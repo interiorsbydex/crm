@@ -33,6 +33,7 @@ import { automationsConfig, AUTOMATION_EVENTS, CC_ROLES } from '../lib/automatio
 import { dashboardLayoutsConfig } from '../lib/dashboardLayouts.js';
 import { permissionsConfig, PERMISSIONS } from '../lib/permissions.js';
 import { checklistsConfig, CHECKLIST_NAMES, BUILT_IN_ITEMS } from '../lib/checklists.js';
+import { reportDefinitionsConfig, WON_STAGE_CHOICES, NPS_SURVEYS, NPS_SURVEY_LABELS, NPS_TRIGGER_STAGES } from '../lib/reportDefinitions.js';
 import { getDocumentTypes } from '../lib/documentTypes.js';
 import {
   CrmSettingsError, DEFAULT_CRM_SETTINGS, LEAD_DETAIL_OPTIONS, HIDEABLE_STAGES, NAMEABLE_STAGES, DESIGN_PHASE_KEYS,
@@ -1076,6 +1077,12 @@ mountVersionedConfig(adminRouter, '/permissions', permissionsConfig, async () =>
 // Optional built-in items and the admin's own items per checklist (lib/checklists.ts).
 mountVersionedConfig(adminRouter, '/checklists', checklistsConfig, async () => ({
   catalog: { names: CHECKLIST_NAMES, builtIn: BUILT_IN_ITEMS, documentTypes: (await getDocumentTypes()).filter((t) => t.active) },
+}));
+
+// ── Reports & NPS (Admin → Reports & NPS) ─────────────────────────────────────
+// Which stages count as onboarded in Reports, and which stage starts each NPS survey (lib/reportDefinitions.ts).
+mountVersionedConfig(adminRouter, '/report-definitions', reportDefinitionsConfig, async () => ({
+  catalog: { wonStageChoices: WON_STAGE_CHOICES, surveys: NPS_SURVEYS.map((key) => ({ key, label: NPS_SURVEY_LABELS[key] })), triggerStages: NPS_TRIGGER_STAGES },
 }));
 
 // ── Document types (Admin → Document Types) ───────────────────────────────────

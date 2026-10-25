@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, Target, Megaphone, Route, FileText, SlidersHorizontal, Zap, LayoutDashboard, ShieldCheck, ListChecks, type LucideIcon } from 'lucide-react';
+import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, Target, Megaphone, Route, FileText, SlidersHorizontal, Zap, LayoutDashboard, ShieldCheck, ListChecks, BarChart3, type LucideIcon } from 'lucide-react';
 import { api, uploadFile } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
 import { DateInput } from '../components/ui/DateTimeInputs';
@@ -14,6 +14,7 @@ import AutomationsAdmin from '../components/admin/AutomationsAdmin';
 import DashboardsAdmin from '../components/admin/DashboardsAdmin';
 import PermissionsAdmin from '../components/admin/PermissionsAdmin';
 import ChecklistsAdmin from '../components/admin/ChecklistsAdmin';
+import ReportsNpsAdmin from '../components/admin/ReportsNpsAdmin';
 import { cycleDescription } from '../lib/crmSettings';
 
 interface User {
@@ -49,7 +50,7 @@ const ROLE_COLORS: Record<string, string> = {
   BRANCH_HEAD: 'bg-green-100 text-green-700',
 };
 
-type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers' | 'import' | 'targets' | 'credits' | 'content' | 'stageRules' | 'docTypes' | 'crmSettings' | 'automations' | 'dashboards' | 'permissions' | 'checklists';
+type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers' | 'import' | 'targets' | 'credits' | 'content' | 'stageRules' | 'docTypes' | 'crmSettings' | 'automations' | 'dashboards' | 'permissions' | 'checklists' | 'reportsNps';
 
 interface ImportPreviewRow {
   row: number; status: 'WILL_IMPORT' | 'DUPLICATE' | 'INVALID';
@@ -464,6 +465,7 @@ export default function Admin() {
     { id: 'dashboards', label: 'Dashboards', Icon: LayoutDashboard },
     { id: 'permissions', label: 'Permissions', Icon: ShieldCheck },
     { id: 'checklists', label: 'Checklists', Icon: ListChecks },
+    { id: 'reportsNps', label: 'Reports & NPS', Icon: BarChart3 },
   ];
 
   const hasLeads = (deactivatePreview?.activeLeads ?? 0) > 0;
@@ -1214,6 +1216,7 @@ export default function Admin() {
         {tab === 'dashboards' && <DashboardsAdmin />}
         {tab === 'permissions' && <PermissionsAdmin />}
         {tab === 'checklists' && <ChecklistsAdmin />}
+        {tab === 'reportsNps' && <ReportsNpsAdmin />}
       </div>
     </div>
   );

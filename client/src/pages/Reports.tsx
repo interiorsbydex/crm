@@ -12,6 +12,7 @@ import DesignerReports from '../components/reports/DesignerReports';
 import BlAdminReports from '../components/reports/BlAdminReports';
 import CreditsPanel from '../components/reports/CreditsPanel';
 import { stageShortLabel, cycleDescription } from '../lib/crmSettings';
+import { Tile, TileGroup, useDashboardLayout } from '../lib/dashboardLayout';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type AnyRow = Record<string, unknown>;
@@ -270,6 +271,8 @@ function useExport() {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function Reports() {
+  // Admin → Dashboards → Reports page: hide, reorder and rename sections.
+  const { label: reportLabel } = useDashboardLayout('reports');
   const user = getStoredUser();
   const role = user?.role ?? '';
   const showFull = ['BRANCH_HEAD', 'BL'].includes(role);
@@ -472,17 +475,20 @@ export default function Reports() {
           {(isDesigner || isBL) && <DesignerReports role={role} />}
 
           {isDesigner && (
-            <>
+            <TileGroup dashboard="reports" className="space-y-6">
 
+              <Tile id="reports.incentiveOverview">
               <SectionCard
-                title="Incentive overview"
+                title={reportLabel('reports.incentiveOverview', 'Incentive overview')}
                 subtitle={`Core and booster credits for the selected ${cycleDescription()} cycle. Credits only — no ₹ payout shown.`}
               >
                 <CreditsPanel showTitle={false} />
               </SectionCard>
+              </Tile>
 
+              <Tile id="reports.npsAnalytics">
               <SectionCard
-                title="NPS analytics"
+                title={reportLabel('reports.npsAnalytics', 'NPS analytics')}
                 subtitle="Sales, Design Freeze, and Sign Off NPS trends for the last six months."
               >
                 {r.designer_incentive?.loading ? <Loader /> : !designerReport ? (
@@ -521,14 +527,17 @@ export default function Reports() {
                   </div>
                 )}
               </SectionCard>
-            </>
+              </Tile>
+            </TileGroup>
           )}
 
+          <TileGroup dashboard="reports" className="space-y-6">
           {/* ═══ SECTION 1 — SALES PIPELINE (full only) ═════════════════════ */}
           {showFull && !isBL && (
+            <Tile id="reports.salesPipeline">
             <div className="space-y-4">
               <div>
-                <h2 className="text-sm font-semibold text-gray-900">Sales pipeline</h2>
+                <h2 className="text-sm font-semibold text-gray-900">{reportLabel('reports.salesPipeline', 'Sales pipeline')}</h2>
                 <p className="text-xs text-gray-400 mt-0.5">Conversion, performance &amp; trends across the pipeline.</p>
               </div>
 
@@ -622,12 +631,14 @@ export default function Reports() {
                 </div>
               </div>
             </div>
+            </Tile>
           )}
 
           {/* ═══ SECTION 2 — DESIGNER PERFORMANCE (all roles) ═══════════════ */}
           {!isDesigner && !isBL && (
+          <Tile id="reports.designerPerformance">
           <SectionCard
-            title="Designer performance"
+            title={reportLabel('reports.designerPerformance', 'Designer performance')}
             subtitle="Assigned leads, design meetings (DQL / PP) and conversion per designer."
             onExport={() => doExport('designer_performance')}
           >
@@ -666,12 +677,14 @@ export default function Reports() {
               </div>
             )}
           </SectionCard>
+          </Tile>
           )}
 
           {/* ═══ SECTION 3 — MONTHLY TREND (all roles) ═══════════════════════ */}
           {!isDesigner && !isBL && (
+          <Tile id="reports.monthlyTrend">
           <SectionCard
-            title="Monthly trend"
+            title={reportLabel('reports.monthlyTrend', 'Monthly trend')}
             subtitle="New leads created each month."
             onExport={() => doExport('monthly_trend')}
           >
@@ -717,12 +730,14 @@ export default function Reports() {
               </>
             )}
           </SectionCard>
+          </Tile>
           )}
 
           {/* ═══ SECTION 4 — OFFER PERFORMANCE (full only) ═══════════════════ */}
           {showFull && !isBL && (
+            <Tile id="reports.offerPerformance">
             <SectionCard
-              title="Offer performance"
+              title={reportLabel('reports.offerPerformance', 'Offer performance')}
               subtitle="Leads tagged to each promotional offer and how many onboarded."
               onExport={() => doExport('offer_performance')}
             >
@@ -749,12 +764,14 @@ export default function Reports() {
                 </div>
               )}
             </SectionCard>
+            </Tile>
           )}
 
           {/* ═══ SECTION 5 — CAMPAIGN PERFORMANCE (full only) ════════════════ */}
           {showFull && !isBL && (
+            <Tile id="reports.campaignPerformance">
             <SectionCard
-              title="Campaign performance"
+              title={reportLabel('reports.campaignPerformance', 'Campaign performance')}
               subtitle="Which Meta and Google campaigns are generating the best leads."
               onExport={() => doExport('campaign_performance')}
             >
@@ -773,12 +790,14 @@ export default function Reports() {
                 />
               )}
             </SectionCard>
+            </Tile>
           )}
 
           {/* ═══ SECTION 6 — MEETING PERFORMANCE (all roles) ════════════════ */}
           {!isDesigner && !isBL && (
+          <Tile id="reports.meetingPerformance">
           <SectionCard
-            title="Meeting performance"
+            title={reportLabel('reports.meetingPerformance', 'Meeting performance')}
             subtitle="Meetings scheduled vs completed vs no-show per designer."
             onExport={() => doExport('meeting_performance')}
           >
@@ -801,12 +820,14 @@ export default function Reports() {
               />
             )}
           </SectionCard>
+          </Tile>
           )}
 
           {/* ═══ SECTION 7 — INACTIVE LEADS (full only) ══════════════════════ */}
           {showFull && (
+            <Tile id="reports.inactiveLeads">
             <SectionCard
-              title="Inactive leads"
+              title={reportLabel('reports.inactiveLeads', 'Inactive leads')}
               subtitle="Leads that dropped off, at which stage, and why."
               onExport={() => doExport('inactive_leads')}
             >
@@ -853,24 +874,31 @@ export default function Reports() {
                 </>
               )}
             </SectionCard>
+            </Tile>
           )}
 
           {role === 'BRANCH_HEAD' && <DesignerReports role={role} />}
           {role === 'BRANCH_HEAD' && <BlAdminReports role={role} />}
           {showFull && (
-            <SectionCard title={isBL ? 'BL & Team Credits' : 'Designer credits'} subtitle={isBL ? 'Your BL credit status and your team designers’ earned credits are shown separately.' : `Core and booster credits per designer for a ${cycleDescription()} cycle. Attendance credit is approved here.`}>
+            <Tile id="reports.credits">
+            <SectionCard title={reportLabel('reports.credits', isBL ? 'BL & Team Credits' : 'Designer credits')} subtitle={isBL ? 'Your BL credit status and your team designers’ earned credits are shown separately.' : `Core and booster credits per designer for a ${cycleDescription()} cycle. Attendance credit is approved here.`}>
               <CreditsPanel showTitle={false} />
             </SectionCard>
+            </Tile>
           )}
+
+          </TileGroup>
 
           {/* ═══ SECTION 8 — COLLAPSIBLE REPORTS ════════════════════════════ */}
           <div className="space-y-3">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Additional Reports</p>
+            <TileGroup dashboard="reports" className="space-y-3">
 
             {/* BL Performance (BH only; BL sees it in BL Reports) */}
             {showFull && !isBL && (
+              <Tile id="reports.blPerformance">
               <CollapsibleCard
-                title="BL performance"
+                title={reportLabel('reports.blPerformance', 'BL performance')}
                 subtitle="Leads managed, closures, and discount metrics per Branch Lead."
                 onExport={() => doExport('bl_performance')}
               >
@@ -888,12 +916,14 @@ export default function Reports() {
                   />
                 )}
               </CollapsibleCard>
+              </Tile>
             )}
 
             {/* Sales Cycle */}
             {!isDesigner && !isBL && (
+            <Tile id="reports.salesCycle">
             <CollapsibleCard
-              title="Sales cycle"
+              title={reportLabel('reports.salesCycle', 'Sales cycle')}
               subtitle="Average, fastest and slowest days from lead creation to onboarding."
               onExport={() => doExport('sales_cycle')}
             >
@@ -909,11 +939,13 @@ export default function Reports() {
                 />
               )}
             </CollapsibleCard>
+            </Tile>
             )}
 
             {/* Lead Aging */}
+            <Tile id="reports.timelinePerformance">
             <CollapsibleCard
-              title="Timeline performance"
+              title={reportLabel('reports.timelinePerformance', 'Timeline performance')}
               subtitle="Average days per stage transition."
               onExport={() => doExport('timeline_performance')}
             >
@@ -929,10 +961,12 @@ export default function Reports() {
                 />
               )}
             </CollapsibleCard>
+            </Tile>
 
             {/* Timeline Performance */}
+            <Tile id="reports.leadAging">
             <CollapsibleCard
-              title="Lead aging"
+              title={reportLabel('reports.leadAging', 'Lead aging')}
               subtitle="Leads currently past their SLA threshold."
               onExport={() => doExport('lead_aging')}
             >
@@ -953,11 +987,13 @@ export default function Reports() {
                 />
               )}
             </CollapsibleCard>
+            </Tile>
 
             {/* Conversion Funnel Detail */}
             {!isDesigner && !isBL && (
+            <Tile id="reports.conversionDetail">
             <CollapsibleCard
-              title="Conversion funnel detail"
+              title={reportLabel('reports.conversionDetail', 'Conversion funnel detail')}
               subtitle="Stage-by-stage conversion rates."
               onExport={() => doExport('conversion')}
             >
@@ -979,13 +1015,17 @@ export default function Reports() {
                 />
               )}
             </CollapsibleCard>
+            </Tile>
             )}
+            </TileGroup>
           </div>
 
+          <TileGroup dashboard="reports">
           {isDesigner && (
+          <Tile id="reports.clientHealth">
           <SectionCard
             id="client-health"
-            title="Client health"
+            title={reportLabel('reports.clientHealth', 'Client health')}
             subtitle="Detailed health status from qualified lead through active project delivery."
           >
             {r.designer_incentive?.loading ? <Loader /> : !designerReport?.clientHealth ? (
@@ -1052,7 +1092,9 @@ export default function Reports() {
               </div>
             )}
           </SectionCard>
+          </Tile>
           )}
+          </TileGroup>
 
         </div>
       </div>

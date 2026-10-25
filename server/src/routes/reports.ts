@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { buildLeadRoleWhere } from '../lib/leadScope.js';
+import { getWonStages } from '../lib/reportDefinitions.js';
 
 export const reportsRouter = Router();
 
@@ -11,9 +12,8 @@ type Handler = (q: Record<string, string>, user: ReportUser) => Promise<unknown>
 // Active funnel only (EFFECTIVE_LEAD/HANDED_OVER are legacy-only and excluded
 // from funnel-shaped reports — see .agents/memory/funnel-restructure.md).
 const PIPELINE_STAGES = ['MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS'];
-// "Won"/converted stages for conversion-rate and incentive-adjacent reports —
-// DESIGN_IN_PROGRESS is now the trigger stage; HANDED_OVER kept for legacy leads.
-const WON_STAGES = ['DESIGN_IN_PROGRESS', 'HANDED_OVER'];
+// "Won"/converted stages for conversion-rate and trend reports come from
+// Admin → Reports & NPS (default: DESIGN_IN_PROGRESS, plus HANDED_OVER for legacy leads).
 
 // ── CSV helper ────────────────────────────────────────────────────────────────
 function toCSV(rows: Record<string, unknown>[]): string {
@@ -244,6 +244,7 @@ async function blPerformance(q: Record<string, string>, user: ReportUser) {
 }
 
 async function sourcePerformance(q: Record<string, string>, user: ReportUser) {
+  const WON_STAGES = await getWonStages();
   const where = await buildLeadWhere(q, user.role, user.id);
   const rows = await prisma.lead.groupBy({
     by: ['source', 'stage'],
@@ -266,6 +267,7 @@ async function sourcePerformance(q: Record<string, string>, user: ReportUser) {
 }
 
 async function campaignPerformance(q: Record<string, string>, user: ReportUser) {
+  const WON_STAGES = await getWonStages();
   const where = await buildLeadWhere(q, user.role, user.id);
   const rows = await prisma.lead.groupBy({
     by: ['utmCampaign', 'stage'],
@@ -368,6 +370,7 @@ async function meetingPerformance(q: Record<string, string>, user: ReportUser) {
 }
 
 async function salesCycle(q: Record<string, string>, user: ReportUser) {
+  const WON_STAGES = await getWonStages();
   const where = { ...(await buildLeadWhere(q, user.role, user.id)), stage: { in: WON_STAGES } };
   const agg = await prisma.lead.aggregate({
     where,
@@ -392,6 +395,7 @@ async function salesCycle(q: Record<string, string>, user: ReportUser) {
 }
 
 async function leadAging(q: Record<string, string>, user: ReportUser) {
+  const WON_STAGES = await getWonStages();
   const SLA_THRESHOLDS: Record<string, number> = {
     EFFECTIVE_LEAD: 1, MQL: 5, DQL: 5, PROPOSAL_READY: 2,
   };
@@ -421,6 +425,7 @@ async function leadAging(q: Record<string, string>, user: ReportUser) {
 }
 
 async function monthlyTrend(q: Record<string, string>, user: ReportUser) {
+  const WON_STAGES = await getWonStages();
   const where = await buildLeadWhere(q, user.role, user.id);
   const startDate = q.startDate ? new Date(q.startDate) : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
   const endDate = q.endDate ? endOfDayIST(q.endDate) : new Date();
@@ -447,6 +452,7 @@ async function monthlyTrend(q: Record<string, string>, user: ReportUser) {
 }
 
 async function offerPerformance(q: Record<string, string>, user: ReportUser) {
+  const WON_STAGES = await getWonStages();
   const where = await buildLeadWhere(q, user.role, user.id);
   const offers = await prisma.offer.findMany({ select: { id: true, name: true } });
   return Promise.all(offers.map(async (o) => {

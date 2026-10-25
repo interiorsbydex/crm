@@ -8,7 +8,7 @@
 import { z } from 'zod';
 import { ConfigError, describeIssues, versionedConfig } from './versionedConfig.js';
 
-export const DASHBOARDS = ['bh', 'bl', 'blTeam', 'designer', 'cre'] as const;
+export const DASHBOARDS = ['bh', 'bl', 'blTeam', 'designer', 'cre', 'reports'] as const;
 export type DashboardKey = (typeof DASHBOARDS)[number];
 
 export interface DashboardLayout { order: string[]; hidden: string[]; labels: Record<string, string> }
@@ -36,7 +36,7 @@ export const dashboardLayoutsConfig = versionedConfig<DashboardLayouts>({
     const parsed = z.object(Object.fromEntries(DASHBOARDS.map((d) => [d, layoutSchema.optional()]))).strict().safeParse(raw);
     if (!parsed.success) {
       throw new ConfigError(400, 'The dashboards could not be saved', describeIssues(parsed.error.issues, {
-        bh: 'Branch Head dashboard', bl: 'Business Lead dashboard', blTeam: 'BL team panel', designer: 'Designer dashboard', cre: 'CRE dashboard',
+        bh: 'Branch Head dashboard', bl: 'Business Lead dashboard', blTeam: 'BL team panel', designer: 'Designer dashboard', cre: 'CRE dashboard', reports: 'Reports page',
       }));
     }
     return { ...defaultDashboardLayouts(), ...parsed.data } as DashboardLayouts;

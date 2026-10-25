@@ -7,6 +7,7 @@ import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendEmail, stageMoveBackwardEmail, intentRatingChangedEmail } from '../lib/email.js';
 import { createAndSendNps, getNpsSendState } from '../lib/npsHelper.js';
+import { npsSurveyForStage } from '../lib/reportDefinitions.js';
 import { designerAssignmentDates, designerAssignmentAgeDays } from '../lib/designerAssignmentAge.js';
 import { logGateBypass } from '../lib/lenientMode.js';
 import { selectBLForLead, assignLeadToDesigner, incrementAssigned } from '../services/assignmentService.js';
@@ -1454,8 +1455,18 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         // the checklist's own send-obm-mail transition.
       }
 
-      // NPS is sent only from the Onboarding Meeting (client decision) — no
-      // automatic sign-off survey on reaching Design in Progress any more.
+      // NPS: by default sent only from the Onboarding Meeting checklist (client
+      // decision). Admin → Reports & NPS can make the Sales, Design Freeze or
+      // Sign Off survey start when a lead reaches a stage; it is drafted for
+      // review like other client mails, and at most once per lead and survey.
+      const npsSurvey = await npsSurveyForStage(stage);
+      if (npsSurvey && existing.email) {
+        try {
+          stageNpsPendingMail = await createAndSendNps(id, npsSurvey);
+        } catch (e: any) {
+          console.warn('[leads:nps-trigger:draft]', e.message);
+        }
+      }
 
       // Fix D — when a lead moves to PROPOSAL_READY, auto-create a plain-text
       // draft notification for the client (no attachment). The response carries

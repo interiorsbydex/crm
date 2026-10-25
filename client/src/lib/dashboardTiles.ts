@@ -12,6 +12,7 @@ export const DASHBOARD_NAMES: Record<string, string> = {
   blTeam: 'Business Lead — team panel',
   designer: 'Designer dashboard',
   cre: 'CRE dashboard',
+  reports: 'Reports page',
 };
 
 export const DASHBOARD_TILES: DashboardTileDef[] = [
@@ -73,4 +74,21 @@ export const DASHBOARD_TILES: DashboardTileDef[] = [
   { id: 'cre.elSection', dashboard: 'cre', section: 'Lead lists', label: 'Effective Lead — Pending Qualification' },
   { id: 'cre.mqlAwaitingSection', dashboard: 'cre', section: 'Lead lists', label: 'MQL — Awaiting BL Allocation' },
   { id: 'cre.mqlAssignedSection', dashboard: 'cre', section: 'Lead lists', label: 'MQL — BL Assigned' },
+  // Reports page (sections show only to the roles that already see them)
+  { id: 'reports.incentiveOverview', dashboard: 'reports', section: 'Designer view', label: 'Incentive overview' },
+  { id: 'reports.npsAnalytics', dashboard: 'reports', section: 'Designer view', label: 'NPS analytics' },
+  { id: 'reports.salesPipeline', dashboard: 'reports', section: 'Main sections', label: 'Sales pipeline' },
+  { id: 'reports.designerPerformance', dashboard: 'reports', section: 'Main sections', label: 'Designer performance' },
+  { id: 'reports.monthlyTrend', dashboard: 'reports', section: 'Main sections', label: 'Monthly trend' },
+  { id: 'reports.offerPerformance', dashboard: 'reports', section: 'Main sections', label: 'Offer performance' },
+  { id: 'reports.campaignPerformance', dashboard: 'reports', section: 'Main sections', label: 'Campaign performance' },
+  { id: 'reports.meetingPerformance', dashboard: 'reports', section: 'Main sections', label: 'Meeting performance' },
+  { id: 'reports.inactiveLeads', dashboard: 'reports', section: 'Main sections', label: 'Inactive leads' },
+  { id: 'reports.credits', dashboard: 'reports', section: 'Main sections', label: 'Designer credits / BL & Team Credits' },
+  { id: 'reports.blPerformance', dashboard: 'reports', section: 'Additional reports', label: 'BL performance' },
+  { id: 'reports.salesCycle', dashboard: 'reports', section: 'Additional reports', label: 'Sales cycle' },
+  { id: 'reports.timelinePerformance', dashboard: 'reports', section: 'Additional reports', label: 'Timeline performance' },
+  { id: 'reports.leadAging', dashboard: 'reports', section: 'Additional reports', label: 'Lead aging' },
+  { id: 'reports.conversionDetail', dashboard: 'reports', section: 'Additional reports', label: 'Conversion funnel detail' },
+  { id: 'reports.clientHealth', dashboard: 'reports', section: 'Designer view — bottom', label: 'Client health' },
 ];
