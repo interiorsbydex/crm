@@ -76,8 +76,8 @@ export const BUILT_IN_ITEMS: Record<ChecklistKind, BuiltInItem[]> = {
     { key: 'clientConfirmed', label: 'Client confirmed' },
   ],
   dip: [
-    { key: 'cxApprovalReceived', label: 'CX approval received' },
-    { key: 'internalMailThreadCompleted', label: 'Internal mail thread completed' },
+    { key: 'cxApprovalReceived', label: 'Client approval received by email' },
+    { key: 'internalMailThreadCompleted', label: 'Internal email thread created' },
     { key: 'paymentScreenshot', label: 'Payment screenshot (Files tab)', lockedReason: PAYMENT_LOCK },
   ],
 };
