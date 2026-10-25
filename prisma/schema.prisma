@@ -1,0 +1,1306 @@
+// Interiors by DeX CRM — Prisma Schema
+// ORM: Prisma | DB: PostgreSQL via Supabase
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // directUrl = env("DIRECT_URL")
+  // Uncomment directUrl before running prisma migrate on Supabase.
+  // Use the "Session mode" pooler URL (port 5432) as DIRECT_URL.
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  DESIGNER
+  DESIGN_MANAGER
+  CRE
+  BL
+  BRANCH_HEAD
+}
+
+/// Display-only designation layered on top of a user's Role. Does not affect
+/// permissions/authorization — role checks continue to use `Role` only.
+/// DESIGN_TEAM_LEAD is currently the sole extra designation (task #77b/#79);
+/// more may be added later without touching permission logic.
+enum Designation {
+  DESIGN_TEAM_LEAD
+}
+
+enum LeadStage {
+  /// Legacy stage — no longer part of the active funnel (new leads start at MQL).
+  /// Kept so existing leads display correctly as legacy/off-funnel.
+  EFFECTIVE_LEAD
+  MQL
+  DQL
+  PROPOSAL_READY
+  PROPOSAL_PRESENTED
+  PROPOSAL_DISCUSSION
+  ONBOARDING
+  ONBOARDING_MEETING
+  DESIGN_IN_PROGRESS
+  /// Legacy terminal stage — replaced by DESIGN_IN_PROGRESS as the funnel's
+  /// terminal/incentive-trigger stage. Kept so existing leads are not broken.
+  HANDED_OVER
+  /// Legacy stage values — no longer written going forward. ON_HOLD/INACTIVE
+  /// are now tracked on the separate `Lead.status` field (task #88) so the
+  /// funnel stage a lead is "parked at" is preserved while on hold/inactive.
+  /// Kept in the enum only so pre-migration historical rows still decode.
+  INACTIVE
+  ON_HOLD
+}
+
+/// Lead lifecycle status — decoupled from `LeadStage` (task #88). A lead's
+/// `stage` always reflects its real funnel position; `status` separately
+/// tracks whether it's actively being worked, parked (ON_HOLD), or dropped
+/// (INACTIVE). This lets the UI show both together, e.g. "DQL — On Hold".
+enum LeadStatus {
+  ACTIVE
+  ON_HOLD
+  INACTIVE
+}
+
+enum CallOutcome {
+  ANSWERED
+  RNR_1
+  RNR_2
+  RNR_3
+  RNR_4
+  RNR_5
+  /// "RNR 6 & beyond" — one bucket for all further ring-no-response attempts.
+  RNR_6_PLUS
+  CALLBACK
+  /// Outcome used when a meeting was scheduled as the direct result of this call.
+  MEETING_SCHEDULED
+}
+
+enum MeetingType {
+  DQL
+  PP
+  /// Proposal Discussion meeting — added after PP in the funnel.
+  PD
+  ONBOARDING
+  /// Onboarding Meeting — added after ONBOARDING (OB) in the funnel.
+  OBM
+  /// Legacy meeting types — no longer selectable when scheduling a new meeting
+  /// (removed from the UI/valid-type list), kept so historical meetings of
+  /// these types keep displaying correctly.
+  DESIGN_FREEZE
+  SIGN_OFF
+}
+
+enum TaskStatus {
+  PENDING
+  COMPLETED
+  RESCHEDULED
+  NOT_DONE
+}
+
+enum TaskType {
+  INTERNAL
+  EXTERNAL
+}
+
+enum MeetingMode {
+  EC_VISIT
+  SITE_VISIT
+  VIRTUAL
+  PUBLIC_PLACE
+  CLIENT_PLACE
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  COMPLETED
+  RESCHEDULED
+  NO_SHOW
+}
+
+enum DiscountStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum PerformanceTier {
+  BASIC
+  STANDARD
+  PREMIUM
+}
+
+enum AssignmentPath {
+  STANDARD
+  DIRECT
+}
+
+enum FieldType {
+  TEXT
+  NUMBER
+  DATE
+  SELECT
+}
+
+enum LeadFileType {
+  FLOOR_PLAN
+  LIFESTYLE_CAPTURE
+  PITCH_PRESENTATION
+  QUOTATION
+  GENERATED_QUOTE
+  /// Task #54 — PD→OB checklist upload
+  PAYMENT_SCREENSHOT
+  /// Task #54 — PD→OB checklist upload
+  OB_QUOTE
+  /// Task #74 — OB→OBM checklist upload: proof the client approved the welcome mail wording
+  WELCOME_MAIL_SCREENSHOT
+  /// Task #115 — distinct from the DQL-stage PITCH_PRESENTATION, for the final version shared at PD.
+  FINAL_PITCH_PRESENTATION
+  /// Task #115 — quotation shared during Proposal Presented.
+  PP_QUOTATION
+  /// Task #115 — quotation shared during Proposal Ready.
+  PR_QUOTATION
+  /// Task #115 — presentation shared during Proposal Ready.
+  PR_PRESENTATION
+  OTHER
+}
+
+enum ProjectPhase {
+  DESIGN
+  TECHNICAL
+  PRODUCTION
+  SITE_EXECUTION
+  HANDOVER
+  COMPLETED
+}
+
+enum ProjectHealth {
+  ON_TRACK
+  AT_RISK
+  DELAYED
+}
+
+enum CollectionStatus {
+  DUE
+  INVOICED
+  COLLECTED
+}
+
+/// Approval state for a project team-member request (task #87).
+enum TeamMemberStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id         String   @id @default(cuid())
+  supabaseId String   @unique
+  name       String
+  email      String   @unique
+  role       Role
+  /// Display-only title layered on top of `role` (e.g. "Design Team Lead").
+  /// Never used for permission checks — those key off `role` only.
+  designation Designation?
+  /// For Designers/CREs: the BL they report to
+  blId       String?
+  /// For Designers (including DTLs): the Design Manager who oversees their team.
+  designManagerId String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Performance metrics (recalculated nightly by performanceRecalc job)
+  totalLeadsAssigned  Int             @default(0)
+  totalLeadsConverted Int             @default(0)
+  conversionRate      Float           @default(0)
+  avgProjectValue     Decimal         @default(0) @db.Decimal(12, 2)
+  performanceTier     PerformanceTier @default(BASIC)
+
+  bl          User?  @relation("BLTeam", fields: [blId], references: [id])
+  teamMembers User[] @relation("BLTeam")
+  designManager User? @relation("DesignManagerTeam", fields: [designManagerId], references: [id])
+  designTeamMembers User[] @relation("DesignManagerTeam")
+
+  designerLeads Lead[] @relation("DesignerLeads")
+  blLeads       Lead[] @relation("BLLeads")
+  createdLeads  Lead[] @relation("CreatedLeads")
+
+  callsLogged               Call[]
+  followUpTasksAssigned     FollowUpTask[]
+  discountRequestsRaised    DiscountRequest[] @relation("RequesterDiscounts")
+  discountRequestsReviewed  DiscountRequest[] @relation("ReviewerDiscounts")
+  discountRequestsForwarded DiscountRequest[] @relation("ForwarderDiscounts")
+  whatsappMessagesSent      WhatsAppMessage[]
+  leadChatMessages          LeadChatMessage[]
+  emailsPreviewed           EmailLog[]
+  activityLogs              ActivityLog[]
+  notifications             NotificationLog[]
+  sentInvites               UserInvite[]      @relation("InvitedBy")
+  intentRatingOverrides     IntentRatingLog[]
+  designerProjects          Project[]
+  uploadedFiles             LeadFile[]
+  uploadedQuoteFiles        QuoteFile[]
+  uploadedDiscountRequestFiles DiscountRequestFile[]
+
+  /// Task #87 — project team assignment
+  pdProjects                Project[]           @relation("ProjectPD")
+  dtlProjects               Project[]           @relation("ProjectDTL")
+  projectTeamMemberships    ProjectTeamMember[] @relation("ProjectTeamMemberUser")
+  projectTeamMemberRequests ProjectTeamMember[] @relation("ProjectTeamMemberRequestedBy")
+  projectTeamMemberReviews  ProjectTeamMember[] @relation("ProjectTeamMemberReviewedBy")
+
+  /// Task #45 — per-cycle Booking/PO targets
+  designerTargets     DesignerTarget[] @relation("DesignerTargets")
+  designerTargetsSet  DesignerTarget[] @relation("DesignerTargetsSetBy")
+
+  @@map("users")
+}
+
+model LeadCounter {
+  id      Int @id @default(1)
+  lastNum Int @default(0)
+
+  @@map("lead_counter")
+}
+
+model ProjectCounter {
+  id      Int @id @default(1)
+  lastNum Int @default(0)
+
+  @@map("project_counter")
+}
+
+model Lead {
+  id                   String         @id @default(cuid())
+  /// Auto-generated X#### format
+  leadId               String         @unique
+  name                 String
+  phone                String
+  phone2               String?
+  email                String?
+  source               String?
+  adName               String?
+  utmCampaign          String?
+  utmAdSet             String?
+  utmSource            String?
+  projectType          String?
+  scope                String?
+  location             String?
+  possessionTimeline   String?
+  estimatedValue       Decimal?       @db.Decimal(12, 2)
+  /// 1 (lowest intent) – 5 (highest intent)
+  intentRating         Int?
+  /// Scheduled next meeting date — required before moving to MQL
+  nextMeetingDate      DateTime?
+  /// Floor plan reference/URL — required before moving to PROPOSAL_READY
+  floorPlanUrl         String?
+  stage                LeadStage      @default(MQL)
+  /// Lifecycle status, decoupled from `stage` (task #88). `stage` keeps
+  /// reflecting the lead's real funnel position even while ON_HOLD/INACTIVE.
+  status               LeadStatus     @default(ACTIVE)
+  /// True when this lead took an explicit skip path that bypassed DQL
+  /// (MQL → Proposal Ready or MQL → Proposal Presented). Set automatically
+  /// by the stage-change handler. Its excluded requirement (the DQL meeting)
+  /// stays required on every later forward move until fulfilled — see
+  /// DEFERRED_SKIP_REQUIREMENTS in stageRequirements.ts.
+  skippedDQL           Boolean        @default(false)
+  /// True when this lead took an explicit skip path that bypassed Proposal
+  /// Ready (DQL → Proposal Presented or MQL → Proposal Presented). Set
+  /// automatically by the stage-change handler. Its excluded requirements
+  /// stay required on every later forward move until fulfilled — see
+  /// DEFERRED_SKIP_REQUIREMENTS in stageRequirements.ts.
+  skippedProposalReady Boolean        @default(false)
+  /// True when this lead took the explicit Proposal Presented → Onboarding
+  /// skip path (bypassing Proposal Discussion). Set automatically by the
+  /// stage-change handler. Its excluded requirements stay required on every
+  /// later forward move until fulfilled — see DEFERRED_SKIP_REQUIREMENTS in
+  /// stageRequirements.ts.
+  skippedProposalDiscussion Boolean   @default(false)
+  /// Founder-spec "Expected OB date" — required before Proposal Ready →
+  /// Proposal Presented and filterable on the lead list/pipeline views.
+  /// Distinct from expectedMoveIn (client's own possession date).
+  expectedObDate       DateTime?
+  onHoldRevivalDate    DateTime?
+  /// Reason for placing on hold — required when stage moves to ON_HOLD
+  onHoldReason         String?
+  /// Free-text internal notes accompanying an On Hold status change, separate
+  /// from the reason category above. Internal-only — never sent to the client.
+  onHoldNotes          String?
+  /// Optional client-facing notes accompanying an On Hold status change.
+  onHoldExternalNotes  String?
+  /// Reason category for marking inactive — required when status moves to INACTIVE
+  inactiveReason       String?
+  /// Free-text notes accompanying inactivation, separate from the reason
+  /// category above. Internal-only — never emailed or texted to the client.
+  inactiveNotes        String?
+  /// Optional client-facing notes accompanying an inactivation.
+  inactiveExternalNotes String?
+  /// Legacy — was used to restore `stage` on reactivation back when ON_HOLD/
+  /// INACTIVE were themselves stage values. Now that status is separate from
+  /// stage (task #88), `stage` never changes on hold/inactivate, so this is
+  /// no longer written by new code. Kept only for historical rows.
+  preHoldStage         LeadStage?
+  /// Timestamp when the assigned designer first opened this lead's detail page
+  firstOpenedAt        DateTime?
+  isDuplicate          Boolean        @default(false)
+  /// Explicitly marks non-business test/demo records so analytics can exclude them.
+  isTestLead           Boolean        @default(false)
+  assignedDesignerId   String?
+  assignedBLId         String?
+  /// Permanent record of which CRE owns this lead's qualification phase.
+  /// Populated at webhook ingest and manual CRE create; never overwritten
+  /// when a real designer replaces assignedDesignerId post-MQL — this is
+  /// the fix for the CRE-scope-loss bug (Stage 1 of the CRE module).
+  assignedCREId        String?
+  /// Free-text reason captured when a BL pushes a lead back from MQL → EL
+  /// for re-qualification. Written by the Stage 2 pushback endpoint.
+  mqlPushbackReason    String?
+  /// Timestamp of the most recent MQL → EL pushback.
+  mqlPushbackAt        DateTime? @db.Timestamptz(6)
+  /// Running count of MQL → EL pushbacks for this lead (used in CRE reports).
+  mqlPushbackCount     Int            @default(0)
+  /// Days from lead creation (leadOriginDate) to the first time this lead
+  /// reached MQL. Set once and never overwritten on re-qualification so it
+  /// reflects the true first-pass TAT for CRE performance reporting.
+  leadAgeAtMQL         Int?
+  createdById          String?
+  currentOfferId       String?
+  /// STANDARD = normal CRE→BL→Designer flow; DIRECT = BL manually assigned
+  assignmentPath       AssignmentPath @default(STANDARD)
+  /// Builder name or "N/A"
+  builder              String?
+  /// Client-specified offers / promotions (up to three)
+  offer1               String?
+  offer2               String?
+  offer3               String?
+  /// Expected move-in / possession date (calendar date)
+  expectedMoveIn       DateTime?
+  /// Alternate email ID
+  email2               String?
+  /// PAN number for invoicing
+  pan                  String?
+  /// GST number for invoicing
+  gst                  String?
+  /// Persistent lead-level notes (separate from activity log)
+  notes                String?
+  /// "auto" = set by meeting-mode mapping; "manual" = designer override
+  intentRatingSource   String?
+  /// Flexible extra fields keyed by CustomFieldDefinition.key
+  customFields         Json           @default("{}")
+  /// The date this lead originated — defaults to the moment it's created in
+  /// the CRM (manual create, webhook, or CSV import), but CSV import allows
+  /// an explicit historical override per row for backfilling old leads.
+  leadOriginDate       DateTime       @default(now())
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  assignedDesigner User?  @relation("DesignerLeads", fields: [assignedDesignerId], references: [id])
+  assignedBL       User?  @relation("BLLeads", fields: [assignedBLId], references: [id])
+  createdBy        User?  @relation("CreatedLeads", fields: [createdById], references: [id])
+  currentOffer     Offer? @relation("CurrentOffer", fields: [currentOfferId], references: [id])
+
+  /// Auto-calculated milestone durations in days
+  daysLeadToDQL      Int?
+  daysDQLToPP        Int?
+  daysPPToOnboarding Int?
+  isSLABreached      Boolean @default(false)
+
+  contacts             Contact[]
+  calls                Call[]
+  followUpTasks        FollowUpTask[]
+  meetings             Meeting[]
+  quotes               Quote[]
+  quoteCallbackReceipts QuoteCallbackReceipt[]
+  discountRequests     DiscountRequest[]
+  whatsappMessages     WhatsAppMessage[]
+  chatMessages         LeadChatMessage[]
+  emailLogs            EmailLog[]
+  slaBreaches          SLABreach[]
+  leadOffers           LeadOffer[]
+  inactivationFeedback InactivationFeedback?
+  activityLogs         ActivityLog[]
+  notifications        NotificationLog[]
+  smsLogs              SmsLog[]
+  dqlQuestionnaire     DQLQuestionnaire?
+  dipChecklist         DIPChecklist?
+  pdObChecklist        PDOBChecklist?
+  obObmChecklist       OBOBMChecklist?
+  intentRatingLogs     IntentRatingLog[]
+  npsResponses         NPSResponse[]
+  project              Project?
+  leadFiles            LeadFile[]
+  attentionFlags       LeadAttentionFlag[]
+
+  @@map("leads")
+}
+
+model LeadAttentionFlag {
+  id          String    @id @default(cuid())
+  leadId      String
+  lead        Lead      @relation(fields: [leadId], references: [id])
+  /// Delayed | At Risk | Blocked | Urgent — same vocabulary as ProjectAttentionFlag
+  category    String
+  description String
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("lead_attention_flags")
+}
+
+model Contact {
+  id        String  @id @default(cuid())
+  leadId    String
+  name      String
+  phone     String?
+  email     String?
+  isPrimary Boolean @default(false)
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("contacts")
+}
+
+model Call {
+  id               String      @id @default(cuid())
+  leadId           String
+  loggedById       String
+  outcome          CallOutcome
+  /// Duration in seconds
+  duration         Int?
+  notes            String?
+  recordingUrl     String?
+  /// Free-text agenda / purpose of the call
+  agenda           String?
+  /// Meeting location or context (e.g. "Office", "Client's site")
+  location         String?
+  /// Actual date-time of the call (may differ from log createdAt)
+  calledAt         DateTime?
+  /// JSON array of { type: string; fileUrl?: string } for call attachments
+  attachments      Json?
+  /// Planned next action after this call (legacy free-text summary, kept for display continuity)
+  nextPlanOfAction String?
+  /// Structured "next plan of action" — array of
+  /// { kind: 'CALL'|'MEETING'|'TASK', details, sendExternalMail }.
+  nextPlanOfActionItems Json?
+  /// Client-facing notes — the ONLY notes content allowed into the auto-mail
+  /// sent on an ANSWERED call. Kept separate from `notes` (now "Internal
+  /// Notes", staff-only, never emailed).
+  externalNotes    String?
+  /// Attachments for externalNotes: array of { fileName?, fileUrl?, storagePath? }.
+  /// Deliberately its own field, not part of the categorized `attachments`
+  /// array (Lifestyle Capture / Proposal / Pitch Presentation).
+  externalNotesAttachments Json?
+  createdAt        DateTime    @default(now())
+
+  lead     Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  loggedBy User @relation(fields: [loggedById], references: [id])
+
+  /// Meetings/tasks auto-created from this call's outcome (callback / meeting-scheduled) —
+  /// lets the UI show a "thread" back to the call that spawned them.
+  meetings      Meeting[]
+  followUpTasks FollowUpTask[]
+
+  @@map("calls")
+}
+
+model FollowUpTask {
+  id           String     @id @default(cuid())
+  leadId       String
+  assignedToId String
+  dueDate      DateTime
+  /// HH:MM 24-hour format — kept as the canonical "start" time (same value as timeFrom).
+  dueTime      String?
+  /// HH:MM range for the task, distinct from a single point-in-time due time.
+  timeFrom     String?
+  timeTo       String?
+  isCompleted  Boolean    @default(false)
+  isOverdue    Boolean    @default(false)
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+
+  status       TaskStatus @default(PENDING)
+  /// Required outcome note captured immediately before a task is marked COMPLETED/NOT_DONE.
+  outcome      String?
+  taskType     TaskType?
+  /// Typable agenda / purpose of the task.
+  agenda       String?
+  /// Staff-only internal notes — never shared with the client.
+  internalNotes String?
+  /// Array of { dueDate, dueTime, reason, rescheduledAt } — appended on every reschedule.
+  rescheduleHistory Json?
+  /// Set when this task was auto-created from a call outcome (callback / meeting-scheduled).
+  originatingCallId String?
+  /// Task #115 — array of { type, storagePath?, fileUrl? }, multiple attachments allowed.
+  attachments  Json?
+  /// Number of follow-up contacts planned for this task.
+  numberOfFollowUps Int?
+  /// Set (to a MeetingType-style value like 'DQL'/'PP'/'PD') when this task represents a
+  /// call scheduled ahead of time via "Schedule Call" — distinguishes it from every other
+  /// FollowUpTask use (callback, generic follow-up) for Call-tab rendering purposes.
+  callStageType String?
+
+  lead            Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignedTo      User  @relation(fields: [assignedToId], references: [id])
+  originatingCall Call? @relation(fields: [originatingCallId], references: [id], onDelete: SetNull)
+
+  @@map("follow_up_tasks")
+}
+
+model Meeting {
+  id                String        @id @default(cuid())
+  leadId            String
+  type              MeetingType
+  /// For PP meetings: 1, 2, 3… tracked as PP1/PP2/PP3
+  ppNumber          Int?
+  mode              MeetingMode
+  status            MeetingStatus @default(SCHEDULED)
+  scheduledAt       DateTime
+  rescheduledReason String?
+  noShowReason      String?
+  /// Tentative replan captured immediately when a meeting is marked NO_SHOW —
+  /// informational only (does not create a new Meeting record).
+  replanScheduledAt DateTime?
+  replanMode       String?
+  replanLocation    String?
+  /// Minutes of Meeting — mandatory when status → COMPLETED
+  mom               String?
+  /// Agenda captured as part of MOM capture on completion.
+  momAgenda         String?
+  /// Multi-select attachment categories chosen during MOM capture, e.g.
+  /// ["Lifestyle Capture", "Proposal"].
+  momAttachmentTypes Json?
+  /// Array of { type, storagePath } — multi-file attachments captured with the MOM.
+  momAttachments    Json?
+  /// Array of { storagePath } — documents attached at meeting booking time (optional).
+  bookingAttachments Json?
+  outcome           String?
+  /// Staff-only internal notes — never shared with the client.
+  internalNotes     String?
+  /// Physical / virtual location of the meeting
+  location          String?
+  /// Array of { scheduledAt, reason, rescheduledAt } — appended on every reschedule
+  rescheduleHistory Json?
+  /// Structured "next plan of action" captured on MOM completion — array of
+  /// { kind: 'CALL'|'MEETING'|'TASK', details, sendExternalMail }.
+  nextPlanOfActionItems Json?
+  confirmationSent  Boolean       @default(false)
+  momSent           Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  /// Set when this meeting was auto-created from a call outcome (meeting-scheduled).
+  originatingCallId String?
+
+  lead            Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  originatingCall Call? @relation(fields: [originatingCallId], references: [id], onDelete: SetNull)
+
+  @@map("meetings")
+}
+
+model Quote {
+  id              String   @id @default(cuid())
+  leadId          String
+  /// Immutable project UUID from proposals.interiorsbydex.com.
+  /// Existing legacy/manual quotes may have no external reference.
+  quoteBuilderRef String?
+  amount          Decimal? @db.Decimal(12, 2)
+  discountPct     Decimal? @db.Decimal(5, 2)
+  status          String   @default("DRAFT")
+  createdAt       DateTime @default(now())
+
+  lead             Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  callbackReceipt  QuoteCallbackReceipt?
+  discountRequests DiscountRequest[]
+  files            QuoteFile[]
+
+  @@index([quoteBuilderRef])
+  @@map("quotes")
+}
+
+/// One durable receipt per external Quote Builder project UUID. This provides
+/// callback idempotency without requiring historical/manual Quote rows to have
+/// globally unique quoteBuilderRef values.
+model QuoteCallbackReceipt {
+  id        String   @id @default(cuid())
+  quoteRef  String   @unique
+  leadId    String
+  quoteId   String   @unique
+  createdAt DateTime @default(now())
+
+  lead  Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@map("quote_callback_receipts")
+}
+
+/// Task #89 — the actual quote document, stored as a real attachment (private
+/// Supabase Storage object) rather than displayed as a bare external link.
+/// Mirrors the LeadFile pattern (see files.ts / LEAD_FILES_BUCKET).
+model QuoteFile {
+  id           String   @id @default(cuid())
+  quoteId      String
+  fileName     String
+  /// Path within the private `crm-quote-files` bucket
+  storagePath  String
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  quote      Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  uploadedBy User  @relation(fields: [uploadedById], references: [id])
+
+  @@index([quoteId])
+  @@map("quote_files")
+}
+
+model DiscountRequest {
+  id                 String         @id @default(cuid())
+  leadId             String
+  quoteId            String?
+  requestedById      String
+  amount             Decimal        @db.Decimal(12, 2)
+  originalAmount     Decimal        @db.Decimal(12, 2)
+  discountPct        Decimal        @db.Decimal(5, 2)
+  reason             String
+  /// Woodwork value excluding GST
+  woodworkValueExGst Decimal?       @db.Decimal(12, 2)
+  /// Total project value excluding GST
+  totalValueExGst    Decimal?       @db.Decimal(12, 2)
+  /// Legacy link to the quote (quote builder link or attachment URL). Superseded
+  /// by the quoteFileName/quoteStoragePath attachment (task #89) — kept
+  /// read-only so pre-existing requests still display their old link.
+  quoteLink          String?
+  /// Legacy single-file attachment for the quote document. Superseded by the
+  /// `files` relation below (multiple attachments); kept read-only so
+  /// pre-existing requests still display their original single file.
+  quoteFileName      String?
+  quoteStoragePath   String?
+  status             DiscountStatus @default(PENDING)
+  /// Server-computed approval routing: SELF | BL | BRANCH_HEAD
+  approverRole       String?
+  /// True when discount > 20% OR post-discount woodwork value < ₹5,00,000
+  isSpecialCase      Boolean        @default(false)
+  reviewedById       String?
+  /// Mandatory on rejection
+  reviewerComment    String?
+  /// Set when BL forwards a BL-routed request to BRANCH_HEAD
+  forwardedToRole    String?
+  /// The BL who forwarded the request
+  forwardedById      String?
+  createdAt          DateTime       @default(now())
+  reviewedAt         DateTime?
+
+  lead        Lead                  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  quote       Quote?                @relation(fields: [quoteId], references: [id])
+  requestedBy User                  @relation("RequesterDiscounts", fields: [requestedById], references: [id])
+  reviewedBy  User?                 @relation("ReviewerDiscounts", fields: [reviewedById], references: [id])
+  forwardedBy User?                 @relation("ForwarderDiscounts", fields: [forwardedById], references: [id])
+  files       DiscountRequestFile[]
+
+  @@map("discount_requests")
+}
+
+/// Real quote-file attachments for a discount request (private
+/// `crm-quote-files` bucket, same as QuoteFile). Replaces the legacy single
+/// quoteFileName/quoteStoragePath pair above, allowing multiple files.
+model DiscountRequestFile {
+  id                String          @id @default(cuid())
+  discountRequestId String
+  fileName          String
+  /// Path within the private `crm-quote-files` bucket
+  storagePath       String
+  uploadedById      String
+  createdAt         DateTime        @default(now())
+
+  discountRequest DiscountRequest @relation(fields: [discountRequestId], references: [id], onDelete: Cascade)
+  uploadedBy      User            @relation(fields: [uploadedById], references: [id])
+
+  @@index([discountRequestId])
+  @@map("discount_request_files")
+}
+
+model WhatsAppMessage {
+  id         String           @id @default(cuid())
+  leadId     String
+  direction  MessageDirection
+  body       String
+  templateId String?
+  sentById   String?
+  twilioSid  String?
+  isRead     Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+
+  lead   Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  sentBy User? @relation(fields: [sentById], references: [id])
+
+  @@map("whatsapp_messages")
+}
+
+model LeadChatMessage {
+  id        String   @id @default(cuid())
+  leadId    String
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("lead_chat_messages")
+}
+
+model EmailLog {
+  id            String   @id @default(cuid())
+  leadId        String
+  /// MEETING_CONFIRMATION | MOM | ONBOARDING | RNR_FOLLOWUP | NO_SHOW | INACTIVATION_FEEDBACK
+  type          String
+  sentTo        String
+  subject       String
+  sentAt        DateTime @default(now())
+  previewedById String?
+
+  lead        Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  previewedBy User? @relation(fields: [previewedById], references: [id])
+
+  @@map("email_logs")
+}
+
+model SLABreach {
+  id         String    @id @default(cuid())
+  leadId     String
+  /// FIRST_CONTACT | LEAD_TO_MQL | MQL_TO_DQL | PROPOSAL_TO_PP
+  rule       String
+  breachedAt DateTime  @default(now())
+  resolvedAt DateTime?
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("sla_breaches")
+}
+
+model Offer {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  startDate   DateTime?
+  endDate     DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  currentLeads Lead[]      @relation("CurrentOffer")
+  leadOffers   LeadOffer[]
+
+  @@map("offers")
+}
+
+model LeadOffer {
+  id        String   @id @default(cuid())
+  leadId    String
+  offerId   String
+  appliedAt DateTime @default(now())
+
+  lead  Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  offer Offer @relation(fields: [offerId], references: [id])
+
+  @@map("lead_offers")
+}
+
+model InactivationFeedback {
+  id                 String    @id @default(cuid())
+  leadId             String    @unique
+  reason             String
+  formToken          String?   @unique
+  feedbackFormSentAt DateTime?
+  clientResponse     String?
+  respondedAt        DateTime?
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("inactivation_feedback")
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  leadId    String?
+  userId    String
+  action    String
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  user User  @relation(fields: [userId], references: [id])
+
+  @@index([leadId])
+  @@index([userId])
+  @@map("activity_logs")
+}
+
+model ReportSchedule {
+  id         String    @id @default(cuid())
+  /// WEEKLY | MONTHLY
+  type       String
+  recipients String[]
+  lastSentAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@map("report_schedules")
+}
+
+model NotificationLog {
+  id        String   @id @default(cuid())
+  userId    String
+  /// OVERDUE_TASK | RNR_ESCALATION | DISCOUNT_REQUEST | SLA_BREACH | MEETING_NO_SHOW
+  type      String
+  message   String
+  leadId    String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  /// The task due date/time or meeting scheduled date/time this notification
+  /// is about — distinct from createdAt (when the notification fired). Null
+  /// for notification types with no inherent due/event date.
+  eventAt   DateTime?
+  /// Follow-up task this reminder belongs to. Kept separate from the visible
+  /// message so reminder deduplication never exposes internal identifiers.
+  taskId    String?
+
+  user User  @relation(fields: [userId], references: [id])
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([userId, isRead])
+  @@index([taskId])
+  @@map("notification_logs")
+}
+
+// ─── Gap-patch models ─────────────────────────────────────────────────────────
+
+model SmsLog {
+  id        String   @id @default(cuid())
+  leadId    String?
+  toPhone   String
+  body      String
+  twilioSid String?
+  status    String   @default("queued")
+  createdAt DateTime @default(now())
+
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@map("sms_logs")
+}
+
+model CustomFieldDefinition {
+  id            String    @id @default(cuid())
+  /// Unique slug key used in lead.customFields JSON (e.g. "carpet_area")
+  key           String    @unique
+  label         String
+  fieldType     FieldType
+  selectOptions Json?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  @@map("custom_field_definitions")
+}
+
+model IntentRatingConfig {
+  /// 1–5 star rating
+  rating      Int    @id
+  label       String
+  description String
+  color       String @default("#6b7280")
+
+  @@map("intent_rating_config")
+}
+
+model DQLQuestionnaire {
+  id             String   @id @default(cuid())
+  leadId         String   @unique
+  formResponseId String?
+  responses      Json     @default("{}")
+  submittedAt    DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("dql_questionnaires")
+}
+
+model UserInvite {
+  id          String    @id @default(cuid())
+  email       String
+  role        Role
+  name        String
+  /// Carried through from the invite form so acceptance can set the same
+  /// reporting line / title the admin picked — not just role.
+  blId        String?
+  designation Designation?
+  invitedById String
+  token       String    @unique @default(cuid())
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  invitedBy User @relation("InvitedBy", fields: [invitedById], references: [id])
+
+  @@map("user_invites")
+}
+
+model LeadFile {
+  id           String       @id @default(cuid())
+  leadId       String
+  stage        LeadStage
+  fileType     LeadFileType
+  fileName     String
+  /// Supabase Storage path in private bucket crm-lead-files
+  storagePath  String
+  uploadedById String
+  createdAt    DateTime     @default(now())
+
+  lead       Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  uploadedBy User @relation(fields: [uploadedById], references: [id])
+
+  @@index([leadId, stage])
+  @@map("lead_files")
+}
+
+model DIPChecklist {
+  id                          String    @id @default(cuid())
+  leadId                      String    @unique
+  welcomeMailSent             Boolean   @default(false)
+  discountApprovalFormSent    Boolean   @default(false)
+  npsTriggered                Boolean   @default(false)
+  cxApprovalReceived          Boolean   @default(false)
+  internalMailThreadCompleted Boolean   @default(false)
+  internalMailThreadUrl       String?
+  completedAt                 DateTime?
+  createdAt                   DateTime  @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("dip_checklists")
+}
+
+/// Task #54 — PD→OB transition checklist. Created when a lead enters
+/// PROPOSAL_DISCUSSION; its `completedAt` (set when the welcome mail is sent)
+/// gates the PROPOSAL_DISCUSSION → ONBOARDING transition. Payment screenshot
+/// and OB Quote uploads are tracked as LeadFile rows (fileType
+/// PAYMENT_SCREENSHOT / OB_QUOTE, stage PROPOSAL_DISCUSSION), not columns
+/// here — consistent with how other stage-gate file requirements work.
+model PDOBChecklist {
+  id                   String    @id @default(cuid())
+  leadId               String    @unique
+  paymentValue         Float?
+  projectValue         Float?
+  /// Furniture value (pre-GST, post-discount) — kept separate from projectValue,
+  /// which excludes furniture.
+  furnitureValue       Float?
+  obMeetingScheduledAt DateTime?
+  obMeetingLocation    String?
+  notes                String?
+  /// Admin/BL confirms the Final Pitch Presentation has been shared with the
+  /// client. Required before the PD→OB welcome mail can be sent. (Replaces
+  /// the former "welcome mail wording approved by client" tickbox, which is
+  /// now covered by the WELCOME_MAIL_SCREENSHOT file requirement below.)
+  finalPitchPresentationConfirmed Boolean @default(false)
+  welcomeMailSent      Boolean   @default(false)
+  welcomeMailSentAt    DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime  @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("pd_ob_checklists")
+}
+
+/// Task #54 — OB→OBM transition checklist. Created when a lead enters
+/// ONBOARDING; its `completedAt` gates the ONBOARDING → ONBOARDING_MEETING
+/// transition. The 7 timeline dates are required (all must be filled in)
+/// before the OBM mail can be sent — they also feed the future Design
+/// Pipeline timeline (task #48), but are not automatically computed here.
+model OBOBMChecklist {
+  id                       String    @id @default(cuid())
+  leadId                   String    @unique
+  // ── 8 manual timeline dates (required before send-obm-mail) ───────────────
+  siteDocumentationAt      DateTime?
+  initialSiteDiscussionAt  DateTime?
+  layoutFinalisationAt     DateTime?
+  designDiscussionAt       DateTime?
+  preSignOffAt             DateTime?
+  maskingAt                DateTime?
+  signOffAt                DateTime?
+  tentativeInteriorHandoverAt DateTime?
+  // ── 7 welcome-document items: shown/confirmed pair each ───────────────────
+  dexMaterialDone          Boolean   @default(false)
+  dexMaterialConfirmed     Boolean   @default(false)
+  creditSystemDone         Boolean   @default(false)
+  creditSystemConfirmed    Boolean   @default(false)
+  deepCleaningDone         Boolean   @default(false)
+  deepCleaningConfirmed    Boolean   @default(false)
+  paymentProcessDone       Boolean   @default(false)
+  paymentProcessConfirmed  Boolean   @default(false)
+  warrantyClaimDone        Boolean   @default(false)
+  warrantyClaimConfirmed   Boolean   @default(false)
+  continuityDone           Boolean   @default(false)
+  continuityConfirmed      Boolean   @default(false)
+  cancellationDone         Boolean   @default(false)
+  cancellationConfirmed    Boolean   @default(false)
+  npsTriggered             Boolean   @default(false)
+  npsTriggeredAt           DateTime?
+  /// Client has confirmed the OBM checklist details (timeline, welcome
+  /// documents, etc.). Required before the OBM welcome mail can be sent —
+  /// blocked at the checklist level, not just at the stage-move gate.
+  clientConfirmed          Boolean   @default(false)
+  obmMailSent              Boolean   @default(false)
+  obmMailSentAt            DateTime?
+  completedAt              DateTime?
+  createdAt                DateTime  @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("ob_obm_checklists")
+}
+
+/// Task #75 — admin-managed list of selectable offers, replacing the old
+/// free-text Offer 1/2/3 lead fields.
+model OfferOption {
+  id        String   @id @default(cuid())
+  label     String   @unique
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("offer_options")
+}
+
+model AssignmentConfig {
+  id        String   @id @default(cuid())
+  /// e.g. "premium_threshold_value", "standard_threshold_pct", "smart_assignment_enabled"
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("assignment_config")
+}
+
+// ─── Module 10 models ─────────────────────────────────────────────────────────
+
+model SLAConfig {
+  /// Rule key: FIRST_CONTACT_24H | LEAD_TO_MQL_5D | MQL_TO_DQL_5D | PROPOSAL_TO_PP_2D
+  rule           String   @id
+  thresholdHours Int
+  updatedAt      DateTime @updatedAt
+
+  @@map("sla_config")
+}
+
+model IntentRatingLog {
+  id             String   @id @default(cuid())
+  leadId         String
+  lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  systemRating   Int
+  finalRating    Int
+  overriddenById String?
+  overriddenBy   User?    @relation(fields: [overriddenById], references: [id])
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  @@map("intent_rating_logs")
+}
+
+model NPSResponse {
+  id          String    @id @default(cuid())
+  leadId      String
+  lead        Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project?  @relation(fields: [projectId], references: [id])
+  /// SALE | DESIGN | EXECUTION
+  stage       String
+  /// 0-10, null until responded
+  score       Int?
+  formToken   String    @unique
+  /// Set only after email is successfully queued; null = email not yet sent (retryable)
+  sentAt      DateTime?
+  respondedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([leadId, stage])
+  @@map("nps_responses")
+}
+
+model Project {
+  id                 String        @id @default(cuid())
+  projectCode        String        @unique
+  leadId             String        @unique
+  lead               Lead          @relation(fields: [leadId], references: [id])
+  designerId         String?
+  designer           User?         @relation(fields: [designerId], references: [id])
+  phase              ProjectPhase  @default(DESIGN)
+  health             ProjectHealth @default(ON_TRACK)
+  progressPercent    Int           @default(0)
+  contractValue      Float
+  outstandingAmount  Float         @default(0)
+  location           String?
+  handoverTargetDate DateTime?
+  /// Task #87 — admin-portal-only "Project Designer" assignment, distinct
+  /// from `designerId` (the lead's originally-assigned designer). Set only
+  /// via PATCH /api/admin/projects/:id/pd.
+  pdUserId           String?
+  pd                 User?         @relation("ProjectPD", fields: [pdUserId], references: [id])
+  /// Task #87 — admin-portal-only "Design Team Lead" assignment for this
+  /// project. Set only via PATCH /api/admin/projects/:id/dtl.
+  dtlUserId          String?
+  dtl                User?         @relation("ProjectDTL", fields: [dtlUserId], references: [id])
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  npsResponses   NPSResponse[]
+  collections    Collection[]
+  attentionFlags ProjectAttentionFlag[]
+  teamMembers    ProjectTeamMember[]
+
+  @@map("projects")
+}
+
+/// Task #87 — additional designers on a project's team, beyond the project's
+/// own `designerId`. A DESIGNER-initiated request stays PENDING until a BL
+/// approves/rejects it; a BL/BRANCH_HEAD-initiated request is auto-approved.
+model ProjectTeamMember {
+  id              String           @id @default(cuid())
+  projectId       String
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User             @relation("ProjectTeamMemberUser", fields: [userId], references: [id])
+  /// Enforced (not just UI convention) — see server/src/routes/projects.ts:
+  /// at most one APPROVED team member per project may have isPrimary=true.
+  isPrimary       Boolean          @default(false)
+  status          TeamMemberStatus @default(PENDING)
+  requestedById   String
+  requestedBy     User             @relation("ProjectTeamMemberRequestedBy", fields: [requestedById], references: [id])
+  reviewedById    String?
+  reviewedBy      User?            @relation("ProjectTeamMemberReviewedBy", fields: [reviewedById], references: [id])
+  reviewedAt      DateTime?
+  /// Required when status is set to REJECTED.
+  rejectionReason String?
+  createdAt       DateTime         @default(now())
+
+  // A user can only have one active (non-rejected-and-resubmittable) row per
+  // project at a time; rejected rows are kept for history and a fresh request
+  // creates a new row rather than reusing the old one (enforced in the route,
+  // not by this constraint alone, since REJECTED rows must remain queryable).
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_team_members")
+}
+
+model Collection {
+  id          String           @id @default(cuid())
+  projectId   String
+  project     Project          @relation(fields: [projectId], references: [id])
+  milestone   String
+  amount      Float
+  status      CollectionStatus @default(DUE)
+  dueDate     DateTime?
+  collectedAt DateTime?
+  createdAt   DateTime         @default(now())
+
+  @@map("collections")
+}
+
+/// Per-designer, per-cycle sales-performance targets. Cycles run the
+/// 16th of one month through the 15th of the next (not calendar months) —
+/// see server/src/lib/targetCycle.ts for the boundary computation. Both
+/// values are ₹ amounts (value-based, not counts), matching how Booking
+/// (Lead.estimatedValue) and PO/Collections (Collection.amount) are already
+/// aggregated on the designer dashboard.
+model DesignerTarget {
+  id          String   @id @default(cuid())
+  designerId  String
+  designer    User     @relation("DesignerTargets", fields: [designerId], references: [id])
+  /// Inclusive start of the 16th–15th cycle this target applies to (IST midnight of the 16th).
+  cycleStart  DateTime
+  /// Inclusive end of the cycle (IST end-of-day of the 15th of the following month).
+  cycleEnd    DateTime
+  bookingTargetValue          Decimal  @db.Decimal(12, 2)
+  poTargetValue               Decimal  @db.Decimal(12, 2)
+  conversionTargetPct         Decimal? @db.Decimal(5, 2)
+  averageBookingValueTarget   Decimal? @db.Decimal(12, 2)
+  /// Individual count of DIP-qualified bookings expected in this cycle.
+  dipTargetCount              Int?
+  setById     String
+  setBy       User     @relation("DesignerTargetsSetBy", fields: [setById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // One target per designer per cycle; editing an existing cycle updates
+  // this row rather than creating a new one (until the cycle is in the past).
+  @@unique([designerId, cycleStart])
+  @@index([designerId])
+  @@map("designer_targets")
+}
+
+model ProjectAttentionFlag {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id])
+  /// Delayed | At Risk | Blocked | Urgent service
+  category    String
+  description String
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("project_attention_flags")
+}
+
+/// Admin-editable credit-incentive rules (one row, id = 'default'). JSON so rule
+/// values change without code changes; see server/src/lib/incentiveCredits.ts.
+model IncentiveConfig {
+  id          String   @id
+  config      Json
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("incentive_config")
+}
+
+/// Manually approved attendance booster per designer per 16th–15th cycle.
+model IncentiveAttendance {
+  id          String   @id @default(cuid())
+  designerId  String
+  cycleStart  DateTime
+  awarded     Boolean
+  enteredById String
+  enteredAt   DateTime @default(now())
+
+  @@unique([designerId, cycleStart])
+  @@map("incentive_attendance")
+}
+
+/// Saved copy of each designer's computed credits per 16th–15th cycle, so BI tools
+/// (Power BI via the rpt_ views) read the same numbers the CRM shows. Refreshed
+/// nightly and on demand; source of truth stays calculateDesignerCredits().
+model DesignerCreditSnapshot {
+  id                      String   @id @default(cuid())
+  designerId              String
+  cycleStart              DateTime
+  cycleEnd                DateTime
+  cycleLabel              String
+  bookingTargetValue      Decimal? @db.Decimal(14, 2)
+  bookingValue            Decimal  @db.Decimal(14, 2)
+  bookingCount            Int
+  coreStandardCredits     Decimal  @db.Decimal(10, 2)
+  coreOverachievementCredits Decimal @db.Decimal(10, 2)
+  coreCredits             Decimal  @db.Decimal(10, 2)
+  boosterCredits          Decimal  @db.Decimal(10, 2)
+  totalCredits            Decimal  @db.Decimal(10, 2)
+  eligibilityBand         String
+  computedAt              DateTime @default(now())
+
+  @@unique([designerId, cycleStart])
+  @@map("designer_credit_snapshots")
+}

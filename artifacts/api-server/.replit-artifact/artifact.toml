@@ -1,0 +1,31 @@
+kind = "api"
+previewPath = "/api"
+title = "API Server"
+version = "1.0.0"
+id = "3B4_FFSkEVBkAeYMFRJ2e"
+
+[[services]]
+localPort = 8080
+name = "API Server"
+paths = ["/api"]
+
+[services.development]
+run = "pnpm --filter @workspace/crm-server run dev"
+
+[services.production]
+
+[services.production.build]
+args = ["sh", "-c", "pnpm --filter @workspace/crm-server run db:generate && pnpm --filter @workspace/crm-server run build"]
+
+[services.production.build.env]
+NODE_ENV = "production"
+
+[services.production.run]
+args = ["sh", "-c", "node server/dist/index.js"]
+
+[services.production.run.env]
+PORT = "8080"
+NODE_ENV = "production"
+
+[services.production.health.startup]
+path = "/api/health"
