@@ -8,9 +8,9 @@ import { createNotification } from '../lib/notifications.js';
 import { sendEmail, stageMoveBackwardEmail, intentRatingChangedEmail } from '../lib/email.js';
 import { createAndSendNps, getNpsSendState } from '../lib/npsHelper.js';
 import { designerAssignmentDates, designerAssignmentAgeDays } from '../lib/designerAssignmentAge.js';
-import { isLenientLaunch, isLenientForStage, logGateBypass } from '../lib/lenientMode.js';
+import { logGateBypass } from '../lib/lenientMode.js';
 import { selectBLForLead, assignLeadToDesigner, incrementAssigned } from '../services/assignmentService.js';
-import { checkStageRequirements, isStageJumpAllowed, FUNNEL_ORDER } from '../config/stageRequirements.js';
+import { checkStageRequirements, isStageJumpAllowed, FUNNEL_ORDER, getEffectiveStageRules, describeAllowedSkips } from '../config/stageRequirements.js';
 import { computeSystemRating } from '../services/intentScoring.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { isValidEmail, isValidPhone, isValidPhoneStrict } from '../lib/leadValidation.js';
@@ -29,6 +29,11 @@ import {
 } from '../lib/stageTimeline.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+/** Stage names for the "cannot skip" error message. */
+const STAGE_SKIP_LABELS: Record<string, string> = {
+  DQL: 'DQL', PROPOSAL_READY: 'Proposal Ready', PROPOSAL_DISCUSSION: 'PD (Pitch Discussion)',
+};
 
 export const leadsRouter = Router();
 
@@ -1186,13 +1191,14 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         });
         return;
       }
-      // Structural skip guard: DQL, Proposal Ready and PD (Pitch Discussion) are
-      // the only stages the agreed spec allows skipping over — every other
-      // forward move must go one funnel step at a time, even if the
-      // accumulated gate requirements happen to be met.
-      if (!isBackwardFunnelMove && !isStageJumpAllowed(prevStage, stage)) {
+      // Structural skip guard: only the stages the admin's stage rules mark as
+      // skippable (by default DQL, Proposal Ready and PD) may be jumped over —
+      // every other forward move must go one funnel step at a time, even if
+      // the accumulated gate requirements happen to be met.
+      const stageRules = await getEffectiveStageRules();
+      if (!isBackwardFunnelMove && !isStageJumpAllowed(prevStage, stage, stageRules)) {
         res.status(400).json({
-          error: `Cannot move directly from ${prevStage} to ${stage} — only DQL, Proposal Ready and PD (Pitch Discussion) can be skipped over (plus MQL → Onboarding directly).`,
+          error: `Cannot move directly from ${prevStage} to ${stage} — ${describeAllowedSkips(stageRules, (s) => STAGE_SKIP_LABELS[s] ?? s)}.`,
         });
         return;
       }
@@ -1233,8 +1239,8 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
           return;
         }
       }
-      const gate = await checkStageRequirements(prospective, prevStage, stage);
-      if (!gate.ok && isLenientForStage(stage)) {
+      const gate = await checkStageRequirements(prospective, prevStage, stage, stageRules);
+      if (!gate.ok && gate.warnOnly) {
         // Lenient launch: the move proceeds; what was missing is returned to the
         // caller as a warning and recorded (see GATE_BYPASSED below).
         gateWarnings = gate.missing;

@@ -43,121 +43,23 @@ const STAGE_LABELS: Record<string, string> = {
   DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',
 };
 
-const FILE_TYPE_LABELS: Record<string, string> = {
-  FLOOR_PLAN: 'Floor Plan',
-  LIFESTYLE_CAPTURE: 'Lifestyle Capture',
-  PITCH_PRESENTATION: 'Pitch Presentation',
-  QUOTATION: 'Quotation',
-  GENERATED_QUOTE: 'Generated Quote',
-  PAYMENT_SCREENSHOT: 'Payment Screenshot',
-  OB_QUOTE: 'OB Quote',
-  WELCOME_MAIL_SCREENSHOT: 'Welcome Mail Approval Screenshot',
-  FINAL_PITCH_PRESENTATION: 'Final Pitch Presentation',
-  PP_QUOTATION: 'PP Quotation',
-  PR_QUOTATION: 'PR quotation',
-  PR_PRESENTATION: 'PR presentation',
-  OTHER: 'Other',
-};
-
-interface RequiredFileGroup {
-  types: string[];
-  mode: 'all' | 'any';
-  /** Concise UI wording when internal/legacy types have a clearer business label. */
-  label?: string;
+/** Upload types and their PDF-only rule come from Admin → Document Types. */
+interface DocumentType {
+  key: string;
+  label: string;
+  pdfOnly: boolean;
+  builtIn: boolean;
+  active: boolean;
 }
 
-/**
- * Required file types per stage (Task #83/#84 — mirrors stageRequirements.ts
- * and the PD→OB / OB→OBM checklist gates). Each stage maps to one or more
- * independent groups (all groups must be satisfied); within a group,
- * `mode: 'all'` means every listed type must be present, `mode: 'any'` means
- * at least one of them satisfies it.
- * PROPOSAL_PRESENTED requires both a quotation (generated Quote or an
- * uploaded quotation file) AND the PD Pitch Presentation file before
- * advancing to PD (Pitch Discussion) — mirrors the PP→PD gate.
- */
-const REQUIRED_FILES: Record<string, RequiredFileGroup[]> = {
-  // Floor plan + lifestyle capture sheet, per the MQL→DQL gate.
-  MQL: [{ types: ['FLOOR_PLAN', 'LIFESTYLE_CAPTURE'], mode: 'all' }],
-  // Both documents needed to enter Proposal Ready are uploaded while the lead
-  // is still in DQL; there is intentionally no empty future PR folder/tile.
-  DQL: [
-    { types: ['PITCH_PRESENTATION'], mode: 'all' },
-    {
-      types: ['QUOTATION', 'GENERATED_QUOTE', 'PR_QUOTATION'],
-      mode: 'any',
-      label: 'PR Quotation',
-    },
-  ],
-  // This folder is used only when Proposal Ready is actually visited. A DQL
-  // lead skipping PR uploads its PP documents to Proposal Presented instead.
-  PROPOSAL_READY: [
-    { types: ['PITCH_PRESENTATION'], mode: 'all' },
-    {
-      types: ['QUOTATION', 'GENERATED_QUOTE', 'PR_QUOTATION', 'PP_QUOTATION'],
-      mode: 'any',
-      label: 'PR Quotation or PP Quotation',
-    },
-  ],
-  // PP→PD gate: both the quotation and the PD Pitch Presentation file are
-  // required. Welcome-mail approval is part of the later PD→OB checklist, not
-  // a prerequisite for entering Proposal Presented.
-  PROPOSAL_PRESENTED: [
-    { types: ['QUOTATION', 'GENERATED_QUOTE', 'PP_QUOTATION'], mode: 'any', label: 'PP Quotation' },
-    { types: ['PITCH_PRESENTATION'], mode: 'all' },
-  ],
-  // Final pitch presentation OR PD file — PD (Pitch Discussion)→Onboarding gate,
-  // AND (independently) the welcome-mail approval screenshot required by the
-  // PD→OB checklist's "Share welcome mail" action (Task #84 — moved here
-  // from the OB→OBM checklist, since it now gates the PD→OB mail).
-  // (The PD→OB checklist itself additionally requires a Payment Screenshot
-  // and OB Quote — see the PD→OB checklist panel, not this folder badge.)
-  PROPOSAL_DISCUSSION: [
-    { types: ['PITCH_PRESENTATION'], mode: 'all' },
-    { types: ['GENERATED_QUOTE'], mode: 'all', label: 'Generated Quote (PP or PD)' },
-    { types: ['WELCOME_MAIL_SCREENSHOT'], mode: 'all' },
-  ],
-  // Fix 2: Generated Quote requirement removed from OB folder — the quote is
-  // uploaded at PD/PP stage and already enforced by the PD→OB gate. Showing it
-  // here as required in the OB folder was misleading (file stage tag never matches).
-
-};
-
-/** Equivalent upload types are treated as the same document for requirement badges. */
-function normalizeFileType(t: string): string {
-  if (t === 'LIFESTYLE_CAPTURE') return 'FLOOR_PLAN';
-  if (t === 'FINAL_PITCH_PRESENTATION') return 'PITCH_PRESENTATION';
-  if (['PR_QUOTATION', 'PP_QUOTATION', 'GENERATED_QUOTE', 'OB_QUOTE'].includes(t)) return 'QUOTATION';
-  return t;
+/** One required-file badge, evaluated server-side by the stage-rules engine. */
+interface RequiredFile {
+  label: string;
+  satisfied: boolean;
+  source: 'stageRule' | 'checklist';
 }
-
-const FILE_TYPE_OPTIONS = [
-  { value: 'FLOOR_PLAN', label: 'Floor Plan' },
-  { value: 'LIFESTYLE_CAPTURE', label: 'Lifestyle Capture' },
-  { value: 'PITCH_PRESENTATION', label: 'Pitch Presentation' },
-  { value: 'QUOTATION', label: 'Quotation' },
-  { value: 'GENERATED_QUOTE', label: 'Generated Quote' },
-  { value: 'PAYMENT_SCREENSHOT', label: 'Payment Screenshot' },
-  { value: 'OB_QUOTE', label: 'OB Quote' },
-  { value: 'WELCOME_MAIL_SCREENSHOT', label: 'Welcome Mail Approval Screenshot' },
-  { value: 'FINAL_PITCH_PRESENTATION', label: 'Final Pitch Presentation' },
-  { value: 'PP_QUOTATION', label: 'PP Quotation' },
-  { value: 'PR_QUOTATION', label: 'PR quotation' },
-  { value: 'PR_PRESENTATION', label: 'PR presentation' },
-  { value: 'OTHER', label: 'Other' },
-];
 
 const ALLOWED_EXTS = '.pdf,.jpg,.jpeg,.png,.webp,.ppt,.pptx,.doc,.docx,.xls,.xlsx';
-const PDF_ONLY_FILE_TYPES = new Set([
-  'PITCH_PRESENTATION',
-  'FINAL_PITCH_PRESENTATION',
-  'PR_PRESENTATION',
-  'QUOTATION',
-  'GENERATED_QUOTE',
-  'OB_QUOTE',
-  'PP_QUOTATION',
-  'PR_QUOTATION',
-]);
 
 function isPdfFile(file: File): boolean {
   return file.type === 'application/pdf' && file.name.toLowerCase().endsWith('.pdf');
@@ -177,27 +79,17 @@ function fileIcon(fileName: string) {
   return '📎';
 }
 
-interface RequiredGroupStatus extends RequiredFileGroup {
-  satisfied: boolean;
-  isLegacy?: boolean;
-}
-
 interface StageFolder {
   stage: string;
   files: LeadFile[];
-  requiredGroups: RequiredGroupStatus[];
+  requiredGroups: RequiredFile[];
   hasRequired: boolean;
-}
-
-function requiredBadgeLabel(group: RequiredFileGroup): string {
-  if (group.label) return group.label;
-  const { types, mode } = group;
-  const labels = types.map((t) => FILE_TYPE_LABELS[t] ?? t);
-  return mode === 'any' ? labels.join(' or ') : labels.join(' + ');
 }
 
 export default function FilesTab({ leadId, currentStage, isLocked, onFilesChanged }: Props) {
   const [files, setFiles] = useState<LeadFile[]>([]);
+  const [docTypes, setDocTypes] = useState<DocumentType[]>([]);
+  const [requirements, setRequirements] = useState<Record<string, RequiredFile[]>>({});
   const [loading, setLoading] = useState(true);
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
   const [uploadState, setUploadState] = useState<Record<string, boolean>>({});
@@ -211,8 +103,12 @@ export default function FilesTab({ leadId, currentStage, isLocked, onFilesChange
   const loadFiles = useCallback(async () => {
     setLoading(true);
     try {
-      const { files: raw } = await api.get<{ files: LeadFile[] }>(`/leads/${leadId}/files`);
+      const [{ files: raw }, { folders }] = await Promise.all([
+        api.get<{ files: LeadFile[] }>(`/leads/${leadId}/files`),
+        api.get<{ folders: Record<string, RequiredFile[]> }>(`/leads/${leadId}/files/requirements`),
+      ]);
       setFiles(raw);
+      setRequirements(folders);
     } catch {
       toast.error('Could not load files');
     } finally {
@@ -223,6 +119,15 @@ export default function FilesTab({ leadId, currentStage, isLocked, onFilesChange
   useEffect(() => {
     loadFiles();
   }, [loadFiles]);
+
+  useEffect(() => {
+    api.get<{ types: DocumentType[] }>('/config/document-types')
+      .then((d) => setDocTypes(d.types))
+      .catch(() => toast.error('Could not load document types'));
+  }, []);
+
+  const docTypeLabel = (key: string) => docTypes.find((t) => t.key === key)?.label ?? key;
+  const isPdfOnly = (key: string) => !!docTypes.find((t) => t.key === key)?.pdfOnly;
 
   // Auto-open the current stage folder and any with files
   useEffect(() => {
@@ -238,8 +143,8 @@ export default function FilesTab({ leadId, currentStage, isLocked, onFilesChange
       toast.error('Select a file type and a file');
       return;
     }
-    if (PDF_ONLY_FILE_TYPES.has(uploadFileType) && !isPdfFile(selectedFile)) {
-      toast.error('Quotations and presentations must be uploaded as PDF files');
+    if (isPdfOnly(uploadFileType) && !isPdfFile(selectedFile)) {
+      toast.error(`${docTypeLabel(uploadFileType)} must be uploaded as a PDF file`);
       return;
     }
     setUploadState((s) => ({ ...s, [stage]: true }));
@@ -284,19 +189,9 @@ export default function FilesTab({ leadId, currentStage, isLocked, onFilesChange
     return stagesWithContent.has(stage) || idx <= currentOrSkipTargetIdx;
   }).map((stage) => {
     const stageFiles = files.filter((f) => f.stage === stage);
-    const groups = REQUIRED_FILES[stage] ?? [];
-    const requiredGroups: RequiredGroupStatus[] = groups.map((g) => {
-      // One upload satisfies every item of the same kind, at any stage: the
-      // pool is every file on the lead, and equivalent types count as one
-      // (floor plan = lifestyle capture sheet, pitch = final pitch, any
-      // quotation file = PR/PP quotation). Mirrors checkStageRequirements.
-      const have = new Set(files.map((f) => normalizeFileType(f.fileType)));
-      const wanted = new Set(g.types.map(normalizeFileType));
-      const satisfied = g.mode === 'any'
-        ? [...wanted].some((t) => have.has(t))
-        : [...wanted].every((t) => have.has(t));
-      return { ...g, satisfied, isLegacy: false };
-    });
+    // Badges come from the server's stage-rules engine (the move out of this
+    // stage), so they always match what the stage change will actually ask for.
+    const requiredGroups = requirements[stage] ?? [];
     const hasRequired = requiredGroups.every((g) => g.satisfied);
     return { stage, files: stageFiles, requiredGroups, hasRequired };
   });
@@ -345,9 +240,7 @@ export default function FilesTab({ leadId, currentStage, isLocked, onFilesChange
                       key={i}
                       className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${g.satisfied ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-700'}`}
                     >
-                      {g.satisfied
-                        ? `✓ ${requiredBadgeLabel(g)}${g.isLegacy ? ' (legacy)' : ''}`
-                        : `⚠ ${requiredBadgeLabel(g)} required`}
+                      {g.satisfied ? `✓ ${g.label}` : `⚠ ${g.label} required`}
                     </span>
                   ))}
                 </span>
@@ -369,7 +262,7 @@ export default function FilesTab({ leadId, currentStage, isLocked, onFilesChange
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-gray-700 truncate">{file.fileName}</p>
                       <p className="text-[10px] text-gray-400">
-                        {FILE_TYPE_LABELS[file.fileType] ?? file.fileType} · {fmtDate(file.createdAt)} · {file.uploadedBy.name}
+                        {docTypeLabel(file.fileType)} · {fmtDate(file.createdAt)} · {file.uploadedBy.name}
                       </p>
                     </div>
                     {file.signedUrl ? (
@@ -393,7 +286,7 @@ export default function FilesTab({ leadId, currentStage, isLocked, onFilesChange
                   <button
                     onClick={() => {
                       setShowUploadForm(stage);
-                      setUploadFileType(requiredGroups[0]?.types[0] ?? '');
+                      setUploadFileType('');
                       setSelectedFile(null);
                     }}
                     className="flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700 font-medium mt-1 pt-1 border-t border-gray-50"
@@ -419,8 +312,8 @@ export default function FilesTab({ leadId, currentStage, isLocked, onFilesChange
                         className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-300"
                       >
                         <option value="">Select type…</option>
-                        {FILE_TYPE_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
+                        {docTypes.filter((t) => t.active).map((t) => (
+                          <option key={t.key} value={t.key}>{t.label}</option>
                         ))}
                       </select>
                     </div>
@@ -428,11 +321,11 @@ export default function FilesTab({ leadId, currentStage, isLocked, onFilesChange
                       <label className="block text-xs font-medium text-gray-600 mb-1">File</label>
                       <label className="flex items-center gap-2 cursor-pointer border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs text-gray-500 hover:border-brand-400 transition-colors">
                         <Paperclip size={12} strokeWidth={2} />
-                        {selectedFile ? selectedFile.name : PDF_ONLY_FILE_TYPES.has(uploadFileType) ? 'Choose PDF file' : 'Choose file (PDF, image, Word, PPT)'}
+                        {selectedFile ? selectedFile.name : isPdfOnly(uploadFileType) ? 'Choose PDF file' : 'Choose file (PDF, image, Word, PPT)'}
                         <input
                           ref={(el) => { fileInputRefs.current[stage] = el; }}
                           type="file"
-                          accept={PDF_ONLY_FILE_TYPES.has(uploadFileType) ? '.pdf,application/pdf' : ALLOWED_EXTS}
+                          accept={isPdfOnly(uploadFileType) ? '.pdf,application/pdf' : ALLOWED_EXTS}
                           className="hidden"
                           onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
                         />

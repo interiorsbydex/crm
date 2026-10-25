@@ -107,7 +107,8 @@ async function request<T>(
     const msg = Array.isArray(err.missing) && err.missing.length
       ? `${base} — missing: ${err.missing.join(', ')}`
       : base;
-    throw new Error(msg);
+    // The full response body rides along (e.g. a `problems` list from admin forms).
+    throw Object.assign(new Error(msg), { status: res.status, data: err });
   }
 
   return res.json() as Promise<T>;

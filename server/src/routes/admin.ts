@@ -19,6 +19,14 @@ import { createNotification } from '../lib/notifications.js';
 import { resolveBaseUrl } from '../lib/baseUrl.js';
 import { sendViaResend } from '../lib/resendEmail.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
+import {
+  StageRulesError, RULE_FIELD_OPTIONS, RULE_MEETING_OPTIONS,
+  loadStageRulesState, saveStageRules, resetStageRules, stageRulesHistory, previewStageRulesImpact,
+} from '../lib/stageRules.js';
+import { defaultStageRules, FUNNEL_EDGES, SKIPPABLE_CANDIDATES, WARNABLE_TARGETS, SKIP_FLAG_BY_STAGE } from '../config/stageRequirements.js';
+import {
+  DOCUMENT_TYPES_CONFIG_KEY, documentTypeOverridesSchema, loadDocumentTypeOverrides, resolveDocumentTypes,
+} from '../lib/documentTypes.js';
 
 export const adminRouter = Router();
 
@@ -900,6 +908,120 @@ adminRouter.patch('/stage-sla-config/:stage', async (req, res) => {
 
     const effective = await getEffectiveStageSla();
     res.json({ stage, config: { stage, ...effective[stage] } });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Stage rules (Admin → Stage Rules) ─────────────────────────────────────────
+// What a lead needs before it can move from one stage to the next. Engine:
+// config/stageRequirements.ts; saving/validation/history: lib/stageRules.ts.
+function sendStageRulesError(res: any, err: any) {
+  if (err instanceof StageRulesError) {
+    res.status(err.status).json({ error: err.message, problems: err.problems });
+  } else {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+adminRouter.get('/stage-rules', async (_req, res) => {
+  try {
+    const [state, customFields, docOverrides] = await Promise.all([
+      loadStageRulesState(),
+      prisma.customFieldDefinition.findMany({ where: { isActive: true }, select: { key: true, label: true }, orderBy: { label: 'asc' } }),
+      loadDocumentTypeOverrides(),
+    ]);
+    res.json({
+      ...state,
+      defaults: defaultStageRules(),
+      catalog: {
+        edges: FUNNEL_EDGES,
+        skippableCandidates: SKIPPABLE_CANDIDATES,
+        warnableTargets: WARNABLE_TARGETS,
+        owedLaterStages: Object.keys(SKIP_FLAG_BY_STAGE),
+        fields: RULE_FIELD_OPTIONS,
+        meetings: RULE_MEETING_OPTIONS,
+        customFields,
+        documentTypes: resolveDocumentTypes(docOverrides.overrides),
+      },
+    });
+  } catch (err: any) {
+    sendStageRulesError(res, err);
+  }
+});
+
+adminRouter.put('/stage-rules', async (req, res) => {
+  try {
+    const { config, revision, note } = req.body as { config?: unknown; revision?: unknown; note?: string };
+    const saved = await saveStageRules(config, revision, req.user!.id, typeof note === 'string' ? note : undefined);
+    res.json({ revision: saved.revision, updatedAt: saved.updatedAt, config: saved.config });
+  } catch (err: any) {
+    sendStageRulesError(res, err);
+  }
+});
+
+adminRouter.post('/stage-rules/preview', async (req, res) => {
+  try {
+    res.json(await previewStageRulesImpact((req.body as { config?: unknown }).config));
+  } catch (err: any) {
+    sendStageRulesError(res, err);
+  }
+});
+
+adminRouter.get('/stage-rules/history', async (_req, res) => {
+  try {
+    res.json({ history: await stageRulesHistory() });
+  } catch (err: any) {
+    sendStageRulesError(res, err);
+  }
+});
+
+adminRouter.delete('/stage-rules', async (req, res) => {
+  try {
+    await resetStageRules(req.user!.id);
+    res.json(await loadStageRulesState());
+  } catch (err: any) {
+    sendStageRulesError(res, err);
+  }
+});
+
+// ── Document types (Admin → Document Types) ───────────────────────────────────
+adminRouter.get('/document-types', async (_req, res) => {
+  try {
+    const state = await loadDocumentTypeOverrides();
+    res.json({ ...state, types: resolveDocumentTypes(state.overrides) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+adminRouter.put('/document-types', async (req, res) => {
+  try {
+    const { overrides, revision } = req.body as { overrides?: unknown; revision?: unknown };
+    const parsed = documentTypeOverridesSchema.safeParse(overrides);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'The document types could not be saved', problems: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) });
+      return;
+    }
+    const current = await loadDocumentTypeOverrides();
+    if (revision !== current.revision) {
+      res.status(409).json({ error: 'Someone else saved the document types since you opened this page. Reload and try again.' });
+      return;
+    }
+    // A custom type, once created, keeps its key forever: files point at it.
+    const removed = current.overrides.custom.filter((c) => !parsed.data.custom.some((n) => n.key === c.key));
+    if (removed.length) {
+      res.status(400).json({ error: `Document types can be switched off but not deleted: ${removed.map((r) => r.label).join(', ')}` });
+      return;
+    }
+    const value = { overrides: parsed.data, revision: current.revision + 1, updatedAt: new Date().toISOString(), updatedById: req.user!.id };
+    await prisma.assignmentConfig.upsert({
+      where: { key: DOCUMENT_TYPES_CONFIG_KEY },
+      create: { key: DOCUMENT_TYPES_CONFIG_KEY, value: value as any },
+      update: { value: value as any },
+    });
+    await logActivity(req.user!.id, 'DOCUMENT_TYPES_UPDATED', undefined, { revision: value.revision, overrides: parsed.data });
+    res.json({ ...value, types: resolveDocumentTypes(parsed.data) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

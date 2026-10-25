@@ -1,10 +1,14 @@
 import { prisma } from '../lib/prisma.js';
+import { isLenientLaunch } from '../lib/lenientMode.js';
 
 /**
- * Single source of truth for mandatory fields/actions required to move a lead
- * from one stage to another. Edit this object to adjust gating rules later.
+ * Stage-movement rules: the mandatory fields/actions required to move a lead
+ * from one stage to another.
  *
- * Rebuilt for Task #83 to match the founder's 8-gate spec:
+ * The rules are admin-editable (Admin → Stage Rules, see lib/stageRules.ts):
+ * the saved copy lives in AssignmentConfig under STAGE_RULES_CONFIG_KEY. When
+ * nothing has been saved, `defaultStageRules()` applies — built from
+ * STAGE_REQUIREMENTS below, which is the founder's 8-gate spec (Task #83):
  *   1. EL→MQL           — project details mandatory (enforced at lead
  *                          creation, Task #82; no runtime gate needed here).
  *   2. MQL→DQL          — floor plan + DQL meeting (completed) + lifestyle
@@ -24,11 +28,9 @@ import { prisma } from '../lib/prisma.js';
  * Key format: `${fromStage}->${toStage}` for adjacent funnel steps. Forward
  * jumps that skip stages are gated by accumulating the requirements of every
  * intermediate step (see FUNNEL_ORDER), so a lead can never bypass a gate by
- * leaping ahead — except when every skipped stage is in SKIPPABLE_STAGES
- * (DQL, Proposal Ready, PD (Pitch Discussion) per the agreed spec), which each
- * drop the specific items the founder marked optional when skipped over (see
- * isExcludedWhenSkipping). Backward moves and off-funnel stages are
- * unrestricted.
+ * leaping ahead — except when every skipped stage is skippable, in which case
+ * each item's `whenSkipped` decides whether it still applies on the jump.
+ * Backward moves and off-funnel stages are unrestricted.
  */
 export type StageRequirement =
   | {
@@ -44,17 +46,21 @@ export type StageRequirement =
         | 'builder'
         | 'scope'
         | 'expectedMoveIn'
-        | 'expectedObDate';
+        | 'expectedObDate'
+        | 'possessionTimeline'
+        | 'email';
       label: string;
     }
+  /** An admin-defined custom field (CustomFieldDefinition.key) must be filled in. */
+  | { type: 'customField'; key: string; label: string }
   /** A meeting of the given type must exist. `status` defaults to 'scheduled'
    * (any active status — SCHEDULED/RESCHEDULED/COMPLETED all count); pass
    * 'completed' to require the meeting be specifically marked COMPLETED. */
-  | { type: 'meeting'; meetingType: 'DQL' | 'PP' | 'ONBOARDING'; status?: 'scheduled' | 'completed'; label: string }
+  | { type: 'meeting'; meetingType: 'DQL' | 'PP' | 'PD' | 'ONBOARDING' | 'OBM'; status?: 'scheduled' | 'completed'; label: string }
   /** Satisfied by EITHER a completed meeting of the given type, OR any logged
    * Call for the lead (calls have no separate "scheduled" state — they are
    * logged after the fact, so any Call row counts as "completed"). */
-  | { type: 'meetingOrCall'; meetingType: 'DQL' | 'PP' | 'ONBOARDING'; label: string }
+  | { type: 'meetingOrCall'; meetingType: 'DQL' | 'PP' | 'PD' | 'ONBOARDING' | 'OBM'; label: string }
   /** Satisfied by a meeting matching ANY of the given meetingType values —
    * for gates where the same real-world meeting has been created under more
    * than one meetingType value over time (e.g. Onboarding Meeting rows use
@@ -74,11 +80,13 @@ export type StageRequirement =
    * File gate: a LeadFile with the given fileType must exist in one of the
    * listed stages. For FLOOR_PLAN the legacy `floorPlanUrl` field on the lead
    * is also accepted as a fallback so existing leads are not broken.
+   * Admin-defined document types use the form `custom:<key>`.
    */
   | { type: 'file'; fileType: string; stages: string[]; label: string }
   /** Satisfied if a LeadFile with ANY of the given fileTypes exists in one of the listed stages. */
   | { type: 'fileAnyOf'; fileTypes: string[]; stages: string[]; label: string };
 
+/** The founder's spec — the defaults behind defaultStageRules(). Admin edits never change this object. */
 export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
   /**
    * Task #83 spec item 2 — MQL → DQL: floor plan, a completed DQL meeting,
@@ -228,21 +236,152 @@ export const FUNNEL_ORDER = [
   'DESIGN_IN_PROGRESS',
 ] as const;
 
+/** Every adjacent funnel step, in order — the transitions an admin can configure. */
+export const FUNNEL_EDGES: string[] = FUNNEL_ORDER.slice(0, -1).map((s, i) => `${s}->${FUNNEL_ORDER[i + 1]}`);
+
+// ── Admin-editable rules ─────────────────────────────────────────────────────
+
 /**
- * Stages the founder's agreed spec marks as genuinely optional — a lead may
- * jump straight past any of these without visiting them. MQL, Proposal
- * Presented, Onboarding, Onboarding Meeting and Design in Progress are NOT
- * skippable: they remain mandatory one-at-a-time steps.
- *
- * A forward jump from `fromStage` to `toStage` is allowed whenever every
- * FUNNEL_ORDER stage strictly between them is in this set — see
- * isStageJumpAllowed(). This generalises what used to be a hardcoded list of
- * three exact (from,to) pairs (DQL→PP, MQL→PP, PP→OB) into "DQL, Proposal
- * Ready and PD (Pitch Discussion) are all skippable", which also legalises the
- * previously-missing MQL→Proposal Ready combination (skip DQL only) without
- * opening up any jump that would also skip the mandatory PP step.
+ * What happens to an item on the edge INTO a stage when a lead jumps over that
+ * stage:
+ *   required  — still has to be met on the jump;
+ *   waived    — dropped for good;
+ *   owedLater — dropped for the jump, but asked for again on every later
+ *               forward move until met (needs the lead's skipped-stage flag,
+ *               so only DQL, Proposal Ready and PD support it).
  */
-const SKIPPABLE_STAGES = new Set<string>(['DQL', 'PROPOSAL_READY', 'PROPOSAL_DISCUSSION']);
+export type WhenSkipped = 'required' | 'waived' | 'owedLater';
+export type RuleItem = StageRequirement & {
+  id: string;
+  whenSkipped: WhenSkipped;
+  /** Checklist-backed items: the checklist performs the move, so they can't be edited or removed. */
+  locked?: boolean;
+};
+/** block = the move is refused; warn = the move goes ahead and the gap is logged (GATE_BYPASSED). */
+export type Enforcement = 'block' | 'warn';
+
+export interface StageRulesConfig {
+  transitions: Record<string, RuleItem[]>;
+  /** Stages a lead may jump straight past. Subset of SKIPPABLE_CANDIDATES. */
+  skippableStages: string[];
+  /** Client-approved shortcut MQL → Onboarding (skips DQL, PR, PP and PD). */
+  allowMqlToOnboarding: boolean;
+  /** Keyed by target stage; only WARNABLE_TARGETS can be 'warn'. */
+  enforcement: Record<string, Enforcement>;
+}
+
+export const STAGE_RULES_CONFIG_KEY = 'stage_rules_v1';
+
+/** MQL, Proposal Presented, Onboarding, Onboarding Meeting and DIP stay one-at-a-time steps. */
+export const SKIPPABLE_CANDIDATES = ['DQL', 'PROPOSAL_READY', 'PROPOSAL_DISCUSSION'];
+
+/**
+ * Annie (Oct 2026): from Onboarding onward the full rules always apply (OB,
+ * OBM and DIP checklists, uploads, stage-move requirements), so only moves
+ * into the pre-Onboarding stages may be set to "warn".
+ */
+export const WARNABLE_TARGETS = ['DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION'];
+
+/** Lead flag recording that a stage was jumped over (set by the stage-change handler). */
+export const SKIP_FLAG_BY_STAGE: Record<string, 'skippedDQL' | 'skippedProposalReady' | 'skippedProposalDiscussion'> = {
+  DQL: 'skippedDQL',
+  PROPOSAL_READY: 'skippedProposalReady',
+  PROPOSAL_DISCUSSION: 'skippedProposalDiscussion',
+};
+
+const LOCKED_TYPES = new Set(['pdObChecklist', 'obObmChecklist', 'dip']);
+export function isLockedRequirement(req: { type: string }): boolean {
+  return LOCKED_TYPES.has(req.type);
+}
+
+/**
+ * The founder-spec skip behaviour, expressed per item: which requirements on
+ * the edge INTO `stage` become optional when `stage` itself is skipped over.
+ */
+function defaultWhenSkipped(req: StageRequirement, stage: string): WhenSkipped {
+  if (stage === 'DQL') {
+    // "the DQL meeting" becomes optional when DQL itself is skipped over.
+    return req.type === 'meeting' && req.meetingType === 'DQL' ? 'waived' : 'required';
+  }
+  if (stage === 'PROPOSAL_READY') {
+    // Requirements for entering PR (the DQL pitch-ready file and PR-specific
+    // quotation) become optional when PR itself is skipped. The PR→PP edge
+    // still contributes its own PP presentation and PP quotation requirements.
+    // A DQL→PP skip's PP-folder documents replace the PR paperwork, so nothing
+    // stays owed afterwards.
+    const waived = (req.type === 'file' && req.fileType === 'PITCH_PRESENTATION' && req.stages.includes('DQL'))
+      || (req.type === 'quote' && !!req.fileTypes?.includes('PR_QUOTATION'));
+    return waived ? 'waived' : 'required';
+  }
+  if (stage === 'PROPOSAL_PRESENTED') {
+    // Only reachable on the MQL → Onboarding shortcut: the PP meeting never
+    // happens, so it can't be required. PP documents/value still apply.
+    return req.type === 'meeting' && req.meetingType === 'PP' ? 'waived' : 'required';
+  }
+  if (stage === 'PROPOSAL_DISCUSSION') {
+    // Skipping PD drops that leg's requirements (meeting/call + PD quote) for
+    // the jump itself, but they are still owed on every later forward move.
+    return 'owedLater';
+  }
+  return 'required';
+}
+
+/** The rules as shipped (the founder's spec). Used until an admin saves changes. */
+export function defaultStageRules(lenient: boolean = isLenientLaunch()): StageRulesConfig {
+  const transitions: Record<string, RuleItem[]> = {};
+  for (const edge of FUNNEL_EDGES) {
+    const toStage = edge.split('->')[1];
+    transitions[edge] = (STAGE_REQUIREMENTS[edge] ?? []).map((req, i) => ({
+      ...req,
+      id: `default:${edge}:${i + 1}`,
+      whenSkipped: defaultWhenSkipped(req, toStage),
+      ...(isLockedRequirement(req) && { locked: true }),
+    }));
+  }
+  const enforcement: Record<string, Enforcement> = {};
+  for (const stage of WARNABLE_TARGETS) enforcement[stage] = lenient ? 'warn' : 'block';
+  return {
+    transitions,
+    skippableStages: [...SKIPPABLE_CANDIDATES],
+    allowMqlToOnboarding: true,
+    enforcement,
+  };
+}
+
+/** Effective rules: the admin-saved copy if there is one, else the defaults. */
+export async function getEffectiveStageRules(): Promise<StageRulesConfig> {
+  const row = await prisma.assignmentConfig.findUnique({ where: { key: STAGE_RULES_CONFIG_KEY } });
+  const stored = (row?.value as { config?: StageRulesConfig } | null)?.config;
+  return stored ? withLockedItems(stored) : defaultStageRules();
+}
+
+/**
+ * Checklist-backed items can never be dropped from a saved copy: the checklist
+ * routes perform those moves and rely on the gate also guarding a direct
+ * stage change.
+ */
+export function withLockedItems(config: StageRulesConfig): StageRulesConfig {
+  const defaults = defaultStageRules();
+  const transitions: Record<string, RuleItem[]> = {};
+  for (const edge of FUNNEL_EDGES) {
+    const locked = defaults.transitions[edge].filter((r) => isLockedRequirement(r));
+    // A checklist step keeps the position the admin left it in, but always in
+    // its original form; one that was removed comes back at the end.
+    const items = (config.transitions?.[edge] ?? []).flatMap((r) => {
+      if (!isLockedRequirement(r)) return [r];
+      const original = locked.find((l) => l.type === r.type);
+      return original ? [original] : [];
+    });
+    for (const l of locked) if (!items.some((r) => r.type === l.type)) items.push(l);
+    transitions[edge] = items;
+  }
+  return { ...config, transitions };
+}
+
+/** Whether a gap on a move into `toStage` only warns instead of blocking. */
+export function isWarnOnly(toStage: string, rules: StageRulesConfig): boolean {
+  return WARNABLE_TARGETS.includes(toStage) && rules.enforcement[toStage] === 'warn';
+}
 
 /**
  * Whether a stage change from `fromStage` to `toStage` is structurally
@@ -258,128 +397,98 @@ const SKIPPABLE_STAGES = new Set<string>(['DQL', 'PROPOSAL_READY', 'PROPOSAL_DIS
  * This only blocks illegal forward skips/entries — off-funnel side moves
  * (INACTIVE, ON_HOLD) and true backward moves are handled by the caller.
  */
-export function isStageJumpAllowed(fromStage: string, toStage: string): boolean {
+export function isStageJumpAllowed(
+  fromStage: string,
+  toStage: string,
+  rules: StageRulesConfig = defaultStageRules(),
+): boolean {
   if (toStage === 'HANDED_OVER') return false;
 
   const toIdx = FUNNEL_ORDER.indexOf(toStage as (typeof FUNNEL_ORDER)[number]);
 
   // EFFECTIVE_LEAD is legacy/off-funnel (not in FUNNEL_ORDER), so it's handled
   // by two explicit, symmetric rules rather than the index arithmetic below:
-  //   - Moving OUT of EL into an active funnel stage may only land on MQL
-  //     (the funnel's real starting point) — this does NOT restrict EL's
-  //     side moves (ON_HOLD/INACTIVE), which aren't in FUNNEL_ORDER either
-  //     and so fall through to the "unrestricted off-funnel" branch below.
-  //   - Moving INTO EL is only ever the explicit MQL → EL rollback; every
-  //     other stage (DQL and beyond) is blocked from demoting back to EL,
-  //     matching the "only MQL → Effective Lead" rule enforced in leads.ts.
+  //   - Moving OUT of EL into an active funnel stage may only land on MQL.
+  //   - Moving INTO EL is only ever the explicit MQL → EL rollback, matching
+  //     the "only MQL → Effective Lead" rule enforced in leads.ts.
   if (fromStage === 'EFFECTIVE_LEAD' && toIdx !== -1) return toStage === 'MQL';
   if (toStage === 'EFFECTIVE_LEAD') return fromStage === 'MQL';
 
   const fromIdx = FUNNEL_ORDER.indexOf(fromStage as (typeof FUNNEL_ORDER)[number]);
   if (fromIdx === -1 || toIdx === -1) return true; // other legacy/off-funnel — unrestricted
-  // Client-approved direct shortcut: MQL → Onboarding (skips DQL, PR, PP, PD).
-  // MQL → Proposal Presented is already covered by the skippable-stage rule.
-  if (fromStage === 'MQL' && toStage === 'ONBOARDING') return true;
+  if (rules.allowMqlToOnboarding && fromStage === 'MQL' && toStage === 'ONBOARDING') return true;
   if (toIdx <= fromIdx) return true; // backward/no-op — handled elsewhere
   if (toIdx === fromIdx + 1) return true; // adjacent forward step always fine
-  // Every stage strictly between fromStage and toStage must be an
-  // explicitly-skippable one, or the jump is not structurally allowed.
+  // Every stage strictly between fromStage and toStage must be skippable.
   for (let i = fromIdx + 1; i < toIdx; i++) {
-    if (!SKIPPABLE_STAGES.has(FUNNEL_ORDER[i])) return false;
+    if (!rules.skippableStages.includes(FUNNEL_ORDER[i])) return false;
   }
   return true;
 }
 
-/** True when a requirement on the edge INTO `skippedStage` becomes optional
- * because `skippedStage` itself is being skipped over on this jump. */
-function isExcludedWhenSkipping(req: StageRequirement, skippedStage: string): boolean {
-  if (skippedStage === 'DQL') {
-    // "the DQL meeting" becomes optional when DQL itself is skipped over.
-    return req.type === 'meeting' && req.meetingType === 'DQL';
-  }
-  if (skippedStage === 'PROPOSAL_READY') {
-    // Requirements for entering PR (the DQL pitch-ready file and PR-specific
-    // quotation) become optional when PR itself is skipped. The PR→PP edge
-    // still contributes its own PP presentation and PP quotation requirements.
-    return (
-      (req.type === 'file' && req.fileType === 'PITCH_PRESENTATION' && req.stages.includes('DQL'))
-      || (req.type === 'quote' && !!req.fileTypes?.includes('PR_QUOTATION'))
-    );
-  }
-  if (skippedStage === 'PROPOSAL_PRESENTED') {
-    // Only reachable on the MQL → Onboarding shortcut: the PP meeting never
-    // happens, so it can't be required. PP documents/value still apply.
-    return req.type === 'meeting' && req.meetingType === 'PP';
-  }
-  if (skippedStage === 'PROPOSAL_DISCUSSION') {
-    // Per spec, skipping PD (Pitch Discussion) drops that leg's requirements
-    // (meeting/call + PD quote) entirely — only the PD→OB leg's own
-    // requirements (the PD→OB checklist etc.) still apply.
-    return true;
-  }
-  return false;
+/** Human-readable list of the allowed skips, for error messages. */
+export function describeAllowedSkips(rules: StageRulesConfig, label: (stage: string) => string = (s) => s): string {
+  const parts = rules.skippableStages.map(label);
+  const skips = parts.length ? `only ${parts.join(', ')} can be skipped over` : 'no stage can be skipped over';
+  return rules.allowMqlToOnboarding ? `${skips} (plus MQL → Onboarding directly)` : skips;
 }
-
-/**
- * Requirements that get excluded from the gate on the skip transition itself
- * (per isExcludedWhenSkipping) but must still be collected before the lead
- * can advance any further. Keyed by the Lead boolean flag
- * (skippedProposalDiscussion) that records the skip actually happened, so
- * these only apply to leads that took that specific skip path.
- *
- * DQL is intentionally absent: when DQL is skipped, its DQL-meeting
- * requirement is waived for the rest of the funnel. A lead that skips DQL
- * must still satisfy the requirements of the stage it is entering and every
- * later stage it actually visits, but it must not retroactively complete the
- * skipped DQL meeting.
- */
-const DEFERRED_SKIP_REQUIREMENTS: Record<string, StageRequirement[]> = {
-  // DQL→PP is an approved shortcut. Its PP-folder quotation and presentation
-  // replace the otherwise separate PR-folder paperwork, so no duplicate PR
-  // upload remains owed after that skip.
-  skippedProposalReady: [],
-  skippedProposalDiscussion: (STAGE_REQUIREMENTS['PROPOSAL_PRESENTED->PROPOSAL_DISCUSSION'] ?? [])
-    .filter((r) => isExcludedWhenSkipping(r, 'PROPOSAL_DISCUSSION')),
-};
 
 /**
  * Collect all requirements that apply when moving from `fromStage` to
  * `toStage`. For forward moves along the funnel this accumulates every
- * intermediate step's requirements so jumps cannot bypass a gate — except
- * the three explicitly-allowed skip transitions, which drop the specific
- * items the founder marked optional for that skip (see
- * ALLOWED_SKIP_TRANSITIONS and isExcludedWhenSkipping). Backward moves and
- * off-funnel stages return any directly-configured requirements (currently
- * none), i.e. they are ungated.
+ * intermediate step's requirements so jumps cannot bypass a gate — dropping,
+ * on each stage jumped over, the items whose `whenSkipped` isn't 'required'.
+ * The edge landing exactly on `toStage` always applies in full. Backward moves
+ * and off-funnel stages are ungated.
  */
-function requirementsForTransition(fromStage: string, toStage: string): StageRequirement[] {
-  const key = `${fromStage}->${toStage}`;
-
-  // An explicit STAGE_REQUIREMENTS entry always takes precedence for a plain
-  // adjacent step.
-  const explicit = STAGE_REQUIREMENTS[key];
-  if (explicit !== undefined) return explicit;
+function requirementsForTransition(fromStage: string, toStage: string, rules: StageRulesConfig): RuleItem[] {
+  const explicit = rules.transitions[`${fromStage}->${toStage}`];
+  if (explicit !== undefined) return [...explicit];
 
   const fromIdx = FUNNEL_ORDER.indexOf(fromStage as (typeof FUNNEL_ORDER)[number]);
   const toIdx = FUNNEL_ORDER.indexOf(toStage as (typeof FUNNEL_ORDER)[number]);
+  if (fromIdx === -1 || toIdx === -1 || toIdx <= fromIdx) return [];
 
-  if (fromIdx !== -1 && toIdx !== -1 && toIdx > fromIdx) {
-    // Skip jump: accumulate every intermediate edge's requirements, dropping
-    // whichever items become optional for each stage that's skipped over
-    // (see isExcludedWhenSkipping). The edge landing exactly on `toStage` is
-    // never treated as "skipped" — its requirements always apply in full.
-    const reqs: StageRequirement[] = [];
-    for (let i = fromIdx; i < toIdx; i++) {
-      const stepFrom = FUNNEL_ORDER[i];
-      const stepTo = FUNNEL_ORDER[i + 1];
-      const stepReqs = STAGE_REQUIREMENTS[`${stepFrom}->${stepTo}`] ?? [];
-      const isSkippedStage = stepTo !== toStage;
-      reqs.push(...(isSkippedStage ? stepReqs.filter((r) => !isExcludedWhenSkipping(r, stepTo)) : stepReqs));
-    }
-    return reqs;
+  const reqs: RuleItem[] = [];
+  for (let i = fromIdx; i < toIdx; i++) {
+    const stepTo = FUNNEL_ORDER[i + 1];
+    const stepReqs = rules.transitions[`${FUNNEL_ORDER[i]}->${stepTo}`] ?? [];
+    const isSkippedStage = stepTo !== toStage;
+    reqs.push(...(isSkippedStage ? stepReqs.filter((r) => r.whenSkipped === 'required') : stepReqs));
   }
+  return reqs;
+}
 
-  return [];
+/**
+ * Every requirement that applies to this move, including items a previous
+ * skip left owed ('owedLater'). Pure — no database access.
+ */
+export function requirementsForMove(
+  lead: Record<string, any>,
+  fromStage: string,
+  toStage: string,
+  rules: StageRulesConfig,
+): RuleItem[] {
+  const fromIdx = FUNNEL_ORDER.indexOf(fromStage as (typeof FUNNEL_ORDER)[number]);
+  const toIdx = FUNNEL_ORDER.indexOf(toStage as (typeof FUNNEL_ORDER)[number]);
+  const reqs = requirementsForTransition(fromStage, toStage, rules);
+
+  // A lead that previously skipped a stage still owes that stage's 'owedLater'
+  // items on every later forward move until fulfilled. Dedup by label in case
+  // a requirement is already part of this transition's own leg.
+  if (fromIdx !== -1 && toIdx !== -1 && toIdx > fromIdx) {
+    const seenLabels = new Set(reqs.map((r) => r.label));
+    for (const [stage, flag] of Object.entries(SKIP_FLAG_BY_STAGE)) {
+      if (!lead[flag]) continue;
+      const edge = FUNNEL_EDGES.find((e) => e.endsWith(`->${stage}`));
+      for (const r of (edge && rules.transitions[edge]) || []) {
+        if (r.whenSkipped !== 'owedLater' || seenLabels.has(r.label)) continue;
+        seenLabels.add(r.label);
+        reqs.push(r);
+      }
+    }
+  }
+  return reqs;
 }
 
 /**
@@ -403,12 +512,100 @@ export function expandQuoteTypes(types: string[]): string[] {
   return Array.from(new Set([...types, ...QUOTATION_FAMILY]));
 }
 
+export const CUSTOM_DOC_PREFIX = 'custom:';
+
+/** Prisma filter matching a lead's files of any of `types` (built-in enum values or `custom:<key>`). */
+function leadFileWhere(leadId: string, types: string[]) {
+  const builtIn = types.filter((t) => !t.startsWith(CUSTOM_DOC_PREFIX));
+  const custom = types.filter((t) => t.startsWith(CUSTOM_DOC_PREFIX)).map((t) => t.slice(CUSTOM_DOC_PREFIX.length));
+  const or: any[] = [];
+  if (builtIn.length) or.push({ fileType: { in: builtIn as any } });
+  if (custom.length) or.push({ fileType: 'OTHER' as any, customType: { in: custom } });
+  return { leadId, OR: or.length ? or : [{ id: '__none__' }] };
+}
+
 const ACTIVE_MEETING_STATUSES = ['SCHEDULED', 'RESCHEDULED', 'COMPLETED'] as const;
 
 function hasValue(v: unknown): boolean {
   if (v === null || v === undefined) return false;
   if (typeof v === 'string') return v.trim().length > 0;
   return true;
+}
+
+/** Whether one requirement is met for the lead. */
+export async function isRequirementMet(r: StageRequirement, lead: Record<string, any>): Promise<boolean> {
+  switch (r.type) {
+    case 'field':
+      return hasValue(lead[r.field]);
+    case 'customField':
+      return hasValue((lead.customFields as Record<string, unknown> | null | undefined)?.[r.key]);
+    case 'meeting': {
+      const statuses = r.status === 'completed' ? ['COMPLETED'] : ACTIVE_MEETING_STATUSES;
+      const m = await prisma.meeting.findFirst({
+        where: { leadId: lead.id, type: r.meetingType as any, status: { in: statuses as any } },
+        select: { id: true },
+      });
+      return !!m;
+    }
+    case 'meetingAnyOf': {
+      const statuses = r.status === 'completed' ? ['COMPLETED'] : ACTIVE_MEETING_STATUSES;
+      const m = await prisma.meeting.findFirst({
+        where: { leadId: lead.id, type: { in: r.meetingTypes as any }, status: { in: statuses as any } },
+        select: { id: true },
+      });
+      return !!m;
+    }
+    case 'meetingOrCall': {
+      const [m, c] = await Promise.all([
+        prisma.meeting.findFirst({
+          // A completed PD (Pitch Discussion) meeting also satisfies the PP→PD
+          // meeting-or-call item, since PD meetings are held while still in PP.
+          where: { leadId: lead.id, type: { in: (r.meetingType === 'PP' ? ['PP', 'PD'] : [r.meetingType]) as any }, status: 'COMPLETED' as any },
+          select: { id: true },
+        }),
+        prisma.call.findFirst({ where: { leadId: lead.id }, select: { id: true } }),
+      ]);
+      return !!m || !!c;
+    }
+    case 'quote': {
+      const [q, f] = await Promise.all([
+        prisma.quote.findFirst({ where: { leadId: lead.id }, select: { id: true } }),
+        prisma.leadFile.findFirst({
+          where: leadFileWhere(lead.id, expandQuoteTypes(r.fileTypes ?? ['QUOTATION', 'GENERATED_QUOTE'])),
+          select: { id: true },
+        }),
+      ]);
+      return !!q || !!f;
+    }
+    case 'dip': {
+      const dip = await prisma.dIPChecklist.findUnique({ where: { leadId: lead.id }, select: { completedAt: true } });
+      return !!dip?.completedAt;
+    }
+    case 'pdObChecklist': {
+      const c = await prisma.pDOBChecklist.findUnique({ where: { leadId: lead.id }, select: { completedAt: true } });
+      return !!c?.completedAt;
+    }
+    case 'obObmChecklist': {
+      const c = await prisma.oBOBMChecklist.findUnique({ where: { leadId: lead.id }, select: { completedAt: true } });
+      return !!c?.completedAt;
+    }
+    case 'file': {
+      const fileRecord = await prisma.leadFile.findFirst({
+        where: leadFileWhere(lead.id, expandFileTypes(r.fileType)),
+        select: { id: true },
+      });
+      // Backward-compat: floor plan field on the lead also satisfies FLOOR_PLAN check
+      return !!fileRecord || (r.fileType === 'FLOOR_PLAN' && hasValue(lead.floorPlanUrl));
+    }
+    case 'fileAnyOf': {
+      const fileRecord = await prisma.leadFile.findFirst({
+        where: leadFileWhere(lead.id, r.fileTypes.flatMap(expandFileTypes)),
+        select: { id: true },
+      });
+      return !!fileRecord;
+    }
+  }
+  return false;
 }
 
 export interface StageCheckResult {
@@ -418,175 +615,50 @@ export interface StageCheckResult {
    * `type` mirrors the requirement's config type (or 'intent' for the intent-rating gate) so callers can decide how to act on
    * an unmet item — e.g. deep-link to the PD→OB / OBM→DIP checklist rather than just showing text. */
   details: { label: string; satisfied: boolean; type: string }[];
+  /** True when the rules say a gap on this move only warns (the move still goes ahead). */
+  warnOnly: boolean;
 }
 
 /**
  * Evaluate whether a lead satisfies the requirements for a stage transition.
  * `lead` must include `id` and should reflect any field changes being applied
  * in the same request (so a user can set a required field and change stage in
- * one update).
+ * one update). `rules` defaults to the effective (admin-saved or default) rules.
  */
 export async function checkStageRequirements(
   lead: Record<string, any>,
   fromStage: string,
   toStage: string,
+  rules?: StageRulesConfig,
 ): Promise<StageCheckResult> {
+  const effective = rules ?? await getEffectiveStageRules();
   const fromIdx = FUNNEL_ORDER.indexOf(fromStage as (typeof FUNNEL_ORDER)[number]);
   const toIdx = FUNNEL_ORDER.indexOf(toStage as (typeof FUNNEL_ORDER)[number]);
-  const isForwardFunnelMove = fromIdx !== -1 && toIdx !== -1 && toIdx > fromIdx;
-
-  const reqs = requirementsForTransition(fromStage, toStage);
-
-  // A lead that previously skipped DQL/Proposal Ready/PD (Pitch Discussion)
-  // still owes that stage's excluded requirements — they were only waived
-  // for the skip hop itself, not forever. Keep surfacing them on every later
-  // forward move until fulfilled. Dedup by label in case a requirement is
-  // already part of this transition's own leg.
-  if (isForwardFunnelMove) {
-    const seenLabels = new Set(reqs.map((r) => r.label));
-    for (const [flag, deferredReqs] of Object.entries(DEFERRED_SKIP_REQUIREMENTS)) {
-      if (!lead[flag]) continue;
-      for (const r of deferredReqs) {
-        if (seenLabels.has(r.label)) continue;
-        seenLabels.add(r.label);
-        reqs.push(r);
-      }
-    }
-  }
 
   const missing: string[] = [];
   const details: { label: string; satisfied: boolean; type: string }[] = [];
-
-  for (const r of reqs) {
-    let satisfied = false;
-    switch (r.type) {
-      case 'field':
-        satisfied = hasValue(lead[r.field]);
-        break;
-      case 'meeting': {
-        const statuses = r.status === 'completed' ? ['COMPLETED'] : ACTIVE_MEETING_STATUSES;
-        const m = await prisma.meeting.findFirst({
-          where: {
-            leadId: lead.id,
-            type: r.meetingType as any,
-            status: { in: statuses as any },
-          },
-          select: { id: true },
-        });
-        satisfied = !!m;
-        break;
-      }
-      case 'meetingAnyOf': {
-        const statuses = r.status === 'completed' ? ['COMPLETED'] : ACTIVE_MEETING_STATUSES;
-        const m = await prisma.meeting.findFirst({
-          where: {
-            leadId: lead.id,
-            type: { in: r.meetingTypes as any },
-            status: { in: statuses as any },
-          },
-          select: { id: true },
-        });
-        satisfied = !!m;
-        break;
-      }
-      case 'meetingOrCall': {
-        const [m, c] = await Promise.all([
-          prisma.meeting.findFirst({
-            // A completed PD (Pitch Discussion) meeting also satisfies the PP→PD
-            // meeting-or-call item, since PD meetings are held while still in PP.
-            where: { leadId: lead.id, type: { in: (r.meetingType === 'PP' ? ['PP', 'PD'] : [r.meetingType]) as any }, status: 'COMPLETED' as any },
-            select: { id: true },
-          }),
-          prisma.call.findFirst({ where: { leadId: lead.id }, select: { id: true } }),
-        ]);
-        satisfied = !!m || !!c;
-        break;
-      }
-      case 'quote': {
-        const [q, f] = await Promise.all([
-          prisma.quote.findFirst({ where: { leadId: lead.id }, select: { id: true } }),
-          prisma.leadFile.findFirst({
-            where: {
-              leadId: lead.id,
-              fileType: { in: expandQuoteTypes(r.fileTypes ?? ['QUOTATION', 'GENERATED_QUOTE']) as any },
-            },
-            select: { id: true },
-          }),
-        ]);
-        satisfied = !!q || !!f;
-        break;
-      }
-      case 'dip': {
-        const dip = await prisma.dIPChecklist.findUnique({
-          where: { leadId: lead.id },
-          select: { completedAt: true },
-        });
-        satisfied = !!dip?.completedAt;
-        break;
-      }
-      case 'pdObChecklist': {
-        const c = await prisma.pDOBChecklist.findUnique({
-          where: { leadId: lead.id },
-          select: { completedAt: true },
-        });
-        satisfied = !!c?.completedAt;
-        break;
-      }
-      case 'obObmChecklist': {
-        const c = await prisma.oBOBMChecklist.findUnique({
-          where: { leadId: lead.id },
-          select: { completedAt: true },
-        });
-        satisfied = !!c?.completedAt;
-        break;
-      }
-      case 'file': {
-        const fileRecord = await prisma.leadFile.findFirst({
-          where: {
-            leadId: lead.id,
-            fileType: { in: expandFileTypes(r.fileType) as any },
-          },
-          select: { id: true },
-        });
-        satisfied = !!fileRecord;
-        // Backward-compat: floor plan field on the lead also satisfies FLOOR_PLAN check
-        if (!satisfied && r.fileType === 'FLOOR_PLAN') {
-          satisfied = hasValue(lead.floorPlanUrl);
-        }
-        break;
-      }
-      case 'fileAnyOf': {
-        const fileRecord = await prisma.leadFile.findFirst({
-          where: {
-            leadId: lead.id,
-            fileType: { in: r.fileTypes.flatMap(expandFileTypes) as any },
-          },
-          select: { id: true },
-        });
-        satisfied = !!fileRecord;
-        break;
-      }
-    }
+  for (const r of requirementsForMove(lead, fromStage, toStage, effective)) {
+    const satisfied = await isRequirementMet(r, lead);
     if (!satisfied) missing.push(r.label);
     details.push({ label: r.label, satisfied, type: r.type });
   }
 
   // Intent-rating=1 ("no action planned") gate — scoped to the MQL→DQL
-  // qualification decision only. This previously blocked EVERY forward move
-  // for the rest of a lead's life once its rating hit 1★ (e.g. an early
-  // low-signal meeting auto-scored it 1★, and the lead was then frozen at
-  // every later stage even after real progress was made) — a lead that has
-  // already been qualified past MQL has, by definition, had action taken on
-  // it, so re-checking this rating on every subsequent hop served no purpose
-  // and was the reported cause of leads looking permanently "stuck". The one
-  // gate the founder's spec actually cares about is the qualification
-  // decision itself: don't let a "no action planned" lead be qualified out
-  // of MQL in the first place.
+  // qualification decision only: a lead that has already been qualified past
+  // MQL has, by definition, had action taken on it, so re-checking this rating
+  // on every later hop only left leads looking permanently "stuck". The gate
+  // the founder's spec cares about is the qualification decision itself.
   if (fromStage === 'MQL' && toIdx > fromIdx && lead.intentRating === 1) {
     const label = 'Intent rating is 1★ (no action planned) — update the lead\'s intent rating before qualifying past MQL';
     missing.push(label);
     details.push({ label, satisfied: false, type: 'intent' });
   }
 
-  return { ok: missing.length === 0, missing, details };
+  return { ok: missing.length === 0, missing, details, warnOnly: isWarnOnly(toStage, effective) };
+}
+
+/** File-type requirements for one Files-tab folder: the items on the edge out of `stage`. */
+export function fileRequirementsForFolder(stage: string, rules: StageRulesConfig): RuleItem[] {
+  const edge = FUNNEL_EDGES.find((e) => e.startsWith(`${stage}->`));
+  return ((edge && rules.transitions[edge]) || []).filter((r) => r.type === 'file' || r.type === 'fileAnyOf' || r.type === 'quote');
 }

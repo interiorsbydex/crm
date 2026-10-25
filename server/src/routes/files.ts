@@ -6,6 +6,10 @@ import { supabaseAdmin } from '../lib/supabase.js';
 import { logActivity } from '../lib/activityLog.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
+import { getDocumentTypes, toStoredFileType, documentTypeKey } from '../lib/documentTypes.js';
+import {
+  FUNNEL_ORDER, fileRequirementsForFolder, getEffectiveStageRules, isRequirementMet, type StageRequirement,
+} from '../config/stageRequirements.js';
 
 export const filesRouter = Router({ mergeParams: true });
 
@@ -26,18 +30,9 @@ const ALLOWED_EXTS = new Set([
   'ppt', 'pptx', 'doc', 'docx', 'xls', 'xlsx',
 ]);
 
-const VALID_FILE_TYPES = ['FLOOR_PLAN', 'LIFESTYLE_CAPTURE', 'PITCH_PRESENTATION', 'QUOTATION', 'GENERATED_QUOTE', 'PAYMENT_SCREENSHOT', 'OB_QUOTE', 'WELCOME_MAIL_SCREENSHOT', 'FINAL_PITCH_PRESENTATION', 'PP_QUOTATION', 'PR_QUOTATION', 'PR_PRESENTATION', 'OTHER'] as const;
+// Valid document types and which must be PDFs come from Admin → Document Types
+// (lib/documentTypes.ts); the built-in defaults keep the original PDF-only set.
 const VALID_STAGES = ['EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER'] as const;
-const PDF_ONLY_FILE_TYPES = new Set([
-  'PITCH_PRESENTATION',
-  'FINAL_PITCH_PRESENTATION',
-  'PR_PRESENTATION',
-  'QUOTATION',
-  'GENERATED_QUOTE',
-  'OB_QUOTE',
-  'PP_QUOTATION',
-  'PR_QUOTATION',
-]);
 
 const LEAD_FILES_BUCKET = 'crm-lead-files'; // private bucket
 
@@ -57,8 +52,9 @@ filesRouter.post(
         res.status(400).json({ error: `stage must be one of: ${VALID_STAGES.join(', ')}` });
         return;
       }
-      if (!fileType || !VALID_FILE_TYPES.includes(fileType as any)) {
-        res.status(400).json({ error: `fileType must be one of: ${VALID_FILE_TYPES.join(', ')}` });
+      const docType = (await getDocumentTypes()).find((t) => t.key === fileType && t.active);
+      if (!fileType || !docType) {
+        res.status(400).json({ error: 'Choose a valid document type' });
         return;
       }
 
@@ -77,8 +73,8 @@ filesRouter.post(
       if (!file) { res.status(400).json({ error: 'No file uploaded' }); return; }
 
       const ext = (file.originalname.split('.').pop() ?? '').toLowerCase();
-      if (PDF_ONLY_FILE_TYPES.has(fileType) && (file.mimetype !== 'application/pdf' || ext !== 'pdf')) {
-        res.status(400).json({ error: 'Quotations and presentations must be uploaded as PDF files' });
+      if (docType.pdfOnly && (file.mimetype !== 'application/pdf' || ext !== 'pdf')) {
+        res.status(400).json({ error: `${docType.label} must be uploaded as a PDF file` });
         return;
       }
       if (!ALLOWED_MIMES.has(file.mimetype) || !ALLOWED_EXTS.has(ext)) {
@@ -105,7 +101,7 @@ filesRouter.post(
         data: {
           leadId,
           stage: stage as any,
-          fileType: fileType as any,
+          ...(toStoredFileType(fileType) as { fileType: any; customType: string | null }),
           fileName: file.originalname,
           storagePath,
           uploadedById: user.id,
@@ -161,7 +157,8 @@ filesRouter.get('/', verifyToken, async (req, res) => {
     // tagged with a `crm-files:` storagePath prefix — those already have a
     // permanent public URL and don't need signing.
     const files: Array<Record<string, any>> = await Promise.all(
-      rawFiles.map(async (f) => {
+      // Admin-defined document types are reported as `custom:<key>`.
+      rawFiles.map((f) => ({ ...f, fileType: documentTypeKey(f) })).map(async (f) => {
         if (f.storagePath.startsWith('crm-files:')) {
           if (!supabaseAdmin) return { ...f, signedUrl: undefined };
           const realPath = f.storagePath.slice('crm-files:'.length);
@@ -209,6 +206,37 @@ filesRouter.get('/', verifyToken, async (req, res) => {
     res.json({ files, grouped });
   } catch (err: any) {
     console.error('[files:list]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/leads/:leadId/files/requirements — required-file badges per folder ──
+// Each Files-tab folder shows the document requirements of the move OUT of that
+// stage, evaluated by the same engine that gates the stage change, so the
+// badges can't drift from the real rules (Admin → Stage Rules).
+filesRouter.get('/requirements', verifyToken, async (req, res) => {
+  try {
+    const { leadId } = req.params as { leadId: string };
+    const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (!(await isAuthorizedForLead(lead, req.user!))) {
+      res.status(403).json({ error: 'Not authorised to view files for this lead' });
+      return;
+    }
+    const rules = await getEffectiveStageRules();
+    const folders: Record<string, { label: string; satisfied: boolean; source: 'stageRule' | 'checklist' }[]> = {};
+    for (const stage of FUNNEL_ORDER.slice(0, -1)) {
+      const items: { label: string; satisfied: boolean; source: 'stageRule' | 'checklist'; req: StageRequirement }[] = [];
+      for (const r of fileRequirementsForFolder(stage, rules)) items.push({ label: r.label, satisfied: false, source: 'stageRule', req: r });
+      // The PD→OB checklist's "Share welcome mail" needs the client's approval screenshot.
+      if (stage === 'PROPOSAL_DISCUSSION') {
+        items.push({ label: 'Welcome Mail Approval Screenshot (PD→OB checklist)', satisfied: false, source: 'checklist', req: { type: 'file', fileType: 'WELCOME_MAIL_SCREENSHOT', stages: [], label: '' } });
+      }
+      folders[stage] = await Promise.all(items.map(async ({ req: r, ...item }) => ({ ...item, satisfied: await isRequirementMet(r, lead) })));
+    }
+    res.json({ folders });
+  } catch (err: any) {
+    console.error('[files:requirements]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, Target, Megaphone, type LucideIcon } from 'lucide-react';
+import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, Target, Megaphone, Route, FileText, type LucideIcon } from 'lucide-react';
 import { api, uploadFile } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
 import { DateInput } from '../components/ui/DateTimeInputs';
 import IncentiveRulesAdmin from '../components/admin/IncentiveRulesAdmin';
 import DashboardContentAdmin from '../components/admin/DashboardContentAdmin';
+import StageRulesAdmin from '../components/admin/StageRulesAdmin';
+import DocumentTypesAdmin from '../components/admin/DocumentTypesAdmin';
 
 interface User {
   id: string; name: string; email: string; role: string;
@@ -41,7 +43,7 @@ const ROLE_COLORS: Record<string, string> = {
   BRANCH_HEAD: 'bg-green-100 text-green-700',
 };
 
-type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers' | 'import' | 'targets' | 'credits' | 'content';
+type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers' | 'import' | 'targets' | 'credits' | 'content' | 'stageRules' | 'docTypes';
 
 interface ImportPreviewRow {
   row: number; status: 'WILL_IMPORT' | 'DUPLICATE' | 'INVALID';
@@ -449,6 +451,8 @@ export default function Admin() {
     { id: 'targets', label: 'Sales Performance Targets', Icon: Target },
     { id: 'credits', label: 'Designer Credit Rules', Icon: Star },
     { id: 'content', label: 'Dashboard Content', Icon: Megaphone },
+    { id: 'stageRules', label: 'Stage Rules', Icon: Route },
+    { id: 'docTypes', label: 'Document Types', Icon: FileText },
   ];
 
   const hasLeads = (deactivatePreview?.activeLeads ?? 0) > 0;
@@ -1191,6 +1195,9 @@ export default function Admin() {
             )}
           </div>
         )}
+
+        {tab === 'stageRules' && <StageRulesAdmin />}
+        {tab === 'docTypes' && <DocumentTypesAdmin />}
       </div>
     </div>
   );

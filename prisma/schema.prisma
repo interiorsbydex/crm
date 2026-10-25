@@ -956,6 +956,9 @@ model LeadFile {
   leadId       String
   stage        LeadStage
   fileType     LeadFileType
+  /// Admin-defined document type key (Admin → Document Types). Set only when
+  /// fileType is OTHER; referenced elsewhere as `custom:<key>`.
+  customType   String?
   fileName     String
   /// Supabase Storage path in private bucket crm-lead-files
   storagePath  String

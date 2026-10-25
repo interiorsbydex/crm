@@ -8,12 +8,22 @@ import {
 } from '../config/slaConfig.js';
 import { getEffectiveStageSla } from '../lib/stageSla.js';
 import { isLenientLaunch } from '../lib/lenientMode.js';
+import { getDocumentTypes } from '../lib/documentTypes.js';
 
 export const configRouter = Router();
 
 // ── GET /api/config/flags — feature flags the client mirrors ──────────────────
 configRouter.get('/flags', verifyToken, (_req, res) => {
   res.json({ lenientLaunch: isLenientLaunch() });
+});
+
+// ── GET /api/config/document-types — Files-tab upload types (Admin → Document Types) ──
+configRouter.get('/document-types', verifyToken, async (_req, res) => {
+  try {
+    res.json({ types: await getDocumentTypes() });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── GET /api/config/offers — active offer options for lead offer dropdowns ────
