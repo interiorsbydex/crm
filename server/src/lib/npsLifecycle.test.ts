@@ -65,7 +65,8 @@ describe('NPS drafting, sending and deduplication', () => {
     expect(state.response.sentAt).toBeNull();
     expect(state.checklistUpdates).toHaveLength(0);
     expect(state.send).not.toHaveBeenCalled();
-    expect((await getNpsSendState('lead', 'ONBOARDING')).status).toBe('NOT_SENT');
+    // Annie #8: a prepared draft is reported as a draft, never as sent.
+    expect(await getNpsSendState('lead', 'ONBOARDING')).toMatchObject({ status: 'NOT_SENT', draftPrepared: true });
   });
 
   it('keeps the original survey token when reopening an unsent draft', async () => {

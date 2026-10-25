@@ -166,7 +166,7 @@ obObmChecklistRouter.get('/', verifyToken, async (req, res) => {
       checklist?.tentativeInteriorHandoverAt,
     );
     res.json({
-      checklist: checklist ? { ...checklist, npsTriggered: nps.status !== 'NOT_SENT', npsTriggeredAt: nps.sentAt } : null,
+      checklist: checklist ? { ...checklist, npsTriggered: nps.status !== 'NOT_SENT', npsTriggeredAt: nps.sentAt, npsDraftPrepared: nps.draftPrepared } : null,
       docItems: DOC_ITEMS.map((key) => ({ key, label: DOC_ITEM_LABELS[key] })),
       timelineFields: TIMELINE_FIELDS,
       obmMailTemplate: {
@@ -247,7 +247,7 @@ obObmChecklistRouter.patch('/', verifyToken, async (req, res) => {
     await logActivity(req.user!.id, 'OB_OBM_CHECKLIST_UPDATED', leadId, data);
 
     const nps = await getNpsSendState(leadId, 'ONBOARDING');
-    res.json({ checklist: { ...checklist, npsTriggered: nps.status !== 'NOT_SENT', npsTriggeredAt: nps.sentAt } });
+    res.json({ checklist: { ...checklist, npsTriggered: nps.status !== 'NOT_SENT', npsTriggeredAt: nps.sentAt, npsDraftPrepared: nps.draftPrepared } });
   } catch (err: any) {
     console.error('[ob-obm-checklist:patch]', err.message);
     res.status(500).json({ error: err.message });

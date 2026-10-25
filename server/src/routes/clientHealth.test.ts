@@ -27,7 +27,8 @@ vi.mock('../lib/prisma.js', () => ({
     leadFile: { findMany: async () => [] },
     call: { findMany: async () => [
       { leadId: 'a', outcome: 'ANSWERED', calledAt: new Date(Date.now() - 3 * 86_400_000) },
-      { leadId: 'b', outcome: 'ANSWERED', calledAt: new Date() },
+      // A minute ago: the report's 'now' is taken before this mock runs, so 'now' itself would look like the future.
+      { leadId: 'b', outcome: 'ANSWERED', calledAt: new Date(Date.now() - 60_000) },
     ] },
     meeting: { findMany: async () => [] },
     activityLog: { findMany: async () => [] },

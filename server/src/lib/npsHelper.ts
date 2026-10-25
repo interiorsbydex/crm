@@ -63,11 +63,11 @@ export async function getNpsSendState(leadId: string, stage: string) {
   });
   const sentAt = response?.sentAt ?? logged?.sentAt ?? null;
   const respondedAt = response?.respondedAt ?? null;
-  return {
-    status: respondedAt ? 'RESPONDED' as const : sentAt ? 'SENT' as const : 'NOT_SENT' as const,
-    sentAt,
-    respondedAt,
-  };
+  const status = respondedAt ? 'RESPONDED' as const : sentAt ? 'SENT' as const : 'NOT_SENT' as const;
+  // A prepared-but-unsent draft is reported separately and never counts as sent.
+  const draftPrepared = status === 'NOT_SENT'
+    && !!(await prisma.emailDraft.findUnique({ where: { key: `${leadId}::NPS_${stage}` }, select: { key: true } }).catch(() => null));
+  return { status, sentAt, respondedAt, draftPrepared };
 }
 
 export async function markNpsSent(

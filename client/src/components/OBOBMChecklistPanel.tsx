@@ -19,6 +19,8 @@ interface OBOBMChecklist {
   tentativeInteriorHandoverAt: string | null;
   npsTriggered: boolean;
   npsTriggeredAt: string | null;
+  /** Draft prepared but not sent yet (never counts as sent). */
+  npsDraftPrepared?: boolean;
   obmMailSent: boolean;
   obmMailSentAt: string | null;
   clientConfirmed: boolean;
@@ -428,7 +430,7 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
       {/* NPS trigger */}
       <div className="flex items-center justify-between mb-4 px-3 py-2 rounded-lg bg-gray-50">
         <span className="text-xs text-gray-700">
-          {checklist.npsTriggered ? '✓ NPS email sent or customer feedback received' : 'NPS email not yet sent'}
+          {checklist.npsTriggered ? '✓ NPS email sent or customer feedback received' : checklist.npsDraftPrepared ? 'NPS email drafted — not sent yet' : 'NPS email not yet sent'}
         </span>
         {isEditable && !checklist.npsTriggered && (
           <button
@@ -436,7 +438,7 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
             disabled={triggeringNps}
             className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700 disabled:opacity-50"
           >
-            <Send size={11} strokeWidth={2.5} /> {triggeringNps ? 'Preparing…' : 'Prepare NPS email'}
+            <Send size={11} strokeWidth={2.5} /> {triggeringNps ? 'Preparing…' : checklist.npsDraftPrepared ? 'Open NPS draft' : 'Prepare NPS email'}
           </button>
         )}
       </div>
