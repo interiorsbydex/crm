@@ -32,8 +32,10 @@ import { getNpsSendState } from '../lib/npsHelper.js';
 import { DESIGN_PHASES, DESIGN_PHASE_DEFAULT_DAYS, MS_PER_DAY } from '../config/slaConfig.js';
 import { getCrmSettings } from '../lib/crmSettings.js';
 import { isLenientForStage, logGateBypass } from '../lib/lenientMode.js';
+import { evaluateChecklist, mergeCustomValues } from '../lib/checklists.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 import { getCommercialContextForLead } from '../lib/stageTimeline.js';
+import { ConfigError } from '../lib/versionedConfig.js';
 
 export const obObmChecklistRouter = Router({ mergeParams: true });
 
@@ -178,6 +180,26 @@ obObmChecklistRouter.get('/', verifyToken, async (req, res) => {
   }
 });
 
+// ── GET /api/leads/:leadId/ob-obm-checklist/status — what's done and what's missing ──
+// Worked out by lib/checklists.ts, which applies Admin → Checklists; the panel
+// shows this instead of keeping its own copy of the rules.
+obObmChecklistRouter.get('/status', verifyToken, async (req, res) => {
+  try {
+    const { leadId } = req.params as { leadId: string };
+    const { lead, authorized } = await loadLeadForChecklist(leadId, req.user!);
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (!authorized) { res.status(403).json({ error: 'Not authorised for this lead' }); return; }
+    const checklist = await prisma.oBOBMChecklist.findUnique({ where: { leadId } });
+    if (!checklist) { res.json({ items: [], missing: [] }); return; }
+    const status = await evaluateChecklist('obObm', leadId, checklist);
+    // `blocking`: what the send step will actually refuse on (nothing in lenient mode; it's recorded instead).
+    const lenient = isLenientForStage('ONBOARDING');
+    res.json({ ...status, blocking: lenient ? [] : status.missing, lenient });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── PATCH /api/leads/:leadId/ob-obm-checklist ─────────────────────────────────
 obObmChecklistRouter.patch('/', verifyToken, async (req, res) => {
   try {
@@ -212,6 +234,15 @@ obObmChecklistRouter.patch('/', verifyToken, async (req, res) => {
       if (body[confirmedKey] !== undefined) data[confirmedKey] = !!body[confirmedKey];
     }
     if (body.clientConfirmed !== undefined) data.clientConfirmed = !!body.clientConfirmed;
+    // The admin's own checklist items (Admin → Checklists).
+    if (req.body.customValues !== undefined) {
+      try {
+        data.customValues = await mergeCustomValues('obObm', current.customValues, req.body.customValues);
+      } catch (err: any) {
+        res.status(err instanceof ConfigError ? err.status : 500).json({ error: err.message });
+        return;
+      }
+    }
     const checklist = await prisma.oBOBMChecklist.update({ where: { leadId }, data });
     await logActivity(req.user!.id, 'OB_OBM_CHECKLIST_UPDATED', leadId, data);
 
@@ -246,17 +277,9 @@ obObmChecklistRouter.post('/send-obm-mail', verifyToken, async (req, res) => {
     // a quote uploaded at PROPOSAL_DISCUSSION or PROPOSAL_PRESENTED). Requiring it
     // again here with stage:'ONBOARDING' caused a false block because the file's
     // stage tag is PD/PP, never OB. Removed — the earlier gate covers this.
-    const missing: string[] = [];
-    if (!allDocsDone(checklist)) {
-      for (const item of DOC_ITEMS) {
-        if (!(checklist as any)[`${item}Done`]) missing.push(DOC_ITEM_LABELS[item]);
-      }
-    }
-    for (const f of TIMELINE_FIELDS) {
-      if (!(checklist as any)[f]) missing.push(TIMELINE_LABELS[f]);
-    }
-    if ((await getNpsSendState(leadId, 'ONBOARDING')).status === 'NOT_SENT') missing.push('NPS survey email sent or customer response received');
-    if (!checklist.clientConfirmed) missing.push('Client confirmed');
+    // What's still missing comes from the checklist engine (lib/checklists.ts),
+    // which applies Admin → Checklists (optional items, the admin's own items).
+    const { missing } = await evaluateChecklist('obObm', leadId, checklist);
     // The client's email can never be waived — there is nobody to send to.
     if (!lead.email) {
       res.status(400).json({ error: 'Cannot send OBM mail — missing requirements', missing: ["Client's email address", ...missing] });

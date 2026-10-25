@@ -32,6 +32,8 @@ import { mountVersionedConfig } from '../lib/versionedConfig.js';
 import { automationsConfig, AUTOMATION_EVENTS, CC_ROLES } from '../lib/automations.js';
 import { dashboardLayoutsConfig } from '../lib/dashboardLayouts.js';
 import { permissionsConfig, PERMISSIONS } from '../lib/permissions.js';
+import { checklistsConfig, CHECKLIST_NAMES, BUILT_IN_ITEMS } from '../lib/checklists.js';
+import { getDocumentTypes } from '../lib/documentTypes.js';
 import {
   CrmSettingsError, DEFAULT_CRM_SETTINGS, LEAD_DETAIL_OPTIONS, HIDEABLE_STAGES, NAMEABLE_STAGES, DESIGN_PHASE_KEYS,
   loadCrmSettingsState, saveCrmSettings, resetCrmSettings, crmSettingsHistory, getCrmSettings, previewCycleStartDay,
@@ -1069,6 +1071,12 @@ mountVersionedConfig(adminRouter, '/dashboards', dashboardLayoutsConfig);
 // Which roles may do each action; roles can only be switched off/on among those
 // the action was built for (lib/permissions.ts).
 mountVersionedConfig(adminRouter, '/permissions', permissionsConfig, async () => ({ catalog: { permissions: PERMISSIONS } }));
+
+// ── Checklists (Admin → Checklists) ───────────────────────────────────────────
+// Optional built-in items and the admin's own items per checklist (lib/checklists.ts).
+mountVersionedConfig(adminRouter, '/checklists', checklistsConfig, async () => ({
+  catalog: { names: CHECKLIST_NAMES, builtIn: BUILT_IN_ITEMS, documentTypes: (await getDocumentTypes()).filter((t) => t.active) },
+}));
 
 // ── Document types (Admin → Document Types) ───────────────────────────────────
 adminRouter.get('/document-types', async (_req, res) => {

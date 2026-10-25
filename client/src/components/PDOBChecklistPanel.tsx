@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useLenientLaunch } from '../lib/flags';
 import { Check, Mail, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api';
 import toast from 'react-hot-toast';
 import EmailPreviewModal from './EmailPreviewModal';
+import { CustomChecklistItems, useChecklistStatus } from './ChecklistExtras';
 import { DateTimeInput } from './ui/DateTimeInputs';
 import { istDatetimeLocalValue, istInputToISO } from '../lib/dateFormat';
 
@@ -39,7 +39,6 @@ const OB_MEETING_LOCATIONS = ['Office', "Client's Site", 'Public Place', "Client
 const OTHER_LOCATION_VALUE = '__other_location__';
 
 export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onComplete, isLocked, refreshKey = 0 }: Props) {
-  const lenient = useLenientLaunch();
   const [checklist, setChecklist] = useState<PDOBChecklist | null>(null);
   const [hasPaymentScreenshot, setHasPaymentScreenshot] = useState(false);
   const [hasObQuote, setHasObQuote] = useState(false);
@@ -51,6 +50,8 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [showMailModal, setShowMailModal] = useState(false);
+  const statusPath = `/leads/${leadId}/pd-ob-checklist`;
+  const { status, reload: reloadStatus } = useChecklistStatus(statusPath, [stage, refreshKey, checklist]);
 
   const [form, setForm] = useState({ paymentValue: '', targetValue: '', projectValue: '', furnitureValue: '', obMeetingScheduledAt: '', obMeetingLocation: '', notes: '', finalPitchPresentationConfirmed: false });
   const [showOtherLocation, setShowOtherLocation] = useState(false);
@@ -197,22 +198,13 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
   }
 
   const isComplete = !!checklist.completedAt;
-  const requiredMissing = [
-    !hasPaymentScreenshot && 'Payment screenshot',
-    !hasObQuote && 'OB Quote',
-    !hasFinalPitchPresentationFile && 'Final Pitch Presentation file (Files → PP or PD)',
-    !hasGeneratedQuotationFile && 'Generated Quotation file (Files → PP or PD)',
-    checklist.paymentValue == null && 'Payment value',
-    checklist.projectValue == null && 'Project value',
-    checklist.furnitureValue == null && 'Furniture value',
-    !checklist.obMeetingScheduledAt && 'OB meeting date/time',
-    !checklist.obMeetingLocation && 'OB meeting location',
-    !checklist.notes?.trim() && 'Notes',
-    !hasWelcomeMailScreenshot && 'Welcome mail approval screenshot',
-    !clientEmail && "Client's email",
-  ].filter(Boolean) as string[];
-  // Lenient launch: only the client's email can still block sending (nobody to mail).
-  const blockingMissing = lenient ? requiredMissing.filter((m) => m === "Client's email") : requiredMissing;
+  // What's missing comes from the server (Admin → Checklists can make items
+  // optional or add new ones), so this always matches what sending will accept.
+  const optionalKeys = new Set(status?.items.filter((i) => !i.required).map((i) => i.key) ?? []);
+  const requiredMissing = [...(status?.missing ?? []), ...(!clientEmail ? ["Client's email"] : [])];
+  const blockingMissing = [...(status?.blocking ?? status?.missing ?? []), ...(!clientEmail ? ["Client's email"] : [])];
+  const lenient = !!status?.lenient;
+  const optionalTag = (key: string) => (optionalKeys.has(key) ? ' (optional)' : '');
 
   return (
     <div className={`border rounded-xl p-5 ${isComplete ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
@@ -232,25 +224,25 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
 
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div className={`text-xs px-3 py-2 rounded-lg ${hasPaymentScreenshot ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-          {hasPaymentScreenshot ? '✓' : '⚠'} Payment screenshot {hasPaymentScreenshot ? 'uploaded' : '— upload in Files tab'}
+          {hasPaymentScreenshot ? '✓' : '⚠'} Payment screenshot {hasPaymentScreenshot ? 'uploaded' : '— upload in Files tab'}{optionalTag('paymentScreenshot')}
         </div>
         <div className={`text-xs px-3 py-2 rounded-lg ${hasObQuote ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-          {hasObQuote ? '✓' : '⚠'} OB Quote {hasObQuote ? 'uploaded' : '— upload in Files tab'}
+          {hasObQuote ? '✓' : '⚠'} OB Quote {hasObQuote ? 'uploaded' : '— upload in Files tab'}{optionalTag('obQuote')}
         </div>
         <div className={`text-xs px-3 py-2 rounded-lg ${hasWelcomeMailScreenshot ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-          {hasWelcomeMailScreenshot ? '✓' : '⚠'} Approval screenshot {hasWelcomeMailScreenshot ? 'uploaded' : '— upload in Files tab'}
+          {hasWelcomeMailScreenshot ? '✓' : '⚠'} Approval screenshot {hasWelcomeMailScreenshot ? 'uploaded' : '— upload in Files tab'}{optionalTag('welcomeMailScreenshot')}
         </div>
         <div className={`text-xs px-3 py-2 rounded-lg ${hasFinalPitchPresentationFile ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-          {hasFinalPitchPresentationFile ? '✓' : '⚠'} Pitch Presentation file {hasFinalPitchPresentationFile ? 'uploaded' : '— upload in Files tab'}
+          {hasFinalPitchPresentationFile ? '✓' : '⚠'} Pitch Presentation file {hasFinalPitchPresentationFile ? 'uploaded' : '— upload in Files tab'}{optionalTag('finalPitchPresentation')}
         </div>
         <div className={`text-xs px-3 py-2 rounded-lg ${hasGeneratedQuotationFile ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-          {hasGeneratedQuotationFile ? '✓' : '⚠'} Generated Quotation file {hasGeneratedQuotationFile ? 'uploaded' : '— upload in Files tab'}
+          {hasGeneratedQuotationFile ? '✓' : '⚠'} Generated Quotation file {hasGeneratedQuotationFile ? 'uploaded' : '— upload in Files tab'}{optionalTag('generatedQuotation')}
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Payment value (₹)</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Payment value (₹){optionalTag('paymentValue')}</label>
           <input
             type="number"
             disabled={!isEditable || saving}
@@ -279,7 +271,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           )}
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Project value excluding furniture (₹)</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Project value excluding furniture (₹){optionalTag('projectValue')}</label>
           <input
             type="number"
             disabled={!isEditable || saving}
@@ -289,7 +281,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Furniture value (₹)</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Furniture value (₹){optionalTag('furnitureValue')}</label>
           <input
             type="number"
             disabled={!isEditable || saving}
@@ -299,7 +291,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">OB meeting date &amp; time</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">OB meeting date &amp; time{optionalTag('obMeetingScheduledAt')}</label>
           <DateTimeInput
             disabled={!isEditable || saving}
             value={form.obMeetingScheduledAt}
@@ -307,7 +299,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">OB meeting location</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">OB meeting location{optionalTag('obMeetingLocation')}</label>
           <select
             disabled={!isEditable || saving}
             value={showOtherLocation ? OTHER_LOCATION_VALUE : form.obMeetingLocation}
@@ -350,7 +342,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
       </label>
 
       <div className="mb-3">
-        <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+        <label className="block text-xs font-medium text-gray-600 mb-1">Notes{optionalTag('notes')}</label>
         <textarea
           disabled={!isEditable || saving}
           value={form.notes}
@@ -399,6 +391,8 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           </button>
         </div>
       )}
+
+      <CustomChecklistItems basePath={statusPath} status={status} disabled={!isEditable || saving} onSaved={reloadStatus} />
 
       {isEditable && requiredMissing.length > 0 && (
         <div className="mt-3 flex items-start gap-1.5 text-xs text-amber-600">

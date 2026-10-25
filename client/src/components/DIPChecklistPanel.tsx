@@ -3,6 +3,7 @@ import { Check, Mail } from 'lucide-react';
 import { api } from '../lib/api';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../lib/permissions';
+import { CustomChecklistItems, useChecklistStatus } from './ChecklistExtras';
 
 interface DIPChecklist {
   id: string;
@@ -25,12 +26,12 @@ interface Props {
   isLocked?: boolean;
 }
 
+// Google review is never required; whether the other two are follows Admin → Checklists.
 const ITEMS = [
-  { key: 'cxApprovalReceived', label: 'Client approval received by email', optional: false },
-  { key: 'internalMailThreadCompleted', label: 'Internal email thread created', optional: false },
-  { key: 'googleReviewReceived', label: 'Google review received (optional)', optional: true },
+  { key: 'cxApprovalReceived', label: 'Client approval received by email' },
+  { key: 'internalMailThreadCompleted', label: 'Internal email thread created' },
+  { key: 'googleReviewReceived', label: 'Google review received' },
 ] as const;
-const REQUIRED_ITEMS = ITEMS.filter((item) => !item.optional);
 
 type ChecklistKey = typeof ITEMS[number]['key'];
 
@@ -42,6 +43,8 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete, isLocked:
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [threadUrl, setThreadUrl] = useState('');
+  const statusPath = `/leads/${leadId}/dip-checklist`;
+  const { status } = useChecklistStatus(statusPath, [stage, checklist]);
 
   const load = async () => {
     try {
@@ -121,9 +124,13 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete, isLocked:
     );
   }
 
-  const completedCount = REQUIRED_ITEMS.filter((item) => checklist[item.key]).length;
+  // Counts and what's missing come from the server, which applies Admin → Checklists.
+  const required = status?.items.filter((i) => i.required) ?? [];
+  const completedCount = required.filter((i) => i.met).length;
+  const isRequired = (key: string) => !!status?.items.find((i) => i.key === key)?.required;
   const isComplete = !!checklist.completedAt;
-  const progress = (completedCount / REQUIRED_ITEMS.length) * 100;
+  const progress = required.length ? (completedCount / required.length) * 100 : 0;
+  const onlyPaymentMissing = status?.missing.length === 1 && status.missing[0].startsWith('Payment screenshot');
 
   return (
     <div className={`border rounded-xl p-5 ${isComplete ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
@@ -133,7 +140,7 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete, isLocked:
           <p className="text-xs text-gray-500 mt-0.5">
             {isComplete
               ? 'Required checks complete — lead can be moved to Design in Progress'
-              : completedCount === REQUIRED_ITEMS.length ? 'Required checks ticked — payment screenshot still required' : `${completedCount} of ${REQUIRED_ITEMS.length} required checks complete`}
+              : onlyPaymentMissing ? 'Required checks ticked — payment screenshot still required' : `${completedCount} of ${required.length} required checks complete`}
           </p>
         </div>
         {isComplete && (
@@ -157,29 +164,37 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete, isLocked:
       <div className="space-y-2 mb-4">
         {ITEMS.map((item) => {
           const checked = checklist[item.key];
+          const optional = !isRequired(item.key);
           return (
             <label
               key={item.key}
               className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors
                 ${checked ? 'bg-green-50' : 'bg-gray-50 hover:bg-gray-100'}
-                 ${((!item.optional && (stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER')) || isLocked) ? 'pointer-events-none opacity-70' : ''}`}
+                 ${((!optional && (stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER')) || isLocked) ? 'pointer-events-none opacity-70' : ''}`}
             >
               <input
                 type="checkbox"
                 checked={checked}
-                disabled={saving || (!item.optional && (stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER')) || isLocked}
+                disabled={saving || (!optional && (stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER')) || isLocked}
                 onChange={() => toggle(item.key, checked)}
                 className="w-4 h-4 accent-brand-500"
               />
               <span className={`text-sm ${checked ? 'text-green-700 line-through' : 'text-gray-700'}`}>
-                {item.label}
+                {item.label}{optional ? ' (optional)' : ''}
               </span>
             </label>
           );
         })}
       </div>
 
-      {!isComplete && completedCount === REQUIRED_ITEMS.length && (
+      <CustomChecklistItems basePath={statusPath} status={status} disabled={saving || isLocked || stage !== 'ONBOARDING_MEETING'}
+        onSaved={async () => { await load(); }} />
+
+      {!isComplete && !onlyPaymentMissing && (status?.missing.length ?? 0) > 0 && completedCount > 0 && (
+        <div className="mt-3 mb-3 text-xs text-amber-700">Still needed: {status!.missing.join(', ')}</div>
+      )}
+
+      {!isComplete && onlyPaymentMissing && (
         <div data-testid="dip-payment-proof-warning" className="mb-3 text-xs text-amber-800 bg-amber-50 border border-amber-300 rounded-lg px-3 py-2">
           All items are ticked, but this checklist is <b>not complete</b> until a payment screenshot is uploaded in the Files tab. Payment proof is mandatory and confirms the booking. After uploading, reload this page.
         </div>

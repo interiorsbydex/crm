@@ -981,6 +981,8 @@ model DIPChecklist {
   cxApprovalReceived          Boolean   @default(false)
   internalMailThreadCompleted Boolean   @default(false)
   internalMailThreadUrl       String?
+  /// Values of the admin's own checklist items (Admin → Checklists), keyed by item key.
+  customValues  Json?
   completedAt                 DateTime?
   createdAt                   DateTime  @default(now())
 
@@ -1013,6 +1015,8 @@ model PDOBChecklist {
   finalPitchPresentationConfirmed Boolean @default(false)
   welcomeMailSent      Boolean   @default(false)
   welcomeMailSentAt    DateTime?
+  /// Values of the admin's own checklist items (Admin → Checklists), keyed by item key.
+  customValues  Json?
   completedAt          DateTime?
   createdAt            DateTime  @default(now())
 
@@ -1061,6 +1065,8 @@ model OBOBMChecklist {
   clientConfirmed          Boolean   @default(false)
   obmMailSent              Boolean   @default(false)
   obmMailSentAt            DateTime?
+  /// Values of the admin's own checklist items (Admin → Checklists), keyed by item key.
+  customValues  Json?
   completedAt              DateTime?
   createdAt                DateTime  @default(now())
 

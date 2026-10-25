@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useLenientLaunch } from '../lib/flags';
 import { Check, Mail, AlertCircle, Send } from 'lucide-react';
 import { api } from '../lib/api';
 import toast from 'react-hot-toast';
 import EmailPreviewModal from './EmailPreviewModal';
+import { CustomChecklistItems, useChecklistStatus } from './ChecklistExtras';
 import { DateInput } from './ui/DateTimeInputs';
 
 interface OBOBMChecklist {
@@ -64,8 +64,9 @@ function FieldStatus({ saving, saved }: { saving: boolean; saved: boolean }) {
 }
 
 export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComplete, isLocked, refreshKey }: Props) {
-  const lenient = useLenientLaunch();
   const [checklist, setChecklist] = useState<OBOBMChecklist | null>(null);
+  const statusPath = `/leads/${leadId}/ob-obm-checklist`;
+  const { status, reload: reloadStatus } = useChecklistStatus(statusPath, [stage, refreshKey, checklist]);
   const [docItems, setDocItems] = useState<{ key: string; label: string }[]>([]);
   const [template, setTemplate] = useState<{ subject: string; html: string; attachmentNames?: string[] }>({ subject: '', html: '' });
   const [loading, setLoading] = useState(true);
@@ -342,17 +343,13 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
   }
 
   const isComplete = !!checklist.completedAt;
-  const allDocsDone = docItems.every((item) => checklist[`${item.key}Done`]);
-  const allDatesFilled = TIMELINE_FIELDS.every((f) => !!checklist[f.key]);
-  const missing = [
-    !allDatesFilled && 'All timeline dates',
-    !allDocsDone && 'All welcome-document items',
-    !checklist.npsTriggered && 'NPS survey email sent or customer response received',
-    !checklist.clientConfirmed && 'Client confirmed',
-    !clientEmail && "Client's email",
-  ].filter(Boolean) as string[];
-  // Lenient launch: only the client's email can still block sending (nobody to mail).
-  const blockingMissing = lenient ? missing.filter((m) => m === "Client's email") : missing;
+  // What's missing comes from the server (Admin → Checklists can make items
+  // optional or add new ones), so this always matches what sending will accept.
+  const optionalKeys = new Set(status?.items.filter((i) => !i.required).map((i) => i.key) ?? []);
+  const missing = [...(status?.missing ?? []), ...(!clientEmail ? ["Client's email"] : [])];
+  const blockingMissing = [...(status?.blocking ?? status?.missing ?? []), ...(!clientEmail ? ["Client's email"] : [])];
+  const lenient = !!status?.lenient;
+  const optionalTag = (key: string) => (optionalKeys.has(key) ? <span className="text-[10px] text-gray-400">(optional)</span> : null);
 
   return (
     <div className={`border rounded-xl p-5 ${isComplete ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
@@ -377,7 +374,7 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
           {TIMELINE_FIELDS.map((f) => (
             <div key={f.key}>
               <label className="flex items-center gap-1.5 text-[11px] text-gray-500 mb-0.5">
-                {f.label}
+                {f.label} {optionalTag(f.key)}
                 <FieldStatus saving={savingKeys.has(f.key)} saved={savedKeys.has(f.key)} />
               </label>
               <DateInput
@@ -408,7 +405,7 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
                     onChange={(e) => toggleDoc(`${item.key}Done`, e.target.checked)}
                     className="w-4 h-4 accent-brand-500 shrink-0"
                   />
-                  <span className={`text-xs ${done ? 'text-green-700' : 'text-gray-700'} truncate`}>{item.label}</span>
+                  <span className={`text-xs ${done ? 'text-green-700' : 'text-gray-700'} truncate`}>{item.label} {optionalTag(item.key)}</span>
                   <FieldStatus saving={savingKeys.has(`${item.key}Done`)} saved={savedKeys.has(`${item.key}Done`)} />
                 </label>
                 <label className="flex items-center gap-1.5 text-[11px] text-gray-400 shrink-0 cursor-pointer">
@@ -454,7 +451,7 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
             onChange={(e) => toggleDoc('clientConfirmed', e.target.checked)}
             className="w-3.5 h-3.5 accent-gray-500"
           />
-          Client confirmed
+          Client confirmed {optionalTag('clientConfirmed')}
           <FieldStatus saving={savingKeys.has('clientConfirmed')} saved={savedKeys.has('clientConfirmed')} />
         </label>
       </div>
@@ -491,6 +488,8 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
           <Mail size={13} strokeWidth={2.5} /> Share OBM mail
         </button>
       )}
+
+      <CustomChecklistItems basePath={statusPath} status={status} disabled={!isEditable} onSaved={reloadStatus} />
 
       {isEditable && missing.length > 0 && (
         <div className="mt-3 flex items-start gap-1.5 text-xs text-amber-600">

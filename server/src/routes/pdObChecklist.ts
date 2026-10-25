@@ -27,8 +27,10 @@ import {
   createMeetingRecord, runMeetingScheduledSideEffects, type ScheduleMeetingLead,
 } from '../lib/meetingScheduler.js';
 import { isLenientForStage, logGateBypass } from '../lib/lenientMode.js';
+import { evaluateChecklist, mergeCustomValues } from '../lib/checklists.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 import { getCommercialContextForLead } from '../lib/stageTimeline.js';
+import { ConfigError } from '../lib/versionedConfig.js';
 
 export const pdObChecklistRouter = Router({ mergeParams: true });
 
@@ -183,6 +185,28 @@ pdObChecklistRouter.get('/', verifyToken, async (req, res) => {
   }
 });
 
+// ── GET /api/leads/:leadId/pd-ob-checklist/status — what's done and what's missing ──
+// Worked out by lib/checklists.ts, which applies Admin → Checklists; the panel
+// shows this instead of keeping its own copy of the rules.
+pdObChecklistRouter.get('/status', verifyToken, async (req, res) => {
+  try {
+    const { leadId } = req.params as { leadId: string };
+    const { lead, authorized } = await loadLeadForChecklist(leadId, req.user!);
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (!authorized) { res.status(403).json({ error: 'Not authorised for this lead' }); return; }
+    const checklist = await prisma.pDOBChecklist.findUnique({ where: { leadId } });
+    if (!checklist) { res.json({ items: [], missing: [], blocking: [], lenient: false }); return; }
+    const status = await evaluateChecklist('pdOb', leadId, checklist);
+    // `blocking`: what the send step will actually refuse on. In lenient mode
+    // only the locked items (payment proof) still block; the rest is recorded.
+    const lenient = isLenientForStage('ONBOARDING');
+    const blocking = lenient ? status.items.filter((i) => i.locked && !i.met).map((i) => i.label) : status.missing;
+    res.json({ ...status, blocking, lenient });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── PATCH /api/leads/:leadId/pd-ob-checklist ──────────────────────────────────
 pdObChecklistRouter.patch('/', verifyToken, async (req, res) => {
   try {
@@ -226,6 +250,15 @@ pdObChecklistRouter.patch('/', verifyToken, async (req, res) => {
       }
     }
     const data: Record<string, any> = {};
+    // The admin's own checklist items (Admin → Checklists).
+    if (req.body.customValues !== undefined) {
+      try {
+        data.customValues = await mergeCustomValues('pdOb', current.customValues, req.body.customValues);
+      } catch (err: any) {
+        res.status(err instanceof ConfigError ? err.status : 500).json({ error: err.message });
+        return;
+      }
+    }
     if (paymentValue !== undefined) data.paymentValue = paymentValue === '' || paymentValue === null ? null : parseFloat(paymentValue);
     if (projectValue !== undefined) data.projectValue = projectValue === '' || projectValue === null ? null : parseFloat(projectValue);
     if (furnitureValue !== undefined) data.furnitureValue = furnitureValue === '' || furnitureValue === null ? null : parseFloat(furnitureValue);
@@ -298,42 +331,12 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
     if (!checklist) { res.status(404).json({ error: 'PD→OB checklist not found.' }); return; }
     if (checklist.completedAt) { res.status(400).json({ error: 'Welcome mail already sent.' }); return; }
 
-    // One upload satisfies every matching item: files are matched at any stage.
+    // What's still missing comes from the checklist engine (lib/checklists.ts),
+    // which applies Admin → Checklists (optional items, the admin's own items).
+    // Files are matched at any stage: one upload satisfies every matching item.
+    const { items, missing } = await evaluateChecklist('pdOb', leadId, checklist);
+    const paymentScreenshot = items.find((i) => i.key === 'paymentScreenshot')?.met;
 
-    const [paymentScreenshot, obQuote, finalPitchPresentationFile, generatedQuoteRecord, generatedQuotationFile, welcomeMailScreenshot] = await Promise.all([
-      prisma.leadFile.findFirst({ where: { leadId, fileType: 'PAYMENT_SCREENSHOT' }, select: { id: true } }),
-      prisma.leadFile.findFirst({ where: { leadId, fileType: { in: ['OB_QUOTE', 'QUOTATION', 'PR_QUOTATION', 'PP_QUOTATION', 'GENERATED_QUOTE'] } }, select: { id: true } }),
-      // Both the Final Pitch Presentation AND the Generated Quotation are now
-      // required together (previously either/or) — mirrors
-      // stageRequirements.ts's PROPOSAL_DISCUSSION->ONBOARDING gate. This
-      // direct transition (send-welcome-mail bypasses checkStageRequirements
-      // entirely) must enforce the same minimum, or a lead could reach
-      // Onboarding without both.
-      prisma.leadFile.findFirst({
-        where: { leadId, fileType: { in: ['PITCH_PRESENTATION', 'FINAL_PITCH_PRESENTATION'] } },
-        select: { id: true },
-      }),
-      prisma.quote.findFirst({ where: { leadId }, select: { id: true } }),
-      prisma.leadFile.findFirst({
-        where: { leadId, fileType: { in: ['OB_QUOTE', 'QUOTATION', 'PR_QUOTATION', 'PP_QUOTATION', 'GENERATED_QUOTE'] } },
-        select: { id: true },
-      }),
-      // Task #84: client approval-of-wording proof for THIS mail.
-      prisma.leadFile.findFirst({ where: { leadId, fileType: 'WELCOME_MAIL_SCREENSHOT' }, select: { id: true } }),
-    ]);
-
-    const missing: string[] = [];
-    if (!paymentScreenshot) missing.push('Payment screenshot (Files tab)');
-    if (!obQuote) missing.push('OB Quote (Files tab)');
-    if (!finalPitchPresentationFile) missing.push('Final Pitch Presentation file (Files → PD or PP if skipping PD)');
-    if (!generatedQuoteRecord && !generatedQuotationFile) missing.push('Generated Quotation (Quote Builder or Files → PP/PD)');
-    if (checklist.paymentValue == null) missing.push('Payment value');
-    if (checklist.projectValue == null) missing.push('Project value (excl. furniture)');
-    if (checklist.furnitureValue == null) missing.push('Furniture value');
-    if (!checklist.obMeetingScheduledAt) missing.push('OB meeting date/time');
-    if (!checklist.obMeetingLocation) missing.push('OB meeting location');
-    if (!checklist.notes || !checklist.notes.trim()) missing.push('Notes');
-    if (!welcomeMailScreenshot) missing.push('Welcome mail approval screenshot (Files tab)');
     // The client's email can never be waived — there is nobody to send to.
     if (!lead.email) {
       res.status(400).json({ error: 'Cannot send welcome mail — missing requirements', missing: ["Client's email address", ...missing] });

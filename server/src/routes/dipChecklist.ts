@@ -11,8 +11,10 @@ import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
-import { requiredDipChecksComplete } from '../lib/dipChecklistRules.js';
+import { evaluateChecklist, mergeCustomValues } from '../lib/checklists.js';
+import { ConfigError } from '../lib/versionedConfig.js';
 import { requirePermission } from '../lib/permissions.js';
+import { isAuthorizedForLead } from '../lib/leadAuth.js';
 
 export const dipChecklistRouter = Router({ mergeParams: true });
 
@@ -42,12 +44,26 @@ dipChecklistRouter.get('/', verifyToken, async (req, res) => {
         checklist = await prisma.dIPChecklist.upsert({ where: { leadId: id }, create: { leadId: id }, update: {} });
       }
     }
-    // Items were all ticked before the (now mandatory) payment screenshot was uploaded: complete now.
-    if (checklist && !checklist.completedAt && requiredDipChecksComplete(checklist)) {
-      const proof = await prisma.leadFile.findFirst({ where: { leadId: id, fileType: 'PAYMENT_SCREENSHOT' }, select: { id: true } });
-      if (proof) checklist = await prisma.dIPChecklist.update({ where: { leadId: id }, data: { completedAt: new Date() } });
+    // Items were all done before the last one (e.g. the payment screenshot) arrived: complete now.
+    if (checklist && !checklist.completedAt && (await evaluateChecklist('dip', id, checklist)).missing.length === 0) {
+      checklist = await prisma.dIPChecklist.update({ where: { leadId: id }, data: { completedAt: new Date() } });
     }
     res.json({ checklist: checklist ? { ...checklist, googleReviewReceived: await googleReviewReceived(id) } : null });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/leads/:id/dip-checklist/status — what's done and what's missing ──
+dipChecklistRouter.get('/status', verifyToken, async (req, res) => {
+  try {
+    const { leadId: id } = req.params;
+    const lead = await prisma.lead.findUnique({ where: { id } });
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (!(await isAuthorizedForLead(lead, req.user!))) { res.status(403).json({ error: 'Not authorised for this lead' }); return; }
+    const checklist = await prisma.dIPChecklist.findUnique({ where: { leadId: id } });
+    if (!checklist) { res.json({ items: [], missing: [] }); return; }
+    res.json(await evaluateChecklist('dip', id, checklist));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -97,6 +113,15 @@ dipChecklistRouter.patch('/', verifyToken, requirePermission('DIP_CHECKLIST_EDIT
     if (cxApprovalReceived !== undefined) updateData.cxApprovalReceived = cxApprovalReceived;
     if (internalMailThreadCompleted !== undefined) updateData.internalMailThreadCompleted = internalMailThreadCompleted;
     if (internalMailThreadUrl !== undefined) updateData.internalMailThreadUrl = internalMailThreadUrl;
+    // The admin's own checklist items (Admin → Checklists).
+    if (req.body.customValues !== undefined) {
+      try {
+        updateData.customValues = await mergeCustomValues('dip', current.customValues, req.body.customValues);
+      } catch (err: any) {
+        res.status(err instanceof ConfigError ? err.status : 500).json({ error: err.message });
+        return;
+      }
+    }
 
     // NPS belongs to onboarding. Google Review is separately recorded and optional.
     const merged = { ...current, ...updateData };
@@ -106,13 +131,11 @@ dipChecklistRouter.patch('/', verifyToken, requirePermission('DIP_CHECKLIST_EDIT
     // Client decision (Annie, Oct 2026): payment proof is mandatory and is what confirms a booking.
     // The checklist (and so Booking Value / incentives, which key on completedAt) cannot complete
     // without a payment screenshot, even in lenient mode.
-    const paymentProof = await prisma.leadFile.findFirst({
-      where: { leadId: id, fileType: 'PAYMENT_SCREENSHOT' },
-      select: { id: true },
-    });
-    const itemsDone = requiredDipChecksComplete(merged);
-    const allComplete = !!itemsDone && !!paymentProof;
-    const paymentProofMissing = !!itemsDone && !paymentProof && !current.completedAt;
+    // Which items are needed follows Admin → Checklists (lib/checklists.ts); the
+    // payment screenshot can never be made optional.
+    const { missing } = await evaluateChecklist('dip', id, merged);
+    const paymentProofMissing = missing.length === 1 && missing[0].startsWith('Payment screenshot') && !current.completedAt;
+    const allComplete = missing.length === 0;
 
     if (allComplete && !current.completedAt) {
       updateData.completedAt = new Date();
