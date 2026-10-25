@@ -906,7 +906,7 @@ export default function DesignerDashboard({ designerId, designerName }: { design
           <div className="rounded-2xl p-5 border" style={{ background: medal?.medal === 'GOLD' ? '#FFF8DF' : '#FAF6F2', borderColor: '#EDE8E3' }}>
             <p className="text-xs font-bold uppercase tracking-widest text-stone-400">{L('designer.monthlyMedal', 'Monthly Medal')} · {medal?.cycle.label ?? 'Current cycle'}</p>
             <div className="flex items-end justify-between gap-4 mt-2">
-              <div><p className="text-2xl font-extrabold text-stone-900">{medal?.medal ? `${medal.medal[0]}${medal.medal.slice(1).toLowerCase()} Medal` : 'No medal yet'}</p><p className="text-xs text-stone-500 mt-1">Designer score: Sales % + Design/DIP %, weighted equally.</p></div>
+              <div><p className="text-2xl font-extrabold text-stone-900">{medal?.medal ? `${medal.medal[0]}${medal.medal.slice(1).toLowerCase()} Medal` : 'No medal yet'}</p><p className="text-xs text-stone-500 mt-1">Designer score: Sales % ({formulas().designerMedalSalesWeight}%) + Design/DIP % ({100 - formulas().designerMedalSalesWeight}%). Gold from {formulas().medals.gold}%, Silver from {formulas().medals.silver}%, Bronze from {formulas().medals.bronze}%.</p></div>
               <p className="text-3xl font-extrabold text-brand-600">{medal?.score != null ? `${medal.score}%` : '—'}</p>
             </div>
           </div>

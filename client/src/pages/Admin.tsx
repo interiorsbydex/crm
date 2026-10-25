@@ -1135,11 +1135,12 @@ export default function Admin() {
                   <thead className="text-gray-500 text-xs">
                     <tr>
                       <th className="text-left px-3 py-2 font-medium">Designer</th>
+                      {/* Same order as the inputs in each row below. */}
                       <th className="text-left px-3 py-2 font-medium">Booking Target (₹)</th>
+                      <th className="text-left px-3 py-2 font-medium">DIP Target</th>
                       <th className="text-left px-3 py-2 font-medium">Conversion Target (%)</th>
                       <th className="text-left px-3 py-2 font-medium">Avg Booking Value Target (₹)</th>
                       <th className="text-left px-3 py-2 font-medium">PO Target (₹)</th>
-                      <th className="text-left px-3 py-2 font-medium">DIP Target</th>
                       <th className="text-left px-3 py-2 font-medium"></th>
                     </tr>
                   </thead>
@@ -1158,14 +1159,14 @@ export default function Admin() {
                             <input
                               type="number"
                               min={0}
-                              value={draft.bookingTargetValue}
+                              aria-label={`Booking target for ${row.name}`} value={draft.bookingTargetValue}
                               onChange={(e) => setTargetDrafts((prev) => ({ ...prev, [row.designerId]: { ...draft, bookingTargetValue: e.target.value } }))}
                               className="w-32 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                               placeholder="e.g. 1500000"
                             />
                           </td>
                           <td className="px-3 py-2">
-                            <input type="number" min={0} step={1} value={draft.dipTargetCount}
+                            <input type="number" min={0} step={1} aria-label={`DIP target for ${row.name}`} value={draft.dipTargetCount}
                               onChange={(e) => setTargetDrafts((prev) => ({ ...prev, [row.designerId]: { ...draft, dipTargetCount: e.target.value } }))}
                               className="w-24 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" placeholder="e.g. 5" />
                           </td>
@@ -1175,7 +1176,7 @@ export default function Admin() {
                               min={0.01}
                               max={100}
                               step="0.01"
-                              value={draft.conversionTargetPct}
+                              aria-label={`Conversion target % for ${row.name}`} value={draft.conversionTargetPct}
                               onChange={(e) => setTargetDrafts((prev) => ({ ...prev, [row.designerId]: { ...draft, conversionTargetPct: e.target.value } }))}
                               className="w-32 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                               placeholder="e.g. 25"
@@ -1185,7 +1186,7 @@ export default function Admin() {
                             <input
                               type="number"
                               min={0.01}
-                              value={draft.averageBookingValueTarget}
+                              aria-label={`Average booking value target for ${row.name}`} value={draft.averageBookingValueTarget}
                               onChange={(e) => setTargetDrafts((prev) => ({ ...prev, [row.designerId]: { ...draft, averageBookingValueTarget: e.target.value } }))}
                               className="w-36 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                               placeholder="e.g. 500000"
@@ -1195,7 +1196,7 @@ export default function Admin() {
                             <input
                               type="number"
                               min={0}
-                              value={draft.poTargetValue}
+                              aria-label={`PO target for ${row.name}`} value={draft.poTargetValue}
                               onChange={(e) => setTargetDrafts((prev) => ({ ...prev, [row.designerId]: { ...draft, poTargetValue: e.target.value } }))}
                               className="w-32 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                               placeholder="e.g. 800000"
