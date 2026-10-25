@@ -811,7 +811,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
 
       // Recent notifications for this designer
       prisma.notificationLog.findMany({
-        where: { userId: user.id },
+        where: { userId: user.id, muted: false },
         orderBy: { createdAt: 'desc' },
         take: 10,
         include: { lead: { select: { id: true, leadId: true, name: true } } },

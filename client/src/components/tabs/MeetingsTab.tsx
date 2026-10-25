@@ -7,6 +7,7 @@ import EmailPreviewModal from '../EmailPreviewModal';
 import { formatISTDateTime, istDatetimeLocalValue, istInputToISO } from '../../lib/dateFormat';
 import { DateTimeInput } from '../ui/DateTimeInputs';
 import { meetingModeOptions, meetingModeLabel, meetingRules } from '../../lib/meetingSettings';
+import { crmSettings } from '../../lib/crmSettings';
 
 const MOM_ATTACHMENT_TYPES = ['Floor Plan', 'Proposal', 'Lifestyle Sheet', 'Other'] as const;
 
@@ -56,7 +57,7 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
 
   // Schedule form
   const [form, setForm] = useState({ type: '', mode: '', scheduledAt: '', location: '', internalNotes: '' });
-  const [notifyClient, setNotifyClient] = useState(true);
+  const [notifyClient, setNotifyClient] = useState(crmSettings().notifyClientByDefault);
 
   // Status update modal
   const [statusModal, setStatusModal] = useState<{
@@ -158,7 +159,7 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
         },
       );
       setForm({ type: '', mode: '', scheduledAt: '', location: '', internalNotes: '' });
-      setNotifyClient(true);
+      setNotifyClient(crmSettings().notifyClientByDefault);
       setBookingFiles([]);
       setShowForm(false);
       await loadMeetings();

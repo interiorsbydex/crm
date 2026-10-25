@@ -6,6 +6,7 @@ import { api, type FollowUpTask } from '../../lib/api';
 import { formatISTDate, todayISTDateString } from '../../lib/dateFormat';
 import { DateInput, TimeInput } from '../ui/DateTimeInputs';
 import EmailPreviewModal from '../EmailPreviewModal';
+import { crmSettings } from '../../lib/crmSettings';
 
 function todayDateStr() {
   return todayISTDateString();
@@ -32,8 +33,8 @@ export default function FollowUpTab({ leadId, isLocked, onTasksChanged }: Props)
     dueDate: '', dueTime: '', timeFrom: '', timeTo: '', taskType: 'INTERNAL', agenda: '', internalNotes: '',
     assignedToId: '', numberOfFollowUps: '',
   });
-  const [taskNotifyClient, setTaskNotifyClient] = useState(true);
-  const [rescheduleNotifyClient, setRescheduleNotifyClient] = useState(true);
+  const [taskNotifyClient, setTaskNotifyClient] = useState(crmSettings().notifyClientByDefault);
+  const [rescheduleNotifyClient, setRescheduleNotifyClient] = useState(crmSettings().notifyClientByDefault);
   // Task #115 — tasks support multiple attachments; no fixed category list.
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
@@ -117,7 +118,7 @@ export default function FollowUpTab({ leadId, isLocked, onTasksChanged }: Props)
         },
       );
       setForm({ dueDate: '', dueTime: '', timeFrom: '', timeTo: '', taskType: 'INTERNAL', agenda: '', internalNotes: '', assignedToId: '', numberOfFollowUps: '' });
-      setTaskNotifyClient(true);
+      setTaskNotifyClient(crmSettings().notifyClientByDefault);
       setAttachmentFiles([]);
       setShowForm(false);
       await loadTasks();

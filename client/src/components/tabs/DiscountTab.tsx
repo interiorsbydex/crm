@@ -200,6 +200,10 @@ export default function DiscountTab({ leadId, isLocked }: Props) {
       toast.error('Please add a comment explaining the rejection');
       return;
     }
+    if (reviewModal.action === 'APPROVED' && crmSettings().discount.requireApprovalComment && !rejectComment.trim()) {
+      toast.error('Please add a comment for this approval');
+      return;
+    }
     setReviewing(true);
     try {
       await api.patch(`/discount-requests/${reviewModal.id}`, {
@@ -262,9 +266,15 @@ export default function DiscountTab({ leadId, isLocked }: Props) {
                 </div>
               )}
               {reviewModal.action === 'APPROVED' && (
-                <p className="text-sm text-gray-500">
-                  Approving this discount will notify the designer and update the request status.
-                </p>
+                <>
+                  <p className="text-sm text-gray-500">
+                    Approving this discount will notify the designer and update the request status.
+                  </p>
+                  <textarea rows={2} value={rejectComment} onChange={(e) => setRejectComment(e.target.value)}
+                    required={crmSettings().discount.requireApprovalComment} aria-label="Approval comment"
+                    placeholder={crmSettings().discount.requireApprovalComment ? 'Comment (required)' : 'Comment (optional)'}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                </>
               )}
               <div className="flex gap-3 pt-2">
                 <button

@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { getStoredUser } from '../lib/auth';
 import toast from 'react-hot-toast';
 import { useCrmSettings } from '../lib/crmSettings';
+import { crmSettings } from '../lib/crmSettings';
 
 interface Lead { id: string; leadId: string; name: string; }
 interface AppUser { id: string; name: string; role: string; }
@@ -40,9 +41,11 @@ function relTime(d: string) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+// Colour bands follow the approval limits in Admin → CRM Settings.
 function discountColor(pct: number) {
-  if (pct <= 10) return 'bg-green-100 text-green-700';
-  if (pct <= 15) return 'bg-amber-100 text-amber-700';
+  const limits = crmSettings().discount;
+  if (pct <= limits.selfApproveUpToPct) return 'bg-green-100 text-green-700';
+  if (pct <= limits.blApproveUpToPct) return 'bg-amber-100 text-amber-700';
   return 'bg-red-100 text-red-700';
 }
 
@@ -96,13 +99,14 @@ export default function Discounts() {
 
   const canApproveDirectly = (req: DiscountRequest) => {
     if (userRole === 'BRANCH_HEAD') return true;
-    if (userRole === 'BL' && req.discountPct <= 15) return true;
+    if (userRole === 'BL' && req.discountPct <= crmSettings().discount.blApproveUpToPct) return true;
     return false;
   };
-  const mustForward = (req: DiscountRequest) => userRole === 'BL' && req.discountPct > 15;
+  const mustForward = (req: DiscountRequest) => userRole === 'BL' && req.discountPct > crmSettings().discount.blApproveUpToPct;
 
   const handleApprove = async () => {
     if (!reviewTarget) return;
+    if (crmSettings().discount.requireApprovalComment && !reviewComment.trim()) { toast.error('A comment is required when approving'); return; }
     setReviewing(true);
     try {
       await api.patch(`/discount-requests/${reviewTarget.id}`, { status: 'APPROVED', reviewerComment: reviewComment.trim() || undefined });
@@ -160,7 +164,7 @@ export default function Discounts() {
               <textarea rows={3} value={reviewComment} onChange={e => setReviewComment(e.target.value)}
                 placeholder="Your decision rationale..."
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none" />
-              <p className="text-xs text-gray-400 mt-1">Mandatory when rejecting</p>
+              <p className="text-xs text-gray-400 mt-1">{crmSettings().discount.requireApprovalComment ? 'Mandatory' : 'Mandatory when rejecting'}</p>
             </div>
             <div className="flex gap-2">
               <button onClick={() => setReviewTarget(null)}

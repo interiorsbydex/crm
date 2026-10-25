@@ -22,7 +22,7 @@ const ALLOWED_QUOTE_EXTS = new Set(['pdf']);
 // Defaults: ≤ 10% designer self-approves, 11–15% BL, 16–20% Branch Head,
 // > 20% Branch Head as a special case; post-discount woodwork below ₹5,00,000
 // always goes to the Branch Head as a special case.
-type DiscountLimits = CrmSettings['discount'];
+type DiscountLimits = Omit<CrmSettings['discount'], 'requireApprovalComment'>;
 
 /**
  * Compute approval routing from the discount % and post-discount woodwork value.
@@ -433,6 +433,11 @@ discountsRouter.patch('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), asy
     }
     if (status === 'REJECTED' && !reviewerComment?.trim()) {
       res.status(400).json({ error: 'reviewerComment is mandatory when rejecting' });
+      return;
+    }
+    // Admin → CRM Settings → Discount limits can require a comment on approvals too.
+    if (status === 'APPROVED' && !reviewerComment?.trim() && (await getCrmSettings()).discount.requireApprovalComment) {
+      res.status(400).json({ error: 'A comment is required when approving a discount (Admin → CRM Settings).' });
       return;
     }
 

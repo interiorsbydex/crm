@@ -29,6 +29,7 @@ import EmailPreviewModal from '../components/EmailPreviewModal';
 import { getStoredUser } from '../lib/auth';
 import { stageLabel, sourceValue, useCrmSettings, sourceLabel } from '../lib/crmSettings';
 import { usePermissions } from '../lib/permissions';
+import { crmSettings } from '../lib/crmSettings';
 
 // 'activity' = combined Calls + Meetings + Tasks feed (new)
 // 'audit'    = system audit log + ChatTab (renamed from 'activity')
@@ -336,7 +337,7 @@ export default function LeadDetail() {
   const [reactivateReason, setReactivateReason] = useState('');
   const [reactivateReasonOther, setReactivateReasonOther] = useState('');
   const [reactivateNotes, setReactivateNotes] = useState('');
-  const [reactivateNotifyClient, setReactivateNotifyClient] = useState(true);
+  const [reactivateNotifyClient, setReactivateNotifyClient] = useState(crmSettings().notifyClientByDefault);
   const [reactivating, setReactivating] = useState(false);
 
   // Batch 12c — On Hold / Inactive / Reactivate client mails are now drafts

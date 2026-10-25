@@ -14,7 +14,9 @@ export interface CrmSettings {
   reactivationReasons: string[];
   flagCategories: string[];
   leadCreateRequired: string[];
-  discount: { selfApproveUpToPct: number; blApproveUpToPct: number; branchHeadUpToPct: number; woodworkSpecialCaseBelow: number };
+  discount: { selfApproveUpToPct: number; blApproveUpToPct: number; branchHeadUpToPct: number; woodworkSpecialCaseBelow: number; requireApprovalComment: boolean };
+  calls: { rnrEscalationAfter: number; rnrInactivationMonths: number; requireFollowUp: boolean };
+  notifyClientByDefault: boolean;
   reminderMinutesBefore: number;
   weeklyDigestDay: number;
   designPhaseDays: Record<string, number>;
@@ -38,7 +40,9 @@ const FALLBACK: CrmSettings = {
   reactivationReasons: [],
   flagCategories: [],
   leadCreateRequired: ['projectType', 'scope', 'location', 'possessionTimeline'],
-  discount: { selfApproveUpToPct: 10, blApproveUpToPct: 15, branchHeadUpToPct: 20, woodworkSpecialCaseBelow: 500_000 },
+  discount: { selfApproveUpToPct: 10, blApproveUpToPct: 15, branchHeadUpToPct: 20, woodworkSpecialCaseBelow: 500_000, requireApprovalComment: false },
+  calls: { rnrEscalationAfter: 5, rnrInactivationMonths: 3, requireFollowUp: false },
+  notifyClientByDefault: true,
   reminderMinutesBefore: 60,
   weeklyDigestDay: 2,
   designPhaseDays: {},

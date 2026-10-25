@@ -74,6 +74,8 @@ export interface EventSetting {
   channels: Partial<Record<Channel, boolean>>;
   /** Who is copied on the client email (client events only). */
   cc: CcRole[];
+  /** For emails normally reviewed first: send straight away instead. */
+  sendDirect?: boolean;
 }
 export type AutomationSettings = Record<string, EventSetting>;
 
@@ -104,6 +106,8 @@ const settingSchema = z.object({
   enabled: z.boolean(),
   channels: z.record(z.enum(['email', 'sms', 'whatsapp']), z.boolean()),
   cc: z.array(z.enum(['designer', 'bl', 'cre', 'branchHeads'])),
+  /** For emails normally reviewed first: send straight away instead. */
+  sendDirect: z.boolean().optional(),
 }).strict();
 
 function validateAutomations(raw: unknown): AutomationSettings {
@@ -117,6 +121,7 @@ function validateAutomations(raw: unknown): AutomationSettings {
     if (!event) { problems.push(`Unknown automation "${code}"`); continue; }
     for (const c of Object.keys(s.channels)) if (!event.channels.includes(c as Channel)) problems.push(`${event.label}: it can't be sent by ${c}`);
     if (event.audience === 'team' && s.cc.length) problems.push(`${event.label}: only client emails can copy people`);
+    if (s.sendDirect && (!event.reviewed || event.lockedReason)) problems.push(`${event.label}: this email can't skip the review step`);
   }
   if (problems.length) throw new ConfigError(400, 'The automations could not be saved', problems);
   // Locked events stay on with all channels whatever is submitted.
@@ -139,6 +144,13 @@ const DRAFT_TYPE_EVENTS: Record<string, string> = {
 export function eventForDraftType(type: string): string {
   if (type.startsWith('NPS_')) return 'NPS_SURVEY';
   return DRAFT_TYPE_EVENTS[type] ?? type;
+}
+
+/** True when Admin → Automations says this normally-reviewed email goes out without the review step. */
+export async function sendsWithoutReview(event: string): Promise<boolean> {
+  const def = EVENT_BY_CODE.get(event);
+  if (!def?.reviewed || def.lockedReason) return false;
+  return (await automationsConfig.get())[event]?.sendDirect === true;
 }
 
 /** Whether `event` should send on `channel` (omit channel to ask if the event is on at all). */

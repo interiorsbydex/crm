@@ -6,6 +6,7 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 config({ path: resolve(__dirname, '../../.env') });
 
 import express from 'express';
+import { autoSendDrafts } from './lib/autoSendDrafts.js';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -121,6 +122,9 @@ app.use('/api/leads/webhook', express.raw({ type: 'application/json' }), (req, _
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(generalLimiter);
+
+// Client emails set to "send straight away" in Admin → Automations skip the review screen.
+app.use('/api', autoSendDrafts);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api', healthRouter);

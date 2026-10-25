@@ -8,7 +8,7 @@ import { api } from '../../lib/api';
 
 type Channel = 'email' | 'sms' | 'whatsapp';
 interface EventDef { code: string; label: string; when: string; audience: 'client' | 'team'; channels: Channel[]; reviewed?: boolean; lockedReason?: string }
-interface Setting { enabled: boolean; channels: Partial<Record<Channel, boolean>>; cc: string[] }
+interface Setting { enabled: boolean; channels: Partial<Record<Channel, boolean>>; cc: string[]; sendDirect?: boolean }
 type Value = Record<string, Setting>;
 interface LoadResp {
   value: Value; defaults: Value; isDefault: boolean; revision: number; updatedAt: string | null; updatedByName: string | null;
@@ -98,10 +98,17 @@ export default function AutomationsAdmin() {
                 <div>
                   <p className="text-sm font-medium text-gray-800">
                     {e.label}
-                    {e.reviewed && <span className="ml-2 text-[10px] font-normal text-gray-400">reviewed before sending</span>}
+                    {e.reviewed && <span className="ml-2 text-[10px] font-normal text-gray-400">{s.sendDirect ? 'sent straight away' : 'reviewed before sending'}</span>}
                   </p>
                   <p className="text-[11px] text-gray-500">{e.when}</p>
                   {locked && <p className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5"><Lock size={10} /> Always on — {e.lockedReason}</p>}
+                  {e.reviewed && !locked && e.channels.includes('email') && (
+                    <label className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-600">
+                      <input type="checkbox" checked={!!s.sendDirect} disabled={!s.enabled}
+                        onChange={(ev) => update(e.code, { sendDirect: ev.target.checked })} />
+                      Send the email straight away (skip the review screen)
+                    </label>
+                  )}
                 </div>
               </div>
               {e.channels.length > 1 && (

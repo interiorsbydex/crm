@@ -288,6 +288,26 @@ export default function CrmSettingsAdmin() {
           <NumField label="Branch Head approves up to" suffix="% (above = special case)" value={draft.discount.branchHeadUpToPct} onChange={(n) => set('discount', { ...draft.discount, branchHeadUpToPct: n })} />
           <NumField label="Special case if woodwork after discount is below" suffix="₹" value={draft.discount.woodworkSpecialCaseBelow} onChange={(n) => set('discount', { ...draft.discount, woodworkSpecialCaseBelow: n })} />
         </div>
+        <label className="mt-3 flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={draft.discount.requireApprovalComment} onChange={(e) => set('discount', { ...draft.discount, requireApprovalComment: e.target.checked })} />
+          A comment is required when approving a discount (rejecting always needs one)
+        </label>
+      </div>
+
+      <div className={CARD} data-testid="section-calls">
+        <h3 className={H3}>Calls</h3>
+        <div className="flex flex-wrap items-end gap-6">
+          <NumField label="Flag for escalation after this many unanswered calls" suffix="calls" min={1} value={draft.calls.rnrEscalationAfter} onChange={(n) => set('calls', { ...draft.calls, rnrEscalationAfter: n })} />
+          <NumField label="Suggest making it inactive once the lead is this old" suffix="months" min={1} value={draft.calls.rnrInactivationMonths} onChange={(n) => set('calls', { ...draft.calls, rnrInactivationMonths: n })} />
+        </div>
+        <label className="mt-3 flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={draft.calls.requireFollowUp} onChange={(e) => set('calls', { ...draft.calls, requireFollowUp: e.target.checked })} />
+          A follow-up task (date and time) must be set when logging a call
+        </label>
+        <label className="mt-2 flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={draft.notifyClientByDefault} onChange={(e) => set('notifyClientByDefault', e.target.checked)} />
+          "Notify the client" boxes on call, meeting and follow-up forms start ticked
+        </label>
       </div>
 
       <div className={CARD} data-testid="section-timing">

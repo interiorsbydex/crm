@@ -23,6 +23,7 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'LEAD_ALLOCATE_BL', area: 'Leads', label: 'Allocate an MQL lead to a Business Lead', roles: ['CRE', 'BRANCH_HEAD'] },
   { key: 'LEAD_PUSHBACK_MQL', area: 'Leads', label: 'Send an MQL lead back to Effective Lead', roles: ['BL', 'BRANCH_HEAD'] },
   { key: 'STAGE_OVERRIDE', area: 'Leads', label: 'Push a stuck lead forward past missing requirements (reason required)', roles: ['BL', 'BRANCH_HEAD'], defaultRoles: ['BRANCH_HEAD'] },
+  { key: 'WHATSAPP_ALL_CHATS', area: 'Leads', label: 'See every WhatsApp chat in the inbox (otherwise only chats of leads they can open)', roles: ['DESIGNER', 'CRE', 'BL', 'BRANCH_HEAD'], defaultRoles: ['BRANCH_HEAD'] },
   { key: 'LEAD_ASSIGN_DIRECT', area: 'Leads', label: 'Assign a lead directly to a designer', roles: ['BL'] },
   { key: 'PROJECT_TEAM_REQUEST', area: 'Projects', label: 'Add or request project team members', roles: ['DESIGNER', 'BL', 'BRANCH_HEAD'] },
   { key: 'PROJECT_TEAM_APPROVE', area: 'Projects', label: 'Approve or reject team members, and choose the primary', roles: ['BL', 'BRANCH_HEAD'] },

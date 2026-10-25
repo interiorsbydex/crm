@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { hasPermission } from '../lib/permissions.js';
+import { buildLeadRoleWhere } from '../lib/leadScope.js';
 import twilio from 'twilio';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
@@ -214,18 +216,9 @@ leadWhatsAppRouter.get('/', verifyToken, async (req, res) => {
 whatsappRouter.get('/inbox', verifyToken, async (req, res) => {
   const user = req.user!;
 
-  let leadFilter: any = {};
-
-  if (user.role === 'DESIGNER') {
-    leadFilter = { assignedDesignerId: user.id };
-  } else if (user.role === 'BL') {
-    const teamMembers = await prisma.user.findMany({
-      where: { blId: user.id },
-      select: { id: true },
-    });
-    leadFilter = { assignedDesignerId: { in: teamMembers.map((m) => m.id) } };
-  }
-  // BRANCH_HEAD + ADMIN → no filter (all leads)
+  // Chats of the leads this user can open (Admin → Lead Routing & Access),
+  // or every chat with the "See every WhatsApp chat" permission.
+  const leadFilter: any = await hasPermission(user.role, 'WHATSAPP_ALL_CHATS') ? {} : await buildLeadRoleWhere(user, prisma);
 
   // Get all leads matching filter that have WhatsApp messages
   const leads = await prisma.lead.findMany({

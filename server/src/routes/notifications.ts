@@ -17,7 +17,7 @@ notificationsRouter.get('/my', verifyToken, async (req, res) => {
 
   const [notificationsPage, unreadCount] = await Promise.all([
     prisma.notificationLog.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, muted: false },
       include: { lead: { select: { id: true, leadId: true, name: true } } },
       orderBy: { createdAt: 'desc' },
       take: NOTIFICATIONS_PAGE_SIZE + 1,
@@ -25,7 +25,7 @@ notificationsRouter.get('/my', verifyToken, async (req, res) => {
     }),
     // Unread count always reflects the full inbox, not just the loaded page.
     prisma.notificationLog.count({
-      where: { userId: user.id, isRead: false },
+      where: { userId: user.id, isRead: false, muted: false },
     }),
   ]);
 

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLenientLaunch } from '../../lib/flags';
 import { AlertTriangle, RefreshCw, Paperclip, X } from 'lucide-react';
 import { api, type CallRecord, type FollowUpTask, type NextPlanItem } from '../../lib/api';
 import NextPlanOfActionPicker from '../NextPlanOfActionPicker';
@@ -7,6 +6,7 @@ import EmailPreviewModal from '../EmailPreviewModal';
 import { formatISTDate, formatISTDateTime, istDatetimeLocalValue, istInputToISO } from '../../lib/dateFormat';
 import { DateInput, TimeInput, DateTimeInput } from '../ui/DateTimeInputs';
 import { meetingModeOptions } from '../../lib/meetingSettings';
+import { crmSettings } from '../../lib/crmSettings';
 
 const ATTACHMENT_TYPES = ['Lifestyle Capture', 'Proposal', 'Pitch Presentation'] as const;
 
@@ -161,7 +161,8 @@ function CallCard({ call, onRecordingRefresh }: CardProps) {
 interface Props { leadId: string; isLocked?: boolean; onCallLogged?: () => void }
 
 export default function CallLogTab({ leadId, isLocked, onCallLogged }: Props) {
-  const lenient = useLenientLaunch();
+  // Follow-up optional unless Admin → CRM Settings → Calls requires it.
+  const lenient = !crmSettings().calls.requireFollowUp;
   const [calls, setCalls] = useState<CallRecord[]>([]);
   const [scheduledCalls, setScheduledCalls] = useState<FollowUpTask[]>([]);
   const [rnrCount, setRnrCount] = useState(0);
@@ -187,7 +188,7 @@ export default function CallLogTab({ leadId, isLocked, onCallLogged }: Props) {
     dueTime: '',
     agenda: '',
   });
-  const [scheduleNotifyClient, setScheduleNotifyClient] = useState(true);
+  const [scheduleNotifyClient, setScheduleNotifyClient] = useState(crmSettings().notifyClientByDefault);
 
   const [form, setForm] = useState({
     outcome: '',
@@ -208,9 +209,9 @@ export default function CallLogTab({ leadId, isLocked, onCallLogged }: Props) {
     meetingScheduledAt: '',
     meetingLocation: '',
   });
-  const [meetingNotifyClient, setMeetingNotifyClient] = useState(true);
-  const [answeredNotifyClient, setAnsweredNotifyClient] = useState(true);
-  const [callbackNotifyClient, setCallbackNotifyClient] = useState(true);
+  const [meetingNotifyClient, setMeetingNotifyClient] = useState(crmSettings().notifyClientByDefault);
+  const [answeredNotifyClient, setAnsweredNotifyClient] = useState(crmSettings().notifyClientByDefault);
+  const [callbackNotifyClient, setCallbackNotifyClient] = useState(crmSettings().notifyClientByDefault);
   const [nextPlanItems, setNextPlanItems] = useState<NextPlanItem[]>([]);
   const [selectedAttachmentTypes, setSelectedAttachmentTypes] = useState<string[]>([]);
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
@@ -279,7 +280,7 @@ export default function CallLogTab({ leadId, isLocked, onCallLogged }: Props) {
         notifyClient: scheduleForm.taskType === 'EXTERNAL' && scheduleNotifyClient,
       });
       setScheduleForm({ stageType: '', taskType: 'EXTERNAL', dueDate: '', dueTime: '', agenda: '' });
-      setScheduleNotifyClient(true);
+      setScheduleNotifyClient(crmSettings().notifyClientByDefault);
       setShowScheduleForm(false);
       await loadCalls();
       // External scheduled calls generate a client notification draft —
@@ -314,7 +315,7 @@ export default function CallLogTab({ leadId, isLocked, onCallLogged }: Props) {
   };
 
   const resetForm = () => {
-    setCallbackNotifyClient(true);
+    setCallbackNotifyClient(crmSettings().notifyClientByDefault);
     setForm({
       outcome: '', duration: '', calledAt: '', location: '', notes: '', externalNotes: '', dueDate: '', dueTime: '',
       callbackDueDate: '', callbackDueTime: '', callbackAgenda: '',

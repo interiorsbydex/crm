@@ -10,6 +10,7 @@
  * applies — the values the CRM shipped with.
  */
 import { z } from 'zod';
+import { isLenientLaunch } from './lenientMode.js';
 import { prisma } from './prisma.js';
 import { logActivity } from './activityLog.js';
 import {
@@ -107,8 +108,20 @@ export const crmSettingsSchema = z.object({
     blApproveUpToPct: z.number().min(0).max(100),
     branchHeadUpToPct: z.number().min(0).max(100),
     woodworkSpecialCaseBelow: z.number().min(0).max(1_000_000_000),
+    /** A written comment is required when approving (rejecting always needs one). */
+    requireApprovalComment: z.boolean(),
   }).strict().refine((d) => d.selfApproveUpToPct <= d.blApproveUpToPct && d.blApproveUpToPct <= d.branchHeadUpToPct,
     'Discount limits must go up: designer ≤ Business Lead ≤ Branch Head'),
+  calls: z.object({
+    /** Unanswered (RNR) calls before the lead is flagged for escalation. */
+    rnrEscalationAfter: z.number().int().min(1, 'must be at least 1').max(20, 'must be 20 or fewer'),
+    /** After escalation, months since the lead arrived before inactivation is suggested. */
+    rnrInactivationMonths: z.number().int().min(1, 'must be at least 1 month').max(24, 'must be 24 months or fewer'),
+    /** A follow-up task (date and time) must be set when logging a call. */
+    requireFollowUp: z.boolean(),
+  }).strict(),
+  /** Whether "notify the client" boxes on call, meeting and follow-up forms start ticked. */
+  notifyClientByDefault: z.boolean(),
   reminderMinutesBefore: z.number().int().min(15, "must be at least 15 minutes (the reminder check runs every 15 minutes)").max(24 * 60),
   /** 0 = Sunday … 6 = Saturday (IST). */
   weeklyDigestDay: z.number().int().min(0).max(6),
@@ -150,7 +163,10 @@ export const DEFAULT_CRM_SETTINGS: CrmSettings = {
     'Process Deviation', 'Communication Deviation', 'Escalation / Cancellation Risk',
   ],
   leadCreateRequired: ['projectType', 'scope', 'location', 'possessionTimeline'],
-  discount: { selfApproveUpToPct: 10, blApproveUpToPct: 15, branchHeadUpToPct: 20, woodworkSpecialCaseBelow: 500_000 },
+  discount: { selfApproveUpToPct: 10, blApproveUpToPct: 15, branchHeadUpToPct: 20, woodworkSpecialCaseBelow: 500_000, requireApprovalComment: false },
+  // Follow-up after a call: required unless the lenient launch switch is on (today's behaviour).
+  calls: { rnrEscalationAfter: 5, rnrInactivationMonths: 3, requireFollowUp: !isLenientLaunch() },
+  notifyClientByDefault: true,
   reminderMinutesBefore: 60,
   weeklyDigestDay: 2,
   designPhaseDays: {
@@ -184,6 +200,7 @@ function merge(saved: Partial<CrmSettings> | undefined): CrmSettings {
     ...d,
     ...s,
     discount: { ...d.discount, ...s.discount },
+    calls: { ...d.calls, ...s.calls },
     designPhaseDays: { ...d.designPhaseDays, ...s.designPhaseDays },
     stageLabels: { ...d.stageLabels, ...s.stageLabels },
   };
@@ -226,7 +243,7 @@ export class CrmSettingsError extends Error {
 const SECTION_NAMES: Record<string, string> = {
   cities: 'Cities', leadSources: 'Lead sources', onHoldReasons: 'On-hold reasons', inactiveReasons: 'Inactive reasons',
   reactivationReasons: 'Reactivation reasons', flagCategories: 'Flag categories', leadCreateRequired: 'New lead details',
-  discount: 'Discount limits', reminderMinutesBefore: 'Reminder timing', weeklyDigestDay: 'Weekly digest day',
+  discount: 'Discount limits', calls: 'Calls', notifyClientByDefault: 'Notify client by default', reminderMinutesBefore: 'Reminder timing', weeklyDigestDay: 'Weekly digest day',
   designPhaseDays: 'Design phase days', designOverallDays: 'Overall design days', stageLabels: 'Stage names', hiddenStages: 'Switched-off stages',
   cycleStartDay: 'Cycle start day',
 };

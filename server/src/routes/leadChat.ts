@@ -19,7 +19,7 @@ leadChatRouter.get('/unread-count', verifyToken, async (req, res) => {
   const user = req.user!;
 
   const unreadCount = await prisma.notificationLog.count({
-    where: { userId: user.id, leadId, type: 'TEAM_CHAT_MESSAGE', isRead: false },
+    where: { userId: user.id, leadId, type: 'TEAM_CHAT_MESSAGE', isRead: false, muted: false },
   });
 
   res.json({ unreadCount });

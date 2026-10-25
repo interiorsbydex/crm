@@ -871,6 +871,10 @@ model NotificationLog {
   /// Follow-up task this reminder belongs to. Kept separate from the visible
   /// message so reminder deduplication never exposes internal identifiers.
   taskId    String?
+  /// Switched off for this person's role in Admin → In-app Alerts. Still
+  /// recorded (reminder jobs use these rows to avoid repeating themselves)
+  /// but never shown.
+  muted     Boolean  @default(false)
 
   user User  @relation(fields: [userId], references: [id])
   lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)

@@ -1,6 +1,7 @@
 import multer from 'multer';
 import { isLenientLaunch, logGateBypass } from '../lib/lenientMode.js';
 import { Router } from 'express';
+import { getCrmSettings } from '../lib/crmSettings.js';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
 import { createNotification, notifyManagers } from '../lib/notifications.js';
@@ -22,8 +23,6 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 const CALL_ATTACHMENT_TYPES = ['Lifestyle Capture', 'Proposal', 'Pitch Presentation'] as const;
 
 const RNR_OUTCOMES = ['RNR_1', 'RNR_2', 'RNR_3', 'RNR_4', 'RNR_5', 'RNR_6_PLUS'] as const;
-const ESCALATION_THRESHOLD = 5;
-const INACTIVATION_MONTHS = 3;
 
 const VALID_OUTCOMES = ['ANSWERED', 'RNR_1', 'RNR_2', 'RNR_3', 'RNR_4', 'RNR_5', 'RNR_6_PLUS', 'CALLBACK', 'MEETING_SCHEDULED'];
 
@@ -225,7 +224,8 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     }
     // Lenient launch: the follow-up is optional when neither date nor time was
     // given. If the user started filling it in, it is still validated.
-    const followUpSkipped = isLenientLaunch() && !followUpTask?.dueDate && !followUpTask?.dueTime;
+    // Whether a follow-up is required: Admin → CRM Settings → Calls.
+    const followUpSkipped = !(await getCrmSettings()).calls.requireFollowUp && !followUpTask?.dueDate && !followUpTask?.dueTime;
     followUpWasSkipped = followUpSkipped;
     if (!followUpSkipped && !followUpTask?.dueTime) {
       res.status(400).json({
@@ -608,15 +608,16 @@ callsRouter.post('/', verifyToken, async (req, res) => {
 
   let needsEscalation = false;
   let needsInactivationPrompt = false;
+  const callRules = (await getCrmSettings()).calls;
 
-  if (rnrCount >= ESCALATION_THRESHOLD) {
+  if (rnrCount >= callRules.rnrEscalationAfter) {
     needsEscalation = true;
 
     // Check if 3 months have passed since lead creation
     const monthsOld =
       (Date.now() - lead.createdAt.getTime()) / (1000 * 60 * 60 * 24 * 30);
 
-    if (monthsOld >= INACTIVATION_MONTHS) {
+    if (monthsOld >= callRules.rnrInactivationMonths) {
       needsInactivationPrompt = true;
     } else {
       // Notify BL about escalation need
@@ -828,7 +829,7 @@ callsRouter.get('/', verifyToken, async (req, res) => {
     orderBy: { dueDate: 'asc' },
   });
 
-  res.json({ calls, rnrCount, needsEscalation: rnrCount >= ESCALATION_THRESHOLD, scheduledCalls });
+  res.json({ calls, rnrCount, needsEscalation: rnrCount >= (await getCrmSettings()).calls.rnrEscalationAfter, scheduledCalls });
 });
 
 // ── POST /api/leads/:leadId/calls/upload-attachment ───────────────────────────

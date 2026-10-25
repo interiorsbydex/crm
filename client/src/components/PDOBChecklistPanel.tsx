@@ -6,6 +6,7 @@ import EmailPreviewModal from './EmailPreviewModal';
 import { CustomChecklistItems, useChecklistStatus } from './ChecklistExtras';
 import { DateTimeInput } from './ui/DateTimeInputs';
 import { istDatetimeLocalValue, istInputToISO } from '../lib/dateFormat';
+import { crmSettings } from '../lib/crmSettings';
 
 interface PDOBChecklist {
   id: string;
@@ -55,7 +56,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
 
   const [form, setForm] = useState({ paymentValue: '', targetValue: '', projectValue: '', furnitureValue: '', obMeetingScheduledAt: '', obMeetingLocation: '', notes: '', finalPitchPresentationConfirmed: false });
   const [showOtherLocation, setShowOtherLocation] = useState(false);
-  const [obMeetingNotifyClient, setObMeetingNotifyClient] = useState(true);
+  const [obMeetingNotifyClient, setObMeetingNotifyClient] = useState(crmSettings().notifyClientByDefault);
   // Fix A — explicit "send externally?" checkbox for the PD→OB welcome email;
   // defaults to true (opt-out if not desired) but must be visible.
   const [welcomeNotifyClient, setWelcomeNotifyClient] = useState(true);
