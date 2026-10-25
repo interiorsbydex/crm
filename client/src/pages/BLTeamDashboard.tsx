@@ -10,6 +10,7 @@ import { api } from '../lib/api';
 import DesignerDashboard from './DesignerDashboard';
 import DashboardContent from '../components/dashboard/DashboardContent';
 import { cycleDescription } from '../lib/crmSettings';
+import { Tile, TileGroup, useDashboardLayout } from '../lib/dashboardLayout';
 
 interface Designer { id: string; name: string }
 interface Row {
@@ -65,6 +66,7 @@ export default function BLTeamDashboard({ teamExtras }: { teamExtras?: ReactNode
       .finally(() => setLoading(false));
   }, [designers]);
 
+  const L = useDashboardLayout('blTeam').label;
   const sum = (f: (r: Row) => number) => rows.reduce((a, r) => a + f(r), 0);
   const sumCredits = (key: 'coreCredits' | 'boosterCredits') =>
     rows.some((r) => r[key] == null)
@@ -102,16 +104,17 @@ export default function BLTeamDashboard({ teamExtras }: { teamExtras?: ReactNode
         </div>
       )}
 
-      <DashboardContent />
+      <TileGroup dashboard="blTeam"><Tile id="blTeam.announcements"><DashboardContent /></Tile></TileGroup>
 
       {designerId ? (
         <DesignerDashboard key={designerId} designerId={designerId} designerName={designers.find((d) => d.id === designerId)?.name} />
       ) : (
         <>
+          <TileGroup dashboard="blTeam"><Tile id="blTeam.teamTable">
           <div className="px-6 pt-4 max-w-7xl mx-auto">
             <div className="bg-white rounded-2xl overflow-hidden shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
               <div className="px-5 py-3" style={{ borderBottom: '1px solid #EDE8E3' }}>
-                <h3 className="font-bold text-stone-900">Team by designer</h3>
+                <h3 className="font-bold text-stone-900">{L('blTeam.teamTable', 'Team by designer')}</h3>
                 <p className="text-xs text-stone-400 mt-0.5">
                   Active leads: current. PP done and onboarded: all-time. Booking, targets and designer credits: current {cycleDescription()} cycle.
                   Credits below belong to designers, not the BL's personal incentive calculation. Click a designer to open their full dashboard.
@@ -160,6 +163,7 @@ export default function BLTeamDashboard({ teamExtras }: { teamExtras?: ReactNode
               )}
             </div>
           </div>
+          </Tile></TileGroup>
           {teamExtras}
         </>
       )}

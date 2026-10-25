@@ -11,6 +11,7 @@ import DesignerDashboard from './DesignerDashboard';
 import BLTeamDashboard from './BLTeamDashboard';
 import CREDashboard from './CREDashboard';
 import { stageShortLabel, sourceLabel } from '../lib/crmSettings';
+import { Tile, TileGroup, useDashboardLayout } from '../lib/dashboardLayout';
 
 interface NpsBreakdown {
   salesNps: number | null;
@@ -177,49 +178,63 @@ function BHDashboard({ data }: { data: DashboardData }) {
   const attentionCount = data.needsAttentionTotal;
   const slaCount = data.slaBreaches.activeCount;
 
+  const L = useDashboardLayout('bh').label;
   return (
     <div className="space-y-6">
       {/* Row 1 – KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <TileGroup dashboard="bh" className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+<Tile id="bh.salesPipeline">
         <KPICard
-          label="Sales Pipeline"
+          label={L('bh.salesPipeline', 'Sales Pipeline')}
           value={fmt(data.pipelineValue)}
           sub={`${data.activeLeads} active leads, est. value`}
           accent
           to="/leads?status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
         />
+        </Tile>
+<Tile id="bh.activeLeads">
         <KPICard
-          label="Active Leads"
+          label={L('bh.activeLeads', 'Active Leads')}
           value={data.activeLeads}
           sub={`${fmt(data.activeLeadsValue ?? 0)} estimated value`}
           to="/leads?status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
         />
+        </Tile>
+<Tile id="bh.activeProjects">
         <KPICard
-          label="Active Projects"
+          label={L('bh.activeProjects', 'Active Projects')}
           value={data.activeProjectsDip?.count ?? 0}
           sub={`${fmt(data.activeProjectsDip?.value ?? 0)} estimated value · in Design`}
           to="/projects?leadStage=DESIGN_IN_PROGRESS"
         />
+        </Tile>
+<Tile id="bh.inDelivery">
         <KPICard
-          label="In Delivery"
+          label={L('bh.inDelivery', 'In Delivery')}
           value={data.inDelivery.count}
           sub={`${fmt(data.inDelivery.contractValueSum)} contract value in flight`}
           to="/projects?dashboardScope=true&excludePhases=HANDOVER,COMPLETED"
         />
+        </Tile>
+<Tile id="bh.collectedThisMonth">
         <KPICard
-          label="Collected This Month"
+          label={L('bh.collectedThisMonth', 'Collected This Month')}
           value={fmt(data.collectedThisMonth)}
           sub="Payments this calendar month"
           to="/collections?status=COLLECTED"
         />
+        </Tile>
+<Tile id="bh.outstanding">
         <KPICard
-          label="Outstanding"
+          label={L('bh.outstanding', 'Outstanding')}
           value={fmt(data.outstanding)}
           sub="Yet to collect on delivery projects"
           to="/projects?dashboardScope=true&excludePhases=HANDOVER,COMPLETED&hasOutstanding=true"
         />
+        </Tile>
+<Tile id="bh.needsAttention">
         <KPICard
-          label="Needs Attention"
+          label={L('bh.needsAttention', 'Needs Attention')}
           value={attentionCount + slaCount}
           sub={`${attentionCount} project${attentionCount !== 1 ? 's' : ''} · ${slaCount} SLA lead${slaCount !== 1 ? 's' : ''}`}
           links={[
@@ -227,46 +242,58 @@ function BHDashboard({ data }: { data: DashboardData }) {
             ...(slaCount > 0 ? [{ label: `${slaCount} SLA-breached lead${slaCount !== 1 ? 's' : ''}`, to: '/leads?hasUnresolvedSlaBreach=true' }] : []),
           ]}
         />
+        </Tile>
+<Tile id="bh.npsScore">
         <KPICard
-          label="NPS Score"
+          label={L('bh.npsScore', 'NPS Score')}
           value={data.avgNPS != null ? data.avgNPS.toFixed(1) : '—'}
           sub="Avg across touchpoints this month"
           to="/nps"
         />
-      </div>
+        </Tile>
+      </TileGroup>
 
       {/* Row 1b – OB Progress + Revenue Generated (live data) + PO Progress + Incentive (pending) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <TileGroup dashboard="bh" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* OB Progress: leads that completed OBM and are now in Design */}
+        <Tile id="bh.obProgress">
         <div className="rounded-2xl p-5 shadow-warm-sm" style={{ background: 'white', border: '1px solid #EDE8E3' }}>
-          <p className="text-[10px] font-semibold text-stone-500 uppercase tracking-wide mb-1">OB Progress</p>
+          <p className="text-[10px] font-semibold text-stone-500 uppercase tracking-wide mb-1">{L('bh.obProgress', 'OB Progress')}</p>
           <p className="text-2xl font-bold text-stone-900">{data.obProgress?.count ?? 0}</p>
           <p className="text-[11px] text-stone-500 mt-0.5">{fmt(data.obProgress?.value ?? 0)} · leads in Design</p>
         </div>
+        </Tile>
         {/* PO Progress – Coming Soon */}
+        <Tile id="bh.poProgress">
         <div className="rounded-2xl p-5 shadow-warm-sm flex flex-col items-center justify-center text-center min-h-[112px]" style={{ background: '#FAF6F2', border: '1px dashed #EDE8E3' }}>
           <Wrench size={20} strokeWidth={1.5} className="text-stone-300 mb-1.5" />
-          <p className="text-sm font-semibold text-stone-400">PO Progress</p>
+          <p className="text-sm font-semibold text-stone-400">{L('bh.poProgress', 'PO Progress')}</p>
           <p className="text-[10px] text-stone-400 mt-0.5">Coming Soon</p>
         </div>
+        </Tile>
         {/* Revenue Generated: total collected across all projects */}
+        <Tile id="bh.revenueGenerated">
         <div className="rounded-2xl p-5 shadow-warm-sm" style={{ background: 'white', border: '1px solid #EDE8E3' }}>
-          <p className="text-[10px] font-semibold text-stone-500 uppercase tracking-wide mb-1">Revenue Generated</p>
+          <p className="text-[10px] font-semibold text-stone-500 uppercase tracking-wide mb-1">{L('bh.revenueGenerated', 'Revenue Generated')}</p>
           <p className="text-2xl font-bold text-stone-900">{fmt(data.revenueGenerated ?? 0)}</p>
           <p className="text-[11px] text-stone-500 mt-0.5">Total collected</p>
         </div>
+        </Tile>
         {/* Estimated Incentive – Coming Soon */}
+        <Tile id="bh.estimatedIncentive">
         <div className="rounded-2xl p-5 shadow-warm-sm flex flex-col items-center justify-center text-center min-h-[112px]" style={{ background: '#FAF6F2', border: '1px dashed #EDE8E3' }}>
           <Wrench size={20} strokeWidth={1.5} className="text-stone-300 mb-1.5" />
-          <p className="text-sm font-semibold text-stone-400">Estimated Incentive</p>
+          <p className="text-sm font-semibold text-stone-400">{L('bh.estimatedIncentive', 'Estimated Incentive')}</p>
           <p className="text-[10px] text-stone-400 mt-0.5">Coming Soon</p>
         </div>
-      </div>
+        </Tile>
+      </TileGroup>
 
       {/* NPS breakdown by stage */}
       {data.npsBreakdown && (
+        <TileGroup dashboard="bh"><Tile id="bh.npsByStage">
         <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
-          <h3 className="font-bold text-stone-900 mb-4 tracking-tight">Client Satisfaction by Stage</h3>
+          <h3 className="font-bold text-stone-900 mb-4 tracking-tight">{L('bh.npsByStage', 'Client Satisfaction by Stage')}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
               { label: 'Sales', value: data.npsBreakdown.salesNps },
@@ -285,13 +312,15 @@ function BHDashboard({ data }: { data: DashboardData }) {
             })}
           </div>
         </div>
+        </Tile></TileGroup>
       )}
 
       {/* Row 2 – Charts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <TileGroup dashboard="bh" className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Pipeline funnel – horizontal bars */}
+        <Tile id="bh.pipelineFunnel">
         <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
-          <h3 className="font-bold text-stone-900 mb-4 tracking-tight">Pipeline Funnel</h3>
+          <h3 className="font-bold text-stone-900 mb-4 tracking-tight">{L('bh.pipelineFunnel', 'Pipeline Funnel')}</h3>
           {funnelData.every((d) => d.count === 0) ? (
             <div className="flex items-center justify-center h-44 text-gray-400 text-sm">No active leads</div>
           ) : (
@@ -307,10 +336,12 @@ function BHDashboard({ data }: { data: DashboardData }) {
             </ResponsiveContainer>
           )}
         </div>
+        </Tile>
 
         {/* Source mix – donut */}
+        <Tile id="bh.leadSources">
         <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
-          <h3 className="font-bold text-stone-900 mb-4 tracking-tight">Lead Sources</h3>
+          <h3 className="font-bold text-stone-900 mb-4 tracking-tight">{L('bh.leadSources', 'Lead Sources')}</h3>
           {data.sourceBreakdown.length === 0 ? (
             <div className="flex items-center justify-center h-44 text-gray-400 text-sm">No source data</div>
           ) : (
@@ -343,14 +374,16 @@ function BHDashboard({ data }: { data: DashboardData }) {
             </div>
           )}
         </div>
-      </div>
+        </Tile>
+      </TileGroup>
 
       {/* Row 3 – Conversion + SLA breaches */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <TileGroup dashboard="bh" className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Stage conversion */}
+        <Tile id="bh.stageConversion">
         <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
           <div className="flex items-center justify-between mb-1">
-            <h3 className="font-bold text-stone-900 tracking-tight">Stage Conversion</h3>
+            <h3 className="font-bold text-stone-900 tracking-tight">{L('bh.stageConversion', 'Stage Conversion')}</h3>
             {(data.totalLeadsReceived ?? 0) > 0 && (
               <span className="text-[11px] text-stone-400">base: {data.totalLeadsReceived} received</span>
             )}
@@ -379,12 +412,14 @@ function BHDashboard({ data }: { data: DashboardData }) {
             ))}
           </div>
         </div>
+        </Tile>
 
         {/* SLA breaches */}
+        <Tile id="bh.slaBreaches">
         <div className="bg-white rounded-2xl overflow-hidden shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
           <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #EDE8E3' }}>
             <h3 className="font-bold text-stone-900 flex items-center gap-2">
-              SLA Breaches
+              {L('bh.slaBreaches', 'SLA Breaches')}
               {data.slaBreaches.activeCount > 0 && (
                 <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">
                   {data.slaBreaches.activeCount}
@@ -421,11 +456,13 @@ function BHDashboard({ data }: { data: DashboardData }) {
             </div>
           )}
         </div>
-      </div>
+        </Tile>
+      </TileGroup>
 
       {/* Row 4 – Activity feed */}
+      <TileGroup dashboard="bh"><Tile id="bh.todaysActivity">
       <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
-        <h3 className="font-bold text-stone-900 mb-4 tracking-tight">Today's Activity</h3>
+        <h3 className="font-bold text-stone-900 mb-4 tracking-tight">{L('bh.todaysActivity', "Today's Activity")}</h3>
         <div className="grid grid-cols-3 gap-4">
           {[
             { label: 'Calls Logged', value: data.teamActivity.callsToday, Icon: Phone, bg: '#FEF0E8', color: 'text-brand-700' },
@@ -440,6 +477,7 @@ function BHDashboard({ data }: { data: DashboardData }) {
           ))}
         </div>
       </div>
+      </Tile></TileGroup>
     </div>
   );
 }
@@ -456,38 +494,48 @@ function BLDashboard({ data }: { data: DashboardData }) {
   const slaCount = data.slaBreaches?.activeCount ?? 0;
   const attentionCount = data.needsAttentionTotal;
 
+  const L = useDashboardLayout('bl').label;
   return (
     <div className="space-y-6">
-      <MedalCard medal={data.medal} />
+      <TileGroup dashboard="bl"><Tile id="bl.medal"><MedalCard medal={data.medal} /></Tile></TileGroup>
       {/* Row 1 – KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <TileGroup dashboard="bl" className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+<Tile id="bl.salesPipeline">
         <KPICard
-          label="Sales Pipeline"
+          label={L('bl.salesPipeline', 'Sales Pipeline')}
           value={fmt(data.pipelineValue)}
           sub={`${data.activeLeads ?? 0} active leads in scope`}
           accent
           to="/leads?status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
         />
+        </Tile>
+<Tile id="bl.inDelivery">
         <KPICard
-          label="In Delivery"
+          label={L('bl.inDelivery', 'In Delivery')}
           value={data.inDelivery.count}
           sub={`${fmt(data.inDelivery.contractValueSum)} in flight`}
           to="/projects?dashboardScope=true&excludePhases=HANDOVER,COMPLETED"
         />
+        </Tile>
+<Tile id="bl.collectedThisMonth">
         <KPICard
-          label="Collected This Month"
+          label={L('bl.collectedThisMonth', 'Collected This Month')}
           value={fmt(data.collectedThisMonth)}
           sub="Payments this calendar month"
           to="/collections?status=COLLECTED"
         />
+        </Tile>
+<Tile id="bl.outstanding">
         <KPICard
-          label="Outstanding"
+          label={L('bl.outstanding', 'Outstanding')}
           value={fmt(data.outstanding)}
           sub="Yet to collect"
           to="/projects?dashboardScope=true&excludePhases=HANDOVER,COMPLETED&hasOutstanding=true"
         />
+        </Tile>
+<Tile id="bl.needsAttention">
         <KPICard
-          label="Needs Attention"
+          label={L('bl.needsAttention', 'Needs Attention')}
           value={attentionCount + slaCount}
           sub={`${attentionCount} project · ${slaCount} SLA`}
           links={[
@@ -495,18 +543,22 @@ function BLDashboard({ data }: { data: DashboardData }) {
             ...(slaCount > 0 ? [{ label: `${slaCount} SLA-breached lead${slaCount !== 1 ? 's' : ''}`, to: '/leads?hasUnresolvedSlaBreach=true' }] : []),
           ]}
         />
+        </Tile>
+<Tile id="bl.nps">
         <KPICard
-          label="NPS"
+          label={L('bl.nps', 'NPS')}
           value={data.avgNPS != null ? data.avgNPS.toFixed(1) : '—'}
           sub="Avg score this month"
           to="/nps"
         />
-      </div>
+        </Tile>
+      </TileGroup>
 
       {/* NPS breakdown by stage */}
       {data.npsBreakdown && (
+        <TileGroup dashboard="bl"><Tile id="bl.npsByStage">
         <div className="bg-white rounded-2xl p-4 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
-          <h3 className="font-bold text-stone-900 mb-3 text-sm tracking-tight">Client Satisfaction by Stage</h3>
+          <h3 className="font-bold text-stone-900 mb-3 text-sm tracking-tight">{L('bl.npsByStage', 'Client Satisfaction by Stage')}</h3>
           <div className="grid grid-cols-4 gap-3">
             {[
               { label: 'Sales', value: data.npsBreakdown.salesNps },
@@ -524,15 +576,17 @@ function BLDashboard({ data }: { data: DashboardData }) {
             })}
           </div>
         </div>
+        </Tile></TileGroup>
       )}
 
       <SectionHeader title="Delivery" />
 
       {/* Row 2 – Phase load + Needs attention */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <TileGroup dashboard="bl" className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Phase load */}
+        <Tile id="bl.phaseLoad">
         <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
-          <h3 className="font-bold text-stone-900 mb-4 tracking-tight">Phase Load</h3>
+          <h3 className="font-bold text-stone-900 mb-4 tracking-tight">{L('bl.phaseLoad', 'Phase Load')}</h3>
           {phaseData.length === 0 ? (
             <div className="flex items-center justify-center h-44 text-gray-400 text-sm">No active projects</div>
           ) : (
@@ -562,11 +616,13 @@ function BLDashboard({ data }: { data: DashboardData }) {
             </ResponsiveContainer>
           )}
         </div>
+        </Tile>
 
         {/* Needs attention */}
+        <Tile id="bl.needsAttentionList">
         <div className="bg-white rounded-2xl overflow-hidden shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
           <div className="px-5 py-4 flex items-center gap-2" style={{ borderBottom: '1px solid #EDE8E3' }}>
-            <h3 className="font-bold text-stone-900">Needs Attention</h3>
+            <h3 className="font-bold text-stone-900">{L('bl.needsAttentionList', 'Needs Attention')}</h3>
             {attentionCount > 0 && (
               <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">{attentionCount}</span>
             )}
@@ -601,14 +657,16 @@ function BLDashboard({ data }: { data: DashboardData }) {
             </div>
           )}
         </div>
-      </div>
+        </Tile>
+      </TileGroup>
 
       {/* Row 3 – Collections due + Coming soon */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <TileGroup dashboard="bl" className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Collections due */}
+        <Tile id="bl.collectionsDue">
         <div className="bg-white rounded-2xl overflow-hidden shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
           <div className="px-5 py-4" style={{ borderBottom: '1px solid #EDE8E3' }}>
-            <h3 className="font-bold text-stone-900">Collections Due</h3>
+            <h3 className="font-bold text-stone-900">{L('bl.collectionsDue', 'Collections Due')}</h3>
           </div>
           {data.collectionsDue.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-gray-400">
@@ -639,16 +697,19 @@ function BLDashboard({ data }: { data: DashboardData }) {
             </div>
           )}
         </div>
+        </Tile>
 
         {/* Site & service pulse — coming soon */}
+        <Tile id="bl.sitePulse">
         <div className="bg-white rounded-2xl p-5 shadow-warm-sm flex flex-col items-center justify-center text-center min-h-[180px]" style={{ border: '1px solid #EDE8E3' }}>
           <Wrench size={28} strokeWidth={1.5} className="text-stone-300 mb-2" />
-          <h3 className="font-semibold text-stone-700 mb-1">Site & Service Pulse</h3>
+          <h3 className="font-semibold text-stone-700 mb-1">{L('bl.sitePulse', 'Site & Service Pulse')}</h3>
           <p className="text-xs text-stone-400 max-w-[180px] leading-relaxed">
             Service & Warranty module is coming in a future release.
           </p>
         </div>
-      </div>
+        </Tile>
+      </TileGroup>
     </div>
   );
 }

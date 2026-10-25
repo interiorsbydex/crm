@@ -7,6 +7,7 @@ import {
 import { getEffectiveStageSla } from '../lib/stageSla.js';
 import { isLenientLaunch } from '../lib/lenientMode.js';
 import { getDocumentTypes } from '../lib/documentTypes.js';
+import { dashboardLayoutsConfig } from '../lib/dashboardLayouts.js';
 import { getCrmSettings, describeCycles } from '../lib/crmSettings.js';
 import { DEFAULT_CYCLE_SCHEDULE } from '../lib/targetCycle.js';
 
@@ -22,6 +23,15 @@ configRouter.get('/crm-settings', verifyToken, async (_req, res) => {
   try {
     const settings = await getCrmSettings();
     res.json({ settings, cycles: describeCycles(settings.cycleSchedule ?? DEFAULT_CYCLE_SCHEDULE) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/config/dashboards — tile layout every dashboard follows (Admin → Dashboards) ──
+configRouter.get('/dashboards', verifyToken, async (_req, res) => {
+  try {
+    res.json({ layouts: await dashboardLayoutsConfig.get() });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

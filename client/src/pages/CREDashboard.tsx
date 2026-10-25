@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { sourceLabel } from '../lib/crmSettings';
+import { Tile, TileGroup, useDashboardLayout } from '../lib/dashboardLayout';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface CRELead {
@@ -194,6 +195,7 @@ function LeadSection({
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function CREDashboard() {
+  const L = useDashboardLayout('cre').label;
   const [summary, setSummary] = useState<StatusSummary | null>(null);
   const [leads, setLeads] = useState<CRELead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -274,36 +276,44 @@ export default function CREDashboard() {
       </div>
 
       {/* ── Stat tiles ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <TileGroup dashboard="cre" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+<Tile id="cre.atEffectiveLead">
         <StatTile
-          label="At Effective Lead"
+          label={L('cre.atEffectiveLead', 'At Effective Lead')}
           value={elActive}
           sub="awaiting qualification"
           accent="bg-indigo-50 text-indigo-500"
           icon={Users}
         />
+        </Tile>
+<Tile id="cre.mqlAwaitingBl">
         <StatTile
-          label="MQL — Awaiting BL"
+          label={L('cre.mqlAwaitingBl', 'MQL — Awaiting BL')}
           value={mqlAwaitingBL.length}
           sub={mqlAwaitingBL.length > 0 ? 'action required' : 'all allocated'}
           accent={mqlAwaitingBL.length > 0 ? 'bg-amber-50 text-amber-500' : 'bg-green-50 text-green-500'}
           icon={AlertTriangle}
         />
+        </Tile>
+<Tile id="cre.mqlBlAssigned">
         <StatTile
-          label="MQL — BL Assigned"
+          label={L('cre.mqlBlAssigned', 'MQL — BL Assigned')}
           value={mqlWithBL.length}
           sub="in BL's queue"
           accent="bg-green-50 text-green-500"
           icon={CheckCircle2}
         />
+        </Tile>
+<Tile id="cre.pushedBack">
         <StatTile
-          label="Pushed Back"
+          label={L('cre.pushedBack', 'Pushed Back')}
           value={pushbackLeads.length}
           sub={pushbackLeads.length > 0 ? 'needs re-qualification' : 'none outstanding'}
           accent={pushbackLeads.length > 0 ? 'bg-rose-50 text-rose-500' : 'bg-stone-50 text-stone-400'}
           icon={AlertTriangle}
         />
-      </div>
+        </Tile>
+      </TileGroup>
 
       {/* ── Pushback callout ─────────────────────────────────────────────────── */}
       {pushbackLeads.length > 0 && (
@@ -318,29 +328,37 @@ export default function CREDashboard() {
         </div>
       )}
 
+      <TileGroup dashboard="cre" className="space-y-5">
       {/* ── Effective Lead section ───────────────────────────────────────────── */}
+      <Tile id="cre.elSection">
       <LeadSection
-        title="Effective Lead — Pending Qualification"
+        title={L('cre.elSection', 'Effective Lead — Pending Qualification')}
         leads={elLeads}
         accent="border-b bg-indigo-50/50 text-indigo-700"
         emptyText="No leads at Effective Lead stage — nice work! 🎯"
       />
+      </Tile>
 
       {/* ── MQL awaiting BL section ─────────────────────────────────────────── */}
+      <Tile id="cre.mqlAwaitingSection">
       <LeadSection
-        title="MQL — Awaiting BL Allocation"
+        title={L('cre.mqlAwaitingSection', 'MQL — Awaiting BL Allocation')}
         leads={mqlAwaitingBL}
         accent={mqlAwaitingBL.length > 0 ? 'border-b bg-amber-50/50 text-amber-700' : 'border-b bg-stone-50/50 text-stone-500'}
         emptyText="All MQL leads have been allocated to a BL ✓"
       />
+      </Tile>
 
       {/* ── MQL with BL section ─────────────────────────────────────────────── */}
+      <Tile id="cre.mqlAssignedSection">
       <LeadSection
-        title="MQL — BL Assigned"
+        title={L('cre.mqlAssignedSection', 'MQL — BL Assigned')}
         leads={mqlWithBL}
         accent="border-b bg-green-50/50 text-green-700"
         emptyText="No leads in this state yet."
       />
+      </Tile>
+      </TileGroup>
     </div>
   );
 }

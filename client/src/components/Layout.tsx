@@ -14,6 +14,7 @@ import { validateEmail, validatePhoneStrict } from '../lib/validation';
 import PhoneInput from './PhoneInput';
 import LeadLocationSelector from './LeadLocationSelector';
 import { loadCrmSettings, useCrmSettings } from '../lib/crmSettings';
+import { loadDashboardLayouts } from '../lib/dashboardLayout';
 import { DateInput } from './ui/DateTimeInputs';
 import { todayISTDateString } from '../lib/dateFormat';
 
@@ -107,7 +108,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // wait for them (or for the load to fail, falling back to built-in values).
   const [settingsReady, setSettingsReady] = useState(false);
   useEffect(() => {
-    loadCrmSettings().catch(() => {}).finally(() => setSettingsReady(true));
+    Promise.allSettled([loadCrmSettings(), loadDashboardLayouts()]).finally(() => setSettingsReady(true));
   }, []);
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});

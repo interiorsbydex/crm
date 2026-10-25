@@ -1,0 +1,76 @@
+/**
+ * Every configurable dashboard tile (Admin → Dashboards). Each entry must match a
+ * <Tile id=…> on its dashboard; lib/dashboardLayout.tsx warns in development if not.
+ * `section` groups tiles the way they sit on screen; order is changed within a section
+ * (the Designer dashboard's "Sections" can also be reordered among themselves).
+ */
+export interface DashboardTileDef { id: string; dashboard: string; section: string; label: string }
+
+export const DASHBOARD_NAMES: Record<string, string> = {
+  bh: 'Branch Head dashboard',
+  bl: 'Business Lead dashboard',
+  blTeam: 'Business Lead — team panel',
+  designer: 'Designer dashboard',
+  cre: 'CRE dashboard',
+};
+
+export const DASHBOARD_TILES: DashboardTileDef[] = [
+  // Branch Head dashboard
+  { id: 'bh.salesPipeline', dashboard: 'bh', section: 'Key numbers', label: 'Sales Pipeline' },
+  { id: 'bh.activeLeads', dashboard: 'bh', section: 'Key numbers', label: 'Active Leads' },
+  { id: 'bh.activeProjects', dashboard: 'bh', section: 'Key numbers', label: 'Active Projects' },
+  { id: 'bh.inDelivery', dashboard: 'bh', section: 'Key numbers', label: 'In Delivery' },
+  { id: 'bh.collectedThisMonth', dashboard: 'bh', section: 'Key numbers', label: 'Collected This Month' },
+  { id: 'bh.outstanding', dashboard: 'bh', section: 'Key numbers', label: 'Outstanding' },
+  { id: 'bh.needsAttention', dashboard: 'bh', section: 'Key numbers', label: 'Needs Attention' },
+  { id: 'bh.npsScore', dashboard: 'bh', section: 'Key numbers', label: 'NPS Score' },
+  { id: 'bh.obProgress', dashboard: 'bh', section: 'Progress', label: 'OB Progress' },
+  { id: 'bh.revenueGenerated', dashboard: 'bh', section: 'Progress', label: 'Revenue Generated' },
+  { id: 'bh.poProgress', dashboard: 'bh', section: 'Progress', label: 'PO Progress' },
+  { id: 'bh.estimatedIncentive', dashboard: 'bh', section: 'Progress', label: 'Estimated Incentive' },
+  { id: 'bh.npsByStage', dashboard: 'bh', section: 'Client satisfaction', label: 'Client Satisfaction by Stage' },
+  { id: 'bh.pipelineFunnel', dashboard: 'bh', section: 'Charts', label: 'Pipeline Funnel' },
+  { id: 'bh.leadSources', dashboard: 'bh', section: 'Charts', label: 'Lead Sources' },
+  { id: 'bh.stageConversion', dashboard: 'bh', section: 'Conversion and SLA', label: 'Stage Conversion' },
+  { id: 'bh.slaBreaches', dashboard: 'bh', section: 'Conversion and SLA', label: 'SLA Breaches' },
+  { id: 'bh.todaysActivity', dashboard: 'bh', section: 'Activity', label: 'Today\'s Activity' },
+  // Business Lead dashboard
+  { id: 'bl.medal', dashboard: 'bl', section: 'Medal', label: 'Medal' },
+  { id: 'bl.salesPipeline', dashboard: 'bl', section: 'Key numbers', label: 'Sales Pipeline' },
+  { id: 'bl.inDelivery', dashboard: 'bl', section: 'Key numbers', label: 'In Delivery' },
+  { id: 'bl.collectedThisMonth', dashboard: 'bl', section: 'Key numbers', label: 'Collected This Month' },
+  { id: 'bl.outstanding', dashboard: 'bl', section: 'Key numbers', label: 'Outstanding' },
+  { id: 'bl.needsAttention', dashboard: 'bl', section: 'Key numbers', label: 'Needs Attention' },
+  { id: 'bl.nps', dashboard: 'bl', section: 'Key numbers', label: 'NPS' },
+  { id: 'bl.npsByStage', dashboard: 'bl', section: 'Client satisfaction', label: 'Client Satisfaction by Stage' },
+  { id: 'bl.phaseLoad', dashboard: 'bl', section: 'Delivery', label: 'Phase Load' },
+  { id: 'bl.needsAttentionList', dashboard: 'bl', section: 'Delivery', label: 'Needs Attention (projects list)' },
+  { id: 'bl.collectionsDue', dashboard: 'bl', section: 'Delivery', label: 'Collections Due' },
+  { id: 'bl.sitePulse', dashboard: 'bl', section: 'Delivery', label: 'Site & Service Pulse' },
+  // Business Lead — team panel
+  { id: 'blTeam.announcements', dashboard: 'blTeam', section: 'Top', label: 'Announcements & design inspiration' },
+  { id: 'blTeam.teamTable', dashboard: 'blTeam', section: 'Team', label: 'Team by designer' },
+  // Designer dashboard
+  { id: 'designer.announcements', dashboard: 'designer', section: 'Top', label: 'Announcements & design inspiration' },
+  { id: 'designer.activeLeads', dashboard: 'designer', section: 'Key numbers', label: 'Active Leads' },
+  { id: 'designer.ppDone', dashboard: 'designer', section: 'Key numbers', label: 'PP Done' },
+  { id: 'designer.bookingDone', dashboard: 'designer', section: 'Key numbers', label: 'Booking Done' },
+  { id: 'designer.creditsEarned', dashboard: 'designer', section: 'Key numbers', label: 'Credits Earned' },
+  { id: 'designer.leadProgression', dashboard: 'designer', section: 'Sections', label: 'Lead Progression' },
+  { id: 'designer.pipelinePotential', dashboard: 'designer', section: 'Sections', label: 'Pipeline Potential' },
+  { id: 'designer.conversionInsights', dashboard: 'designer', section: 'Insights', label: 'Conversion Insights' },
+  { id: 'designer.todaysFocus', dashboard: 'designer', section: 'Insights', label: 'Today\'s Focus' },
+  { id: 'designer.teamLeaderboard', dashboard: 'designer', section: 'Sections', label: 'Team Leaderboard' },
+  { id: 'designer.attentionRequired', dashboard: 'designer', section: 'Alerts', label: 'Attention Required' },
+  { id: 'designer.recentNotifications', dashboard: 'designer', section: 'Alerts', label: 'Recent Notifications' },
+  { id: 'designer.clientHealth', dashboard: 'designer', section: 'Sections', label: 'Client Health' },
+  { id: 'designer.monthlyMedal', dashboard: 'designer', section: 'Sections', label: 'Monthly Medal' },
+  // CRE dashboard
+  { id: 'cre.atEffectiveLead', dashboard: 'cre', section: 'Key numbers', label: 'At Effective Lead' },
+  { id: 'cre.mqlAwaitingBl', dashboard: 'cre', section: 'Key numbers', label: 'MQL — Awaiting BL' },
+  { id: 'cre.mqlBlAssigned', dashboard: 'cre', section: 'Key numbers', label: 'MQL — BL Assigned' },
+  { id: 'cre.pushedBack', dashboard: 'cre', section: 'Key numbers', label: 'Pushed Back' },
+  { id: 'cre.elSection', dashboard: 'cre', section: 'Lead lists', label: 'Effective Lead — Pending Qualification' },
+  { id: 'cre.mqlAwaitingSection', dashboard: 'cre', section: 'Lead lists', label: 'MQL — Awaiting BL Allocation' },
+  { id: 'cre.mqlAssignedSection', dashboard: 'cre', section: 'Lead lists', label: 'MQL — BL Assigned' },
+];

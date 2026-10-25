@@ -30,6 +30,7 @@ import {
 } from '../lib/documentTypes.js';
 import { mountVersionedConfig } from '../lib/versionedConfig.js';
 import { automationsConfig, AUTOMATION_EVENTS, CC_ROLES } from '../lib/automations.js';
+import { dashboardLayoutsConfig } from '../lib/dashboardLayouts.js';
 import {
   CrmSettingsError, DEFAULT_CRM_SETTINGS, LEAD_DETAIL_OPTIONS, HIDEABLE_STAGES, NAMEABLE_STAGES, DESIGN_PHASE_KEYS,
   loadCrmSettingsState, saveCrmSettings, resetCrmSettings, crmSettingsHistory, getCrmSettings, previewCycleStartDay,
@@ -1058,6 +1059,10 @@ adminRouter.delete('/crm-settings', async (req, res) => {
 mountVersionedConfig(adminRouter, '/automations', automationsConfig, async () => ({
   catalog: { events: AUTOMATION_EVENTS, ccRoles: CC_ROLES },
 }));
+
+// ── Dashboards (Admin → Dashboards) ───────────────────────────────────────────
+// Hidden tiles, tile order within sections and tile names, per role's dashboard.
+mountVersionedConfig(adminRouter, '/dashboards', dashboardLayoutsConfig);
 
 // ── Document types (Admin → Document Types) ───────────────────────────────────
 adminRouter.get('/document-types', async (_req, res) => {

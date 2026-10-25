@@ -16,6 +16,7 @@ import {
   AlertTriangle, Target, RefreshCw, ChevronRight, FileText, BarChart3, Heart,
 } from 'lucide-react';
 import { cycleDescription } from '../lib/crmSettings';
+import { Tile, TileGroup, useDashboardLayout } from '../lib/dashboardLayout';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 const fmt = (n: number) => {
@@ -227,6 +228,7 @@ const NOTIF_ICON: Record<string, string> = {
 // the signed-in user's. Personal-only panels (own tasks, own client-health list)
 // are not shown in that mode because they belong to the signed-in user.
 export default function DesignerDashboard({ designerId, designerName }: { designerId?: string; designerName?: string } = {}) {
+  const L = useDashboardLayout('designer').label;
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -392,7 +394,7 @@ export default function DesignerDashboard({ designerId, designerName }: { design
       </div>
 
       {/* BL's selected-designer view already has the shared feed in its parent. */}
-      {!designerId && <DashboardContent embedded />}
+      {!designerId && <TileGroup dashboard="designer"><Tile id="designer.announcements"><DashboardContent embedded /></Tile></TileGroup>}
 
       {loading && (
         <div className="space-y-6">
@@ -406,23 +408,26 @@ export default function DesignerDashboard({ designerId, designerName }: { design
       {error && <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-red-600 text-sm">{error}</div>}
 
       {data && !loading && (
-        <>
+        <TileGroup dashboard="designer" className="space-y-6">
           {/* ── Row 1: KPI cards ── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 items-start gap-4">
+          <TileGroup dashboard="designer" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 items-start gap-4">
 
+            <Tile id="designer.activeLeads">
             <Panel className="p-4" to="/leads?status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER" drillLabel="View active leads">
               <p className="text-2xl font-extrabold text-stone-900">{data.personalStats.activeLeads}</p>
-              <p className="text-sm font-semibold text-stone-700 mt-1">Active Leads</p>
+              <p className="text-sm font-semibold text-stone-700 mt-1">{L('designer.activeLeads', 'Active Leads')}</p>
               <p className="text-xs text-stone-400 mt-1">Current sales pipeline</p>
             </Panel>
+            </Tile>
 
+            <Tile id="designer.ppDone">
             <Panel className="p-4" to="/meetings" showDrillLabel={false}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 shadow-sm">
                     <FileText size={21} strokeWidth={2.2} className="text-white" />
                   </span>
-                <p className="text-base font-bold text-stone-900">PP Done</p>
+                <p className="text-base font-bold text-stone-900">{L('designer.ppDone', 'PP Done')}</p>
                 <p className="text-xs text-stone-400">All-time · unique leads with completed PP meetings</p>
                 </div>
                 <ChevronRight size={19} strokeWidth={2.5} className="text-stone-900" />
@@ -448,12 +453,14 @@ export default function DesignerDashboard({ designerId, designerName }: { design
                 </div>
               </div>
             </Panel>
+            </Tile>
 
+            <Tile id="designer.bookingDone">
             <Panel className="p-4" to="/leads?stage=DESIGN_IN_PROGRESS" showDrillLabel={false} style={{ background: '#FFFFFF', border: '1px solid #E8E4DF' }}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <BarChart3 size={29} strokeWidth={2.5} className="text-brand-600" />
-                  <p className="text-base font-bold text-stone-900">Booking Done</p>
+                  <p className="text-base font-bold text-stone-900">{L('designer.bookingDone', 'Booking Done')}</p>
                 </div>
                 <ChevronRight size={19} strokeWidth={2.5} className="text-stone-900" />
               </div>
@@ -483,7 +490,9 @@ export default function DesignerDashboard({ designerId, designerName }: { design
                 <p className="mt-5 text-sm text-stone-500">No target set for this cycle</p>
               )}
             </Panel>
+            </Tile>
 
+            <Tile id="designer.creditsEarned">
             <Panel
               to="/reports"
               drillLabel="View incentive report"
@@ -493,7 +502,7 @@ export default function DesignerDashboard({ designerId, designerName }: { design
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Star size={31} strokeWidth={1.8} fill="currentColor" className="text-brand-600" />
-                  <p className="text-base font-bold text-stone-900">Credits Earned</p>
+                  <p className="text-base font-bold text-stone-900">{L('designer.creditsEarned', 'Credits Earned')}</p>
                 </div>
                 <ChevronRight size={19} strokeWidth={2.5} className="text-stone-900" />
               </div>
@@ -510,10 +519,11 @@ export default function DesignerDashboard({ designerId, designerName }: { design
                     </>}
               </p>
             </Panel>
-          </div>
+            </Tile>
+          </TileGroup>
 
           {/* ── Lead Progression ── */}
-          {(() => {
+          <Tile id="designer.leadProgression">{(() => {
             const STEPS = [
               { stage: 'MQL', label: 'MQL', color: '#16a34a' },
               { stage: 'DQL', label: 'DQL', color: '#d97706' },
@@ -529,7 +539,7 @@ export default function DesignerDashboard({ designerId, designerName }: { design
               <Panel className="p-5">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="text-lg font-bold text-stone-900">Lead Progression</p>
+                    <p className="text-lg font-bold text-stone-900">{L('designer.leadProgression', 'Lead Progression')}</p>
                     <p className="mt-1 text-xs text-stone-500">All time · leads that reached each stage</p>
                   </div>
                   {funnelRows && (
@@ -570,16 +580,17 @@ export default function DesignerDashboard({ designerId, designerName }: { design
                 <Link to="/leads" className="mt-3 inline-block text-sm font-semibold text-brand-600">View leads →</Link>
               </Panel>
             );
-          })()}
+          })()}</Tile>
 
           {/* ── Pipeline Potential (forecast card removed per client request) ── */}
           {dd?.forecast && (
+            <Tile id="designer.pipelinePotential">
             <div>
               <Panel className="p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <BarChart3 size={29} strokeWidth={2.4} className="text-indigo-500" />
-                    <p className="text-lg font-bold text-stone-900">Pipeline Potential</p>
+                    <p className="text-lg font-bold text-stone-900">{L('designer.pipelinePotential', 'Pipeline Potential')}</p>
                     <ChevronRight size={18} strokeWidth={2.5} className="text-stone-900" />
                   </div>
                   <p className="text-xs italic text-stone-400">Expected OB date · current target cycle</p>
@@ -622,19 +633,21 @@ export default function DesignerDashboard({ designerId, designerName }: { design
               </Panel>
 
             </div>
+            </Tile>
           )}
 
           {/* ── Row 3: Conversion Insights + Design Score + Today's Focus ── */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <TileGroup dashboard="designer" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
             {/* Conversion Insights */}
+            <Tile id="designer.conversionInsights">
             <Panel>
               <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: CARD_BORDER }}>
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-50">
                     <BarChart3 size={19} strokeWidth={2.4} className="text-brand-600" />
                   </div>
-                  <h3 className="font-bold tracking-tight text-stone-900">Conversion Insights</h3>
+                  <h3 className="font-bold tracking-tight text-stone-900">{L('designer.conversionInsights', 'Conversion Insights')}</h3>
                 </div>
                 <ChevronRight size={18} strokeWidth={2.5} className="text-stone-900" />
               </div>
@@ -667,13 +680,15 @@ export default function DesignerDashboard({ designerId, designerName }: { design
                 </div>
               </div>
             </Panel>
+            </Tile>
 
             {/* Design Score hidden per client feedback (weights TBD). */}
 
             {/* Today's Focus — date-grouped live work-item feed */}
+            <Tile id="designer.todaysFocus">
             <Panel>
               <PanelHeader
-                title="Today's Focus"
+                title={L('designer.todaysFocus', "Today's Focus")}
                 action={
                   <Link to="/tasks" className="text-xs text-brand-600 font-medium flex items-center gap-1">
                     View All <ChevronRight size={12} />
@@ -735,12 +750,14 @@ export default function DesignerDashboard({ designerId, designerName }: { design
                 )}
               </div>
             </Panel>
-          </div>
+            </Tile>
+          </TileGroup>
 
           {/* ── Row 4: Team Leaderboard ── */}
+          <Tile id="designer.teamLeaderboard">
           <div>
             <Panel>
-              <PanelHeader title="Team Leaderboard" action={<span className="text-xs text-stone-400">{dd?.targetCycle?.label ?? 'Target cycle'} · Booking ₹</span>} />
+              <PanelHeader title={L('designer.teamLeaderboard', 'Team Leaderboard')} action={<span className="text-xs text-stone-400">{dd?.targetCycle?.label ?? 'Target cycle'} · Booking ₹</span>} />
               <div className="divide-y divide-stone-50">
                 {dd?.leaderboard.length === 0 && (
                   <p className="text-sm text-stone-400 text-center py-8">No team data</p>
@@ -767,20 +784,21 @@ export default function DesignerDashboard({ designerId, designerName }: { design
               </div>
             </Panel>
           </div>
+          </Tile>
 
           {/* ── Row 6: Attention Required + Notifications + Client Health ── */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <TileGroup dashboard="designer" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             {/* Attention Required
                 Use dd.attentionItems (derived from the designer's own projects)
                 for both DESIGNER and CRE. DESIGNER also gets data.needsAttention
                 from deliveryWidgets; we prefer the more-specific dd source so CRE
                 always sees real data rather than an empty list. */}
-            {(() => {
+            <Tile id="designer.attentionRequired">{(() => {
               const items = dd?.attentionItems ?? data.needsAttention ?? [];
               return (
                 <Panel>
-                  <PanelHeader title="Attention Required" action={
+                  <PanelHeader title={L('designer.attentionRequired', 'Attention Required')} action={
                     items.length > 0 && (
                       <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">{items.length}</span>
                     )
@@ -809,11 +827,12 @@ export default function DesignerDashboard({ designerId, designerName }: { design
                   )}
                 </Panel>
               );
-            })()}
+            })()}</Tile>
 
             {/* Notifications */}
+            <Tile id="designer.recentNotifications">
             <Panel>
-              <PanelHeader title="Recent Notifications" action={
+              <PanelHeader title={L('designer.recentNotifications', 'Recent Notifications')} action={
                 <Link to="/notifications" className="text-xs text-brand-600 font-medium flex items-center gap-1"><Bell size={12} /> View All</Link>
               } />
               {!dd?.recentNotifications.length ? (
@@ -837,10 +856,12 @@ export default function DesignerDashboard({ designerId, designerName }: { design
                 </div>
               )}
             </Panel>
-          </div>
+            </Tile>
+          </TileGroup>
 
           {/* ── Client Health summary ── */}
           {dd?.clientHealth && (
+            <Tile id="designer.clientHealth">
             <Panel to="/client-health" drillLabel="View client health" className="p-5">
               <p className="mb-2 text-xs text-stone-500">Information completeness — separate from contact health</p>
               {contactCounts && <p className="mb-3 text-xs text-stone-600" data-testid="dashboard-contact-health">
@@ -849,7 +870,7 @@ export default function DesignerDashboard({ designerId, designerName }: { design
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Heart size={27} fill="currentColor" className="text-brand-600" />
-                  <h3 className="text-lg font-bold text-stone-900">Client Health</h3>
+                  <h3 className="text-lg font-bold text-stone-900">{L('designer.clientHealth', 'Client Health')}</h3>
                 </div>
                 <ChevronRight size={20} className="text-stone-700" />
               </div>
@@ -873,18 +894,21 @@ export default function DesignerDashboard({ designerId, designerName }: { design
                 ))}
               </div>
             </Panel>
+            </Tile>
           )}
 
           {/* ── Monthly medal ── */}
+          <Tile id="designer.monthlyMedal">
           <div className="rounded-2xl p-5 border" style={{ background: medal?.medal === 'GOLD' ? '#FFF8DF' : '#FAF6F2', borderColor: '#EDE8E3' }}>
-            <p className="text-xs font-bold uppercase tracking-widest text-stone-400">Monthly Medal · {medal?.cycle.label ?? 'Current cycle'}</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-stone-400">{L('designer.monthlyMedal', 'Monthly Medal')} · {medal?.cycle.label ?? 'Current cycle'}</p>
             <div className="flex items-end justify-between gap-4 mt-2">
               <div><p className="text-2xl font-extrabold text-stone-900">{medal?.medal ? `${medal.medal[0]}${medal.medal.slice(1).toLowerCase()} Medal` : 'No medal yet'}</p><p className="text-xs text-stone-500 mt-1">Designer score: Sales % + Design/DIP %, weighted equally.</p></div>
               <p className="text-3xl font-extrabold text-brand-600">{medal?.score != null ? `${medal.score}%` : '—'}</p>
             </div>
           </div>
+          </Tile>
 
-        </>
+        </TileGroup>
       )}
     </div>
   );
