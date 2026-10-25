@@ -133,7 +133,7 @@ export default function DocumentTypesAdmin() {
         </div>
       )}
       <div className="flex items-center gap-3">
-        <button onClick={save} disabled={!dirty || saving} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-40">
+        <button onClick={save} disabled={(!dirty && !newName.trim()) || saving} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-40">
           {saving ? 'Saving…' : 'Save document types'}
         </button>
         <button onClick={() => setDraft(structuredClone(data.overrides))} disabled={!dirty || saving} className="text-xs text-gray-500 hover:underline disabled:opacity-40">Discard changes</button>

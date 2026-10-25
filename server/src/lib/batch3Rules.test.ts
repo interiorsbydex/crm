@@ -16,17 +16,19 @@ describe.skipIf(!safeDb)('batch 3 rules', () => {
   const created: string[] = [];
   beforeEach(async () => {
     await prisma.assignmentConfig.deleteMany({ where: { key: { in: KEYS } } });
-    const u = await prisma.user.findFirst({ where: { role: 'DESIGNER' }, select: { id: true } });
-    userId = u?.id ?? '';
+    if (!userId) {
+      const tag = `batch3-test-${Date.now()}`;
+      userId = (await prisma.user.create({ data: { supabaseId: tag, name: 'Batch 3 test designer', email: `${tag}@example.invalid`, role: 'DESIGNER' } })).id;
+    }
   });
   afterAll(async () => {
     await prisma.assignmentConfig.deleteMany({ where: { key: { in: KEYS } } });
     if (created.length) await prisma.notificationLog.deleteMany({ where: { id: { in: created } } });
+    if (userId) await prisma.user.delete({ where: { id: userId } });
     await prisma.$disconnect();
   });
 
   it('an alert switched off for a role is recorded but hidden', async () => {
-    if (!userId) return;
     const shown = await createNotification(userId, 'CALL_LOGGED', 'test alert shown');
     created.push(shown.id);
     expect(shown.muted).toBe(false);

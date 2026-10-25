@@ -21,7 +21,7 @@ import { putLeadOnHold, markLeadInactive, reactivateLead } from '../lib/leadStat
 import { buildLeadRoleWhere, userCanAccessLead } from '../lib/leadScope.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 import { hasAllMqlMandatoryFields, getLeadMqlMandatoryFields } from '../lib/leadMandatoryFields.js';
-import { getCrmSettings, stageName } from '../lib/crmSettings.js';
+import { getCrmSettings, stageName, sourceMatchWhere } from '../lib/crmSettings.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { saveDraft } from '../lib/emailService.js';
 import {
@@ -41,9 +41,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
  * ("Meta Ads"), so a filter matches either, ignoring case.
  */
 async function sourceWhere(source: string) {
-  const option = (await getCrmSettings()).leadSources.find((s) => s.value === source || s.label.toLowerCase() === source.toLowerCase());
-  const names = Array.from(new Set([source, ...(option ? [option.value, option.label] : [])]));
-  return { OR: names.map((n) => ({ source: { equals: n, mode: 'insensitive' as const } })) };
+  return sourceMatchWhere(source);
 }
 
 export const leadsRouter = Router();

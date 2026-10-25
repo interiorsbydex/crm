@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { getCrmSettings, sourceDisplayName } from '../lib/crmSettings.js';
 import { getFormulas, medalFor as medalForScore, blend } from '../lib/formulaSettings.js';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
@@ -325,9 +326,15 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
   const stageFunnel = PIPELINE_STAGES.map((s) => ({ stage: s, count: stageMap[s] ?? 0 }));
 
   // ── Source breakdown ──────────────────────────────────────────────────────────
-  const sourceBreakdown = sourceCounts
-    .filter((r) => r.source)
-    .map((r) => ({ source: r.source!, count: r._count.id }))
+  // One slice per source, whether stored as its code or its name.
+  const sourceSettings = await getCrmSettings();
+  const sourceTotals = new Map<string, number>();
+  for (const r of sourceCounts.filter((r) => r.source)) {
+    const name = sourceDisplayName(sourceSettings, r.source);
+    sourceTotals.set(name, (sourceTotals.get(name) ?? 0) + r._count.id);
+  }
+  const sourceBreakdown = [...sourceTotals.entries()]
+    .map(([source, count]) => ({ source, count }))
     .sort((a, b) => b.count - a.count);
 
   // ── Cumulative stage progression + TAT ────────────────────────────────────────

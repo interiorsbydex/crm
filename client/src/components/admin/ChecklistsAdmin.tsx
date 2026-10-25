@@ -217,7 +217,7 @@ export default function ChecklistsAdmin() {
         <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="What did you change? (optional — shown in the change history)"
           className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs" />
         <div className="flex flex-wrap items-center gap-3">
-          <button onClick={save} disabled={!dirty || busy} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-40">
+          <button onClick={save} disabled={(!dirty && !newLabel.trim()) || busy} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-40">
             {busy ? 'Saving…' : 'Save checklists'}
           </button>
           <button onClick={() => { setDraft(structuredClone(data.value)); setProblems([]); }} disabled={!dirty || busy} className="text-xs text-gray-500 hover:underline disabled:opacity-40">Discard changes</button>

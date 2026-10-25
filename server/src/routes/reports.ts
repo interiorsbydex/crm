@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { buildLeadRoleWhere } from '../lib/leadScope.js';
+import { getCrmSettings, sourceDisplayName, sourceMatchWhere } from '../lib/crmSettings.js';
 import { getWonStages } from '../lib/reportDefinitions.js';
 
 export const reportsRouter = Router();
@@ -45,7 +46,7 @@ async function buildLeadWhere(q: Record<string, string>, userRole?: string, user
   if (q.endDate) where.createdAt = { ...where.createdAt, lte: endOfDayIST(q.endDate) };
   if (q.designerId) where.assignedDesignerId = q.designerId;
   if (q.blId) where.assignedBLId = q.blId;
-  if (q.source) where.source = q.source;
+  if (q.source) where.AND = [...(Array.isArray(where.AND) ? where.AND : []), await sourceMatchWhere(q.source)];
   if (q.stage) where.stage = q.stage;
   if (q.projectType) where.projectType = q.projectType;
   if (q.location) where.location = q.location;
@@ -90,7 +91,14 @@ async function leadSummary(q: Record<string, string>, user: ReportUser) {
     _count: { id: true },
     orderBy: { _count: { id: 'desc' } },
   });
-  return rows.map((r) => ({ source: r.source ?? 'Unknown', count: r._count.id }));
+  // One row per source, whether stored as its code or its name.
+  const settings = await getCrmSettings();
+  const merged = new Map<string, number>();
+  for (const r of rows) {
+    const name = sourceDisplayName(settings, r.source);
+    merged.set(name, (merged.get(name) ?? 0) + r._count.id);
+  }
+  return [...merged.entries()].map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count);
 }
 
 async function pipeline(q: Record<string, string>, user: ReportUser) {
@@ -252,8 +260,9 @@ async function sourcePerformance(q: Record<string, string>, user: ReportUser) {
     _count: { id: true },
   });
   const sourceMap: Record<string, { total: number; onboarding: number }> = {};
+  const settings = await getCrmSettings();
   for (const r of rows) {
-    const src = r.source ?? 'Unknown';
+    const src = sourceDisplayName(settings, r.source);
     if (!sourceMap[src]) sourceMap[src] = { total: 0, onboarding: 0 };
     sourceMap[src].total += r._count.id;
     if (WON_STAGES.includes(r.stage)) sourceMap[src].onboarding += r._count.id;

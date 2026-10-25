@@ -357,3 +357,21 @@ export async function crmSettingsHistory(limit = 30) {
 export function stageName(settings: CrmSettings, stage: string): string {
   return (settings.stageLabels as Record<string, string>)[stage] ?? stage;
 }
+
+/**
+ * Lead sources are stored as a code ("WALK_IN") by the lead forms, webhooks
+ * and imports, but older records hold the display name ("Walk-in"). These two
+ * helpers treat both as the same source, ignoring case.
+ */
+export function sourceDisplayName(settings: CrmSettings, raw: string | null | undefined): string {
+  if (!raw) return 'Unknown';
+  const option = settings.leadSources.find((s) => s.value === raw || s.label.toLowerCase() === raw.toLowerCase());
+  return option?.label ?? raw.replace(/_/g, ' ');
+}
+
+/** Prisma filter matching a source given as either its code or its name. */
+export async function sourceMatchWhere(source: string) {
+  const option = (await getCrmSettings()).leadSources.find((s) => s.value === source || s.label.toLowerCase() === source.toLowerCase());
+  const names = Array.from(new Set([source, ...(option ? [option.value, option.label] : [])]));
+  return { OR: names.map((n) => ({ source: { equals: n, mode: 'insensitive' as const } })) };
+}
