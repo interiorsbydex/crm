@@ -125,7 +125,7 @@ async function notifyExternalTask(
         agendaHtml: task.agenda ? `<p>Agenda: ${task.agenda}</p>` : '',
       });
     const draftKey = `${lead.id}::${mailType}::${task.id}`;
-    saveDraft(draftKey, subject, html, { leadId: lead.id, type: mailType });
+    await saveDraft(draftKey, subject, html, { leadId: lead.id, type: mailType });
     pendingMail = { draftKey, type: mailType, to: lead.email, subject, html };
   }
   if (lead.phone) {

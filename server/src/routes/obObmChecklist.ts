@@ -283,7 +283,7 @@ obObmChecklistRouter.post('/send-obm-mail', verifyToken, async (req, res) => {
     // below (registered as the onSentAction), never at draft-creation time.
     const draftKey = `${leadId}::OB_OBM_WELCOME`;
     const attachments = await downloadMasterMailAttachments(await getWelcomeMailAttachments());
-    saveDraft(draftKey, emailPayload.subject, emailPayload.html, {
+    await saveDraft(draftKey, emailPayload.subject, emailPayload.html, {
       leadId, type: 'OB_OBM_WELCOME', onSentAction: 'OB_OBM_WELCOME',
     }, attachments);
 

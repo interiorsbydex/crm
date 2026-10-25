@@ -207,7 +207,7 @@ export async function runMeetingScheduledSideEffects(params: MeetingScheduledSid
       ? `${rendered.html}\n${attachmentsHtml}`
       : rendered.html;
     const draftKey = `${leadId}::MEETING_CONFIRMATION::${meeting.id}`;
-    saveDraft(
+    await saveDraft(
       draftKey,
       rendered.subject,
       renderedHtml,

@@ -1081,6 +1081,24 @@ model OfferOption {
   @@map("offer_options")
 }
 
+/// Client emails prepared for a person to review and send (lib/emailService.ts).
+/// Kept in the database, not server memory, so a draft survives a restart and
+/// is found by whichever server instance handles the "send" click.
+model EmailDraft {
+  /// e.g. "<leadId>::ON_HOLD" or "<leadId>::MOM::<meetingId>"
+  key         String   @id
+  subject     String
+  html        String
+  /// { leadId, type, onSentAction? }
+  meta        Json?
+  /// [{ filename, content (base64), contentType? }]
+  attachments Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("email_drafts")
+}
+
 model AssignmentConfig {
   id        String   @id @default(cuid())
   /// e.g. "premium_threshold_value", "standard_threshold_pct", "smart_assignment_enabled"

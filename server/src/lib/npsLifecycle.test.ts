@@ -24,8 +24,19 @@ vi.mock('./prisma.js', () => ({
     lead: {
       findUnique: async () => ({ name: 'Synthetic QA', email: state.missingEmail ? null : 'synthetic@resend.dev' }),
     },
+    // Drafts are stored in the EmailDraft table; an in-memory stand-in here.
+    emailDraft: {
+      findUnique: async ({ where }: any) => drafts.get(where.key) ?? null,
+      upsert: async ({ where, create, update }: any) => {
+        const row = drafts.has(where.key) ? { ...drafts.get(where.key), ...update } : { ...create };
+        drafts.set(where.key, row);
+        return row;
+      },
+      deleteMany: async ({ where }: any) => ({ count: drafts.delete(where.key) ? 1 : 0 }),
+    },
   },
 }));
+const drafts = new Map<string, any>();
 vi.mock('./email.js', () => ({ sendEmail: state.send }));
 vi.mock('./mailTemplates.js', () => ({
   renderMailTemplate: async (_code: string, vars: any) => ({ subject: 'Synthetic NPS', html: `<p>${vars.ratingUrl}</p>` }),
@@ -112,16 +123,16 @@ describe('Shared draft metadata protection', () => {
     const handler = vi.fn(async () => {});
     registerOnSentHandler('FIXTURE_WELCOME', handler);
     const attachments: any[] = [{ filename: 'synthetic.pdf', content: Buffer.from('Synthetic QA only') }];
-    saveDraft('welcome', 'Original', '<p>Original</p>', { leadId: 'lead', type: 'WELCOME', onSentAction: 'FIXTURE_WELCOME' }, attachments);
-    saveDraft('welcome', 'Edited', '<p>Edited</p>', { leadId: 'lead', type: 'WELCOME' });
+    await saveDraft('welcome', 'Original', '<p>Original</p>', { leadId: 'lead', type: 'WELCOME', onSentAction: 'FIXTURE_WELCOME' }, attachments);
+    await saveDraft('welcome', 'Edited', '<p>Edited</p>', { leadId: 'lead', type: 'WELCOME' });
     await sendDraft('welcome', 'synthetic@resend.dev', 'designer');
     expect(handler).toHaveBeenCalledWith('lead', 'designer');
     expect(state.send.mock.calls[0][0].attachments).toEqual(attachments);
   });
 
-  it('does not inherit another lead/type callback when identity differs', () => {
-    saveDraft('identity', 'One', '<p>One</p>', { leadId: 'one', type: 'FIRST', onSentAction: 'FIRST_ACTION' });
-    saveDraft('identity', 'Two', '<p>Two</p>', { leadId: 'two', type: 'SECOND' });
-    expect(getDraft('identity')?.meta).toEqual({ leadId: 'two', type: 'SECOND' });
+  it('does not inherit another lead/type callback when identity differs', async () => {
+    await saveDraft('identity', 'One', '<p>One</p>', { leadId: 'one', type: 'FIRST', onSentAction: 'FIRST_ACTION' });
+    await saveDraft('identity', 'Two', '<p>Two</p>', { leadId: 'two', type: 'SECOND' });
+    expect((await getDraft('identity'))?.meta).toEqual({ leadId: 'two', type: 'SECOND' });
   });
 });

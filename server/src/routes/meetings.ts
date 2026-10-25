@@ -625,7 +625,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
       emailPayload.to = lead.email;
       const type = `MEETING_${status}`;
       const draftKey = `${lead.id}::${type}`;
-      saveDraft(draftKey, emailPayload.subject, emailPayload.html, { leadId: lead.id, type }, (emailPayload as any).attachments);
+      await saveDraft(draftKey, emailPayload.subject, emailPayload.html, { leadId: lead.id, type }, (emailPayload as any).attachments);
       pendingMail = { draftKey, type, to: emailPayload.to, subject: emailPayload.subject, html: emailPayload.html };
     }
   }

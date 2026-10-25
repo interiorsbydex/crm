@@ -64,13 +64,15 @@ export function previewEmail(type: string, vars: Record<string, string>): string
   return fillTemplate(config.template, vars);
 }
 
-// ── Draft storage (in-memory for dev; use Redis/DB for prod) ─────────────────
+// ── Draft storage ─────────────────────────────────────────────────────────────
+// Drafts live in the EmailDraft table, not server memory, so one prepared on
+// one server instance can be sent from another, and survives a restart.
 // onSentAction lets a route register a stage/checklist side-effect that must
 // only run once the draft is *actually sent* (never at draft-creation time) —
 // used by PD→OB welcome mail and OB→OBM mail, which previously advanced the
 // lead's stage synchronously with the send instead of on real delivery.
 interface DraftMeta { leadId: string; type: string; onSentAction?: string }
-const drafts = new Map<string, { subject: string; html: string; meta?: DraftMeta; attachments?: EmailAttachment[] }>();
+export interface Draft { subject: string; html: string; meta?: DraftMeta; attachments?: EmailAttachment[] }
 
 // Registry of post-send side-effect handlers, keyed by `onSentAction`.
 // Populated by the routes that need one (pdObChecklist.ts, obObmChecklist.ts)
@@ -84,27 +86,40 @@ export function registerOnSentHandler(action: string, handler: OnSentHandler) {
   onSentHandlers.set(action, handler);
 }
 
-export function saveDraft(key: string, subject: string, html: string, meta?: DraftMeta, attachments?: EmailAttachment[]) {
+export async function saveDraft(key: string, subject: string, html: string, meta?: DraftMeta, attachments?: EmailAttachment[]): Promise<void> {
   // Preserve meta/attachments set at creation time (e.g. by meetings.ts) even
   // if the caller re-saving edited content (routes/email.ts PATCH /draft)
   // doesn't pass them again.
-  const existing = drafts.get(key);
+  const existing = await getDraft(key);
   const sameIdentity = meta && existing?.meta
     && meta.leadId === existing.meta.leadId && meta.type === existing.meta.type;
   const preservedMeta = sameIdentity ? { ...existing!.meta, ...meta } : meta ?? existing?.meta;
-  drafts.set(key, { subject, html, meta: preservedMeta, attachments: attachments ?? existing?.attachments });
+  const data = {
+    subject,
+    html,
+    meta: (preservedMeta ?? undefined) as any,
+    attachments: (attachments ?? existing?.attachments ?? undefined) as any,
+  };
+  await prisma.emailDraft.upsert({ where: { key }, create: { key, ...data }, update: data });
 }
 
-export function getDraft(key: string) {
-  return drafts.get(key) ?? null;
+export async function getDraft(key: string): Promise<Draft | null> {
+  const row = await prisma.emailDraft.findUnique({ where: { key } });
+  if (!row) return null;
+  return {
+    subject: row.subject,
+    html: row.html,
+    meta: (row.meta as unknown as DraftMeta | null) ?? undefined,
+    attachments: (row.attachments as unknown as EmailAttachment[] | null) ?? undefined,
+  };
 }
 
 export async function sendDraft(key: string, to: string, sentByUserId?: string): Promise<void> {
-  const draft = drafts.get(key);
+  const draft = await getDraft(key);
   if (!draft) throw new Error('Draft not found');
 
   await sendEmail({ to, subject: draft.subject, html: draft.html, attachments: draft.attachments });
-  drafts.delete(key);
+  await prisma.emailDraft.deleteMany({ where: { key } });
 
   if (draft.meta?.onSentAction) {
     const handler = onSentHandlers.get(draft.meta.onSentAction);

@@ -123,7 +123,7 @@ export async function runClientTuesdayDigest(): Promise<{ digests: number }> {
       // One draft per lead per week — key prevents duplicate drafts on retries
       const weekKey = weekStart.toISOString().slice(0, 10);
       const draftKey = `${lead.id}::WEEKLY_DIGEST::${weekKey}`;
-      saveDraft(draftKey, subject, html, { leadId: lead.id, type: 'WEEKLY_DIGEST' });
+      await saveDraft(draftKey, subject, html, { leadId: lead.id, type: 'WEEKLY_DIGEST' });
       digests++;
       console.log(`[jobs:client-tuesday-digest] Draft created for lead ${lead.leadId}`);
     } catch (e: any) {

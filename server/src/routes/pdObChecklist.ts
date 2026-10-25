@@ -363,7 +363,7 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
     // completePdObWelcomeSent() below (registered as the onSentAction) —
     // never at draft-creation time.
     const draftKey = `${leadId}::PD_OB_WELCOME`;
-    saveDraft(draftKey, emailPayload.subject, emailPayload.html, {
+    await saveDraft(draftKey, emailPayload.subject, emailPayload.html, {
       leadId, type: 'PD_OB_WELCOME', onSentAction: 'PD_OB_WELCOME',
     });
 

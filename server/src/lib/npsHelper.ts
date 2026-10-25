@@ -172,7 +172,7 @@ export async function createAndSendNps(leadId: string, npsStage: string): Promis
     // sentAt once a human actually clicks Send — never at draft-creation time.
     const type = `NPS_${npsStage}`;
     const draftKey = `${leadId}::${type}`;
-    saveDraft(draftKey, rendered.subject, rendered.html, { leadId, type, onSentAction: `NPS_SENT_${npsStage}` });
+    await saveDraft(draftKey, rendered.subject, rendered.html, { leadId, type, onSentAction: `NPS_SENT_${npsStage}` });
 
     return { draftKey, type, to: lead.email, subject: rendered.subject, html: rendered.html };
   } catch (e) {

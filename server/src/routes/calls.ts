@@ -579,7 +579,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
       ? `${subject} (Attachment included)`
       : subject;
     const draftKey = `${leadId}::CALL_LOG_SUMMARY::${call.id}`;
-    saveDraft(draftKey, finalSubject, renderedHtml, { leadId, type: 'CALL_LOG_SUMMARY' }, emailAttachments.length ? emailAttachments : undefined);
+    await saveDraft(draftKey, finalSubject, renderedHtml, { leadId, type: 'CALL_LOG_SUMMARY' }, emailAttachments.length ? emailAttachments : undefined);
     pendingMail = { draftKey, type: 'CALL_LOG_SUMMARY', to: lead.email, cc, subject: finalSubject, html: renderedHtml };
   }
 
@@ -598,7 +598,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
       agendaHtml: callbackAgenda ? `<p><strong>Agenda:</strong> ${callbackAgenda}</p>` : '',
     });
     const cbDraftKey = `${leadId}::CALL_SCHEDULED::${task.id}`;
-    saveDraft(cbDraftKey, subject, html, { leadId, type: 'CALL_SCHEDULED' });
+    await saveDraft(cbDraftKey, subject, html, { leadId, type: 'CALL_SCHEDULED' });
     const cbCcIds = [lead.assignedDesignerId, lead.assignedBLId].filter((v): v is string => !!v);
     const cbCcUsers = cbCcIds.length
       ? await prisma.user.findMany({ where: { id: { in: cbCcIds } }, select: { email: true } })
@@ -764,7 +764,7 @@ callsRouter.post('/schedule', verifyToken, async (req, res) => {
       agendaHtml,
     });
     const draftKey = `${leadId}::CALL_SCHEDULED::${task.id}`;
-    saveDraft(draftKey, subject, html, { leadId, type: 'CALL_SCHEDULED' });
+    await saveDraft(draftKey, subject, html, { leadId, type: 'CALL_SCHEDULED' });
     const ccIds = [lead.assignedDesignerId, lead.assignedBLId].filter((v): v is string => !!v);
     const ccUsers = ccIds.length
       ? await prisma.user.findMany({ where: { id: { in: ccIds } }, select: { email: true } })

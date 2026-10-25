@@ -68,7 +68,7 @@ emailRouter.patch('/draft/:type/:leadId', verifyToken, async (req, res) => {
   if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
   const draftKey = `${leadId}::${type}`;
-  saveDraft(draftKey, subject ?? `${type} — Interiors by DeX`, html, { leadId, type });
+  await saveDraft(draftKey, subject ?? `${type} — Interiors by DeX`, html, { leadId, type });
 
   res.json({ message: 'Draft saved', draftKey });
 });
@@ -80,7 +80,7 @@ emailRouter.post('/send-draft', verifyToken, async (req, res) => {
 
   if (!draftKey || !to) { res.status(400).json({ error: 'draftKey and to are required' }); return; }
 
-  const draft = getDraft(draftKey);
+  const draft = await getDraft(draftKey);
   if (!draft) { res.status(404).json({ error: 'Draft not found or expired' }); return; }
 
   const leadId = draftKey.split('::')[0];
@@ -102,7 +102,7 @@ emailRouter.post('/send-draft', verifyToken, async (req, res) => {
   // can't reconstruct. Apply any edits to the stored draft before sending so
   // they aren't silently discarded.
   if (subject !== undefined || html !== undefined) {
-    saveDraft(draftKey, subject ?? draft.subject, html ?? draft.html, draft.meta, draft.attachments);
+    await saveDraft(draftKey, subject ?? draft.subject, html ?? draft.html, draft.meta, draft.attachments);
   }
 
   // The sending user's id is passed through so any registered onSentAction

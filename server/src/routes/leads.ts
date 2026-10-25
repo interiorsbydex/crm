@@ -1466,7 +1466,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
             leadRef: existing.leadId,
           });
           const draftKey = `${id}::PROPOSAL_READY::${Date.now()}`;
-          saveDraft(draftKey, subject, html, { leadId: id, type: 'PROPOSAL_READY' });
+          await saveDraft(draftKey, subject, html, { leadId: id, type: 'PROPOSAL_READY' });
           stageProposalPendingMail = { draftKey, type: 'PROPOSAL_READY', to: existing.email, subject, html };
         } catch (e: any) {
           console.warn('[leads:proposal-ready:draft]', e.message);

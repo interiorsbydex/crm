@@ -100,7 +100,7 @@ export async function putLeadOnHold(opts: {
         const renderedHtml = clientNotesHtml && !rendered.html.includes(clientNotesHtml)
           ? `${rendered.html}\n${clientNotesHtml}` : rendered.html;
         const draftKey = `${leadId}::ON_HOLD`;
-        saveDraft(draftKey, rendered.subject, renderedHtml, { leadId, type: 'ON_HOLD' });
+        await saveDraft(draftKey, rendered.subject, renderedHtml, { leadId, type: 'ON_HOLD' });
         pendingMail = { draftKey, type: 'ON_HOLD', to: existing.email, subject: rendered.subject, html: renderedHtml };
       } catch (e) {
         console.error('[ON_HOLD draft failed]', e);
@@ -201,7 +201,7 @@ export async function markLeadInactive(opts: {
       const renderedHtml = clientNotesHtml && !rendered.html.includes(clientNotesHtml)
         ? `${rendered.html}\n${clientNotesHtml}` : rendered.html;
       const draftKey = `${leadId}::INACTIVATION_FEEDBACK`;
-      saveDraft(draftKey, rendered.subject, renderedHtml, { leadId, type: 'INACTIVATION_FEEDBACK' });
+      await saveDraft(draftKey, rendered.subject, renderedHtml, { leadId, type: 'INACTIVATION_FEEDBACK' });
       pendingMail = { draftKey, type: 'INACTIVATION_FEEDBACK', to: existing.email, subject: rendered.subject, html: renderedHtml };
     }
 
@@ -287,7 +287,7 @@ export async function reactivateLead(opts: {
     const notesHtml = trimmedNotes ? `<p>${trimmedNotes}</p>` : '';
     const rendered = await renderMailTemplate('REACTIVATION', { clientName: lead.name, notesHtml });
     const draftKey = `${leadId}::REACTIVATION`;
-    saveDraft(draftKey, rendered.subject, rendered.html, { leadId, type: 'REACTIVATION' });
+    await saveDraft(draftKey, rendered.subject, rendered.html, { leadId, type: 'REACTIVATION' });
     pendingMail = { draftKey, type: 'REACTIVATION', to: lead.email, subject: rendered.subject, html: rendered.html };
   }
 
