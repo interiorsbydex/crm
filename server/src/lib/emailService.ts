@@ -3,6 +3,7 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { prisma } from './prisma.js';
 import { sendEmail, type EmailAttachment } from './email.js';
+import { automationCc, eventForDraftType } from './automations.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = resolve(__dirname, '../../templates/email');
@@ -118,7 +119,9 @@ export async function sendDraft(key: string, to: string, sentByUserId?: string):
   const draft = await getDraft(key);
   if (!draft) throw new Error('Draft not found');
 
-  await sendEmail({ to, subject: draft.subject, html: draft.html, attachments: draft.attachments });
+  // Who is copied follows Admin → Automations for this kind of email.
+  const cc = draft.meta ? (await automationCc(eventForDraftType(draft.meta.type), draft.meta.leadId)).filter((e) => e !== to) : [];
+  await sendEmail({ to, cc, subject: draft.subject, html: draft.html, attachments: draft.attachments });
   await prisma.emailDraft.deleteMany({ where: { key } });
 
   if (draft.meta?.onSentAction) {

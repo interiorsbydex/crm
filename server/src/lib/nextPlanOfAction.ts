@@ -17,6 +17,7 @@ import { renderMailTemplate } from './mailTemplates.js';
 import { sendEmail } from './email.js';
 import { assertNoActiveMeeting, computeMeetingNumbering, createMeetingRecord, runMeetingScheduledSideEffects, normalizeMeetingLocation, type ScheduleMeetingLead, type PendingMeetingMail } from './meetingScheduler.js';
 import { validateGenericAttachments } from './attachmentValidation.js';
+import { isAutomationOn, automationCc } from './automations.js';
 
 export type NextPlanKind = 'CALL' | 'MEETING' | 'TASK';
 
@@ -273,7 +274,9 @@ export async function runNextPlanMeetingSideEffects(
 }
 
 /** Best-effort per-item client email — call only after the transaction that created the records has committed. */
-export async function sendNextPlanMails(items: NextPlanItem[], lead: { name: string; email: string | null }): Promise<void> {
+export async function sendNextPlanMails(items: NextPlanItem[], lead: { id?: string; name: string; email: string | null }): Promise<void> {
+  if (!items.some((i) => i.sendExternalMail) || !(await isAutomationOn('NEXT_PLAN_OF_ACTION', 'email'))) return;
+  const cc = lead.id ? (await automationCc('NEXT_PLAN_OF_ACTION', lead.id)).filter((e) => e !== lead.email) : [];
   for (const item of items) {
     if (!item.sendExternalMail || !lead.email) continue;
     const { subject, html } = await renderMailTemplate('NEXT_PLAN_OF_ACTION', {
@@ -281,6 +284,6 @@ export async function sendNextPlanMails(items: NextPlanItem[], lead: { name: str
       kind: item.kind,
       details: describeItem(item),
     });
-    await sendEmail({ to: lead.email, subject, html }).catch(() => {});
+    await sendEmail({ to: lead.email, cc, subject, html }).catch(() => {});
   }
 }

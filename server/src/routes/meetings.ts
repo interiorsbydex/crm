@@ -20,6 +20,7 @@ import { computeMeetingNumbering, createMeetingRecord, runMeetingScheduledSideEf
 import { meetingIdsScheduledByCre } from '../lib/creMeetingScope.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
+import { isAutomationOn, eventForDraftType } from '../lib/automations.js';
 
 // Selectable when scheduling a NEW meeting. DESIGN_FREEZE/SIGN_OFF remain valid
 // enum values (and stay readable/reportable) for historical rows only — they
@@ -555,7 +556,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
   // Best-effort per-item client mail — only fired once the transaction above
   // has committed, so a mail failure never rolls back a persisted plan.
   if (status === 'COMPLETED' && nextPlanOfAction?.length) {
-    await sendNextPlanMails(nextPlanOfAction, { name: lead.name, email: lead.email });
+    await sendNextPlanMails(nextPlanOfAction, { id: lead.id, name: lead.name, email: lead.email });
   }
 
   // Client-facing mail (MOM / reschedule / no-show) is drafted here but not
@@ -621,6 +622,8 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
       emailPayload = { to: '', subject: rendered.subject, html: rendered.html };
     }
 
+    // Admin → Automations can switch this client email off.
+    if (emailPayload && !(await isAutomationOn(eventForDraftType(`MEETING_${status}`), 'email'))) emailPayload = null;
     if (emailPayload) {
       emailPayload.to = lead.email;
       const type = `MEETING_${status}`;
@@ -630,8 +633,9 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     }
   }
 
-  // SMS: status-triggered messages
-  if (lead.phone) {
+  // SMS: status-triggered messages (each can be switched off in Admin → Automations)
+  const smsEvent = eventForDraftType(`MEETING_${status}`);
+  if (lead.phone && ['MOM', 'RESCHEDULED', 'NO_SHOW'].includes(smsEvent) && await isAutomationOn(smsEvent, 'sms')) {
     if (status === 'COMPLETED') {
       sendSms(
         lead.phone,

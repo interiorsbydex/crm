@@ -13,6 +13,7 @@ import { assertNextPlanMeetingSchedulable, createNextPlanRecords, runNextPlanMee
 import { assertNoActiveMeeting, computeMeetingNumbering, createMeetingRecord, runMeetingScheduledSideEffects } from '../lib/meetingScheduler.js';
 import { validateAttachmentPairing, validateGenericAttachments } from '../lib/attachmentValidation.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
+import { isAutomationOn, automationCc } from '../lib/automations.js';
 
 export const callsRouter = Router({ mergeParams: true });
 
@@ -47,6 +48,7 @@ async function sendInternalCallNotes(
   user: { name: string },
   notes: string,
 ): Promise<void> {
+  if (!(await isAutomationOn('TEAM_INTERNAL_CALL_NOTES', 'email'))) return;
   const recipientIds = new Set<string>(
     [lead.assignedDesignerId, lead.assignedBLId].filter((id): id is string => !!id),
   );
@@ -452,7 +454,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
   // Best-effort per-item client mail — only fired once the transaction above
   // has committed, so a mail failure never rolls back a persisted plan.
   if (nextPlanOfAction?.length) {
-    await sendNextPlanMails(nextPlanOfAction, { name: lead.name, email: lead.email });
+    await sendNextPlanMails(nextPlanOfAction, { id: lead.id, name: lead.name, email: lead.email });
   }
 
   // A next-plan-created meeting needs the same side effects as any other
@@ -515,19 +517,15 @@ callsRouter.post('/', verifyToken, async (req, res) => {
   // (`notes`) must NEVER be read in this block — that is the enforcement
   // point that keeps internal content off client mail.
   let pendingMail: { draftKey: string; type: string; to: string; cc: string[]; subject: string; html: string } | null = null;
-  if (outcome === 'ANSWERED' && notifyClient !== false && lead.email) {
+  if (outcome === 'ANSWERED' && notifyClient !== false && lead.email && await isAutomationOn('CALL_LOG_SUMMARY', 'email')) {
     const followUpDate = task
       ? new Date(task.dueDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }) + (task.dueTime ? ` at ${task.dueTime}` : '')
       : meeting
         ? new Date(meeting.scheduledAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' })
         : 'To be confirmed';
 
-    const ccIds = [lead.assignedDesignerId, lead.assignedBLId].filter((v): v is string => !!v);
-    const ccUsers = ccIds.length
-      ? await prisma.user.findMany({ where: { id: { in: ccIds } }, select: { email: true } })
-      : [];
-    const managers = await prisma.user.findMany({ where: { role: 'BRANCH_HEAD' }, select: { email: true } });
-    const cc = [...ccUsers, ...managers].map((u) => u.email).filter((e): e is string => !!e);
+    // Who is copied is set in Admin → Automations (applied again when it's sent).
+    const cc = await automationCc('CALL_LOG_SUMMARY', lead.id);
 
     // External Notes files are stored in a private bucket. Download their
     // bytes while creating the draft so the preview identifies them and the
@@ -585,7 +583,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
 
   // Callback Scheduled outcome → draft the same client "Call Scheduled" email
   // as the Schedule a Call flow. Returned as a draft for review; never auto-sent.
-  if (outcome === 'CALLBACK' && task && notifyClient !== false && lead.email) {
+  if (outcome === 'CALLBACK' && task && notifyClient !== false && lead.email && await isAutomationOn('CALL_SCHEDULED', 'email')) {
     const scheduledDate = new Date(task.dueDate).toLocaleDateString('en-IN', {
       timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long', year: 'numeric',
     });
@@ -599,12 +597,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     });
     const cbDraftKey = `${leadId}::CALL_SCHEDULED::${task.id}`;
     await saveDraft(cbDraftKey, subject, html, { leadId, type: 'CALL_SCHEDULED' });
-    const cbCcIds = [lead.assignedDesignerId, lead.assignedBLId].filter((v): v is string => !!v);
-    const cbCcUsers = cbCcIds.length
-      ? await prisma.user.findMany({ where: { id: { in: cbCcIds } }, select: { email: true } })
-      : [];
-    const cbManagers = await prisma.user.findMany({ where: { role: 'BRANCH_HEAD' }, select: { email: true } });
-    const cbCc = [...cbCcUsers, ...cbManagers].map((u) => u.email).filter((e): e is string => !!e);
+    const cbCc = await automationCc('CALL_SCHEDULED', lead.id);
     pendingMail = { draftKey: cbDraftKey, type: 'CALL_SCHEDULED', to: lead.email, cc: cbCc, subject, html };
   }
 
@@ -748,7 +741,7 @@ callsRouter.post('/schedule', verifyToken, async (req, res) => {
   // Mirrors the answered-call pendingMail flow: the draft is returned to the
   // UI which shows an EmailPreviewModal; the user reviews then sends or discards.
   let pendingMail: { draftKey: string; type: string; to: string; cc?: string[]; subject: string; html: string } | null = null;
-  if (taskType === 'EXTERNAL' && notifyClient !== false && lead.email) {
+  if (taskType === 'EXTERNAL' && notifyClient !== false && lead.email && await isAutomationOn('CALL_SCHEDULED', 'email')) {
     const scheduledDate = new Date(dueDate).toLocaleDateString('en-IN', {
       timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long', year: 'numeric',
     });
@@ -765,12 +758,7 @@ callsRouter.post('/schedule', verifyToken, async (req, res) => {
     });
     const draftKey = `${leadId}::CALL_SCHEDULED::${task.id}`;
     await saveDraft(draftKey, subject, html, { leadId, type: 'CALL_SCHEDULED' });
-    const ccIds = [lead.assignedDesignerId, lead.assignedBLId].filter((v): v is string => !!v);
-    const ccUsers = ccIds.length
-      ? await prisma.user.findMany({ where: { id: { in: ccIds } }, select: { email: true } })
-      : [];
-    const managers = await prisma.user.findMany({ where: { role: 'BRANCH_HEAD' }, select: { email: true } });
-    const cc = [...ccUsers, ...managers].map((u) => u.email).filter((e): e is string => !!e);
+    const cc = await automationCc('CALL_SCHEDULED', lead.id);
     pendingMail = { draftKey, type: 'CALL_SCHEDULED', to: lead.email, cc, subject, html };
   }
 

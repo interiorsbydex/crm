@@ -15,6 +15,7 @@ import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { validateFutureDate } from '../lib/nextPlanOfAction.js';
 import { creCreatedTaskIds, type TaskWithCreatorEvidence } from '../lib/creTaskScope.js';
+import { isAutomationOn } from '../lib/automations.js';
 
 type TaskAttachmentInput = AttachmentEntry;
 
@@ -109,7 +110,7 @@ async function notifyExternalTask(
   const isRescheduled = Boolean(rescheduled);
   const mailType = isRescheduled ? 'CALL_RESCHEDULED' : 'EXTERNAL_TASK';
   let pendingMail: { draftKey: string; type: string; to: string; subject: string; html: string } | null = null;
-  if (notifyClientEmail && lead.email) {
+  if (notifyClientEmail && lead.email && await isAutomationOn(mailType, 'email')) {
     const { subject, html } = isRescheduled
       ? await renderMailTemplate(mailType, {
         clientName: lead.name,
@@ -128,7 +129,7 @@ async function notifyExternalTask(
     await saveDraft(draftKey, subject, html, { leadId: lead.id, type: mailType });
     pendingMail = { draftKey, type: mailType, to: lead.email, subject, html };
   }
-  if (lead.phone) {
+  if (lead.phone && await isAutomationOn(mailType, 'whatsapp')) {
     const waBody = isRescheduled
       ? `Hi ${lead.name}, your call has been rescheduled to ${dueStr}${task.dueTime ? ` at ${task.dueTime}` : ''}. Reason: ${rescheduled!.reason}.${task.agenda ? ` Agenda: ${task.agenda}` : ''} — Team Interiors by DeX`
       : `Hi ${lead.name}, we have a follow-up scheduled with you on ${dueStr}${task.dueTime ? ` at ${task.dueTime}` : ''}.${task.agenda ? ` Agenda: ${task.agenda}` : ''} — Team Interiors by DeX`;
