@@ -44,7 +44,8 @@ export async function assignLeadToDesigner(
 ): Promise<string | null> {
   const smartEnabled = process.env.SMART_ASSIGNMENT_ENABLED === 'true';
 
-  let whereFilter: any = { blId, isActive: true, role: { in: ['DESIGNER', 'CRE'] } };
+  // Designers only — a CRE in the BL's team must never be auto-picked as a designer.
+  let whereFilter: any = { blId, isActive: true, role: 'DESIGNER' };
 
   if (smartEnabled) {
     const config = await getConfig();
@@ -61,7 +62,7 @@ export async function assignLeadToDesigner(
   // If smart assignment filtered out all designers, fall back to any active designer
   if (designers.length === 0 && smartEnabled) {
     const fallback = await prisma.user.findFirst({
-      where: { blId, isActive: true, role: { in: ['DESIGNER', 'CRE'] } },
+      where: { blId, isActive: true, role: 'DESIGNER' },
       select: { id: true },
       orderBy: { totalLeadsAssigned: 'asc' },
     });
@@ -126,6 +127,14 @@ export async function routeQualifiedLead(estimatedValue: number | null): Promise
   if (mode === 'MANUAL') return { mode, blId: null, designerId: null };
   const bl = await selectBLForLead();
   if (!bl) return { mode, blId: null, designerId: null };
-  const designerId = mode === 'BL_THEN_DESIGNER' ? await assignLeadToDesigner(estimatedValue, bl.id) : null;
-  return { mode, blId: bl.id, designerId };
+  // Designers only: a CRE can sit in a BL's team but must never be handed a
+  // lead as its designer. Next in turn = fewest leads assigned so far.
+  const designer = mode === 'BL_THEN_DESIGNER'
+    ? await prisma.user.findFirst({
+      where: { blId: bl.id, isActive: true, role: 'DESIGNER' },
+      select: { id: true },
+      orderBy: [{ totalLeadsAssigned: 'asc' }, { id: 'asc' }],
+    })
+    : null;
+  return { mode, blId: bl.id, designerId: designer?.id ?? null };
 }

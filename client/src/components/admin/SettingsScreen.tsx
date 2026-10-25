@@ -143,7 +143,7 @@ export function Choice<V extends string>({ name, label, help, value, options, on
       {help && <p className="text-xs text-gray-500">{help}</p>}
       {options.map((o) => (
         <label key={o.value} className="flex items-start gap-2 text-sm text-gray-700">
-          <input type="radio" name={name} checked={value === o.value} onChange={() => onChange(o.value)} className="mt-1" />
+          <input type="radio" name={name} aria-label={`${label}: ${o.label}`} checked={value === o.value} onChange={() => onChange(o.value)} className="mt-1" />
           <span>{o.label}{o.help && <span className="block text-xs text-gray-400">{o.help}</span>}</span>
         </label>
       ))}
