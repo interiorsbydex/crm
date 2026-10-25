@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from './prisma.js';
 import {
-  AUTOMATION_EVENTS, automationCc, automationsConfig, defaultAutomations, eventForDraftType, isAutomationOn,
+  AUTOMATION_EVENTS, automationCc, automationsConfig, defaultAutomations, eventForDraftType, isAutomationOn, sendsWithoutReview,
 } from './automations.js';
 import { ConfigError } from './versionedConfig.js';
 
@@ -99,6 +99,19 @@ describe.skipIf(!safeDb)('automations store (local test DB)', () => {
     await automationsConfig.save(v, 0, ids.bh);
     expect(await automationCc('CALL_LOG_SUMMARY', ids.lead)).toEqual([`auto-designer-${stamp}@crm.test`]);
     expect(await automationCc('ON_HOLD', ids.lead)).toEqual([]);
+  });
+
+  it('emails skip review only when switched to, and never the locked ones', async () => {
+    expect(await sendsWithoutReview('CALL_LOG_SUMMARY')).toBe(false);
+    const v = defaultAutomations();
+    v.CALL_LOG_SUMMARY.sendDirect = true;
+    const saved = await automationsConfig.spec.validate(v);
+    await prisma.assignmentConfig.create({ data: { key: KEY, value: { value: saved, revision: 1, updatedAt: new Date().toISOString(), updatedById: 'x' } as any } });
+    expect(await sendsWithoutReview('CALL_LOG_SUMMARY')).toBe(true);
+    const locked = defaultAutomations();
+    locked.PD_OB_WELCOME.sendDirect = true;
+    const fails = async () => { try { await automationsConfig.spec.validate(locked); return false; } catch (e) { return e instanceof ConfigError; } };
+    expect(await fails()).toBe(true);
   });
 
   it('refuses a stale save and restores the original', async () => {

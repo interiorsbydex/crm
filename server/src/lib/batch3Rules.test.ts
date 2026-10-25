@@ -2,12 +2,10 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from './prisma.js';
 import { alertSettingsConfig, createNotification } from './notifications.js';
-import { automationsConfig, defaultAutomations, sendsWithoutReview } from './automations.js';
 import { DEFAULT_CRM_SETTINGS, validateCrmSettings } from './crmSettings.js';
-import { ConfigError } from './versionedConfig.js';
 
 const safeDb = /@localhost:\d+\//.test(process.env.DATABASE_URL ?? '');
-const KEYS = ['in_app_alerts_v1', 'automations_v1'];
+const KEYS = ['in_app_alerts_v1'];
 
 async function store(key: string, value: unknown) {
   await prisma.assignmentConfig.create({ data: { key, value: { value, revision: 1, updatedAt: new Date().toISOString(), updatedById: 'x' } as any } });
@@ -37,18 +35,6 @@ describe.skipIf(!safeDb)('batch 3 rules', () => {
     created.push(hidden.id);
     expect(hidden.muted).toBe(true);
     expect(hidden.isRead).toBe(true);
-  });
-
-  it('emails skip review only when switched to, and never the locked ones', async () => {
-    expect(await sendsWithoutReview('CALL_LOG_SUMMARY')).toBe(false);
-    const v = defaultAutomations();
-    v.CALL_LOG_SUMMARY.sendDirect = true;
-    await store('automations_v1', await automationsConfig.spec.validate(v));
-    expect(await sendsWithoutReview('CALL_LOG_SUMMARY')).toBe(true);
-    const locked = defaultAutomations();
-    locked.PD_OB_WELCOME.sendDirect = true;
-    const bad = async () => { try { await automationsConfig.spec.validate(locked); return false; } catch (e) { return e instanceof ConfigError; } };
-    expect(await bad()).toBe(true);
   });
 
   it('call and approval settings have safe limits', () => {
