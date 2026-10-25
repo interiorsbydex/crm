@@ -23,7 +23,7 @@ describe.skipIf(!safeDb)('permissions', () => {
   it('with nothing saved, every role keeps exactly what it had', async () => {
     for (const p of PERMISSIONS) {
       for (const role of ['DESIGNER', 'CRE', 'BL', 'BRANCH_HEAD']) {
-        expect(await hasPermission(role, p.key), `${role} ${p.key}`).toBe(p.roles.includes(role as any));
+        expect(await hasPermission(role, p.key), `${role} ${p.key}`).toBe((p.defaultRoles ?? p.roles).includes(role as any) || (role === 'BRANCH_HEAD' && p.roles.includes('BRANCH_HEAD')));
       }
     }
   });

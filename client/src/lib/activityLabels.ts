@@ -15,6 +15,8 @@ function fmtWhen(iso?: string) {
 export function describeActivity(action: string, meta?: Record<string, any>): string {
   const m = meta ?? {};
   switch (action) {
+    case 'GATE_OVERRIDDEN':
+      return `Pushed forward by override: ${stageLabel(m.from)} → ${stageLabel(m.to)} — reason: ${m.reason ?? '—'} (missing: ${Array.isArray(m.missing) ? m.missing.join('; ') : '—'})`;
     case 'GATE_BYPASSED':
       return `Proceeded with missing items (${Array.isArray(m.missing) ? m.missing.join('; ') : '—'})`;
     case 'STAGE_CHANGED':

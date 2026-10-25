@@ -314,6 +314,7 @@ export default function LeadDetail() {
   // the target stage is picked in the modal above.
   const [stageCapture, setStageCapture] = useState<{ targetStage: string } | null>(null);
   const [stageCaptureError, setStageCaptureError] = useState<string | null>(null);
+  const [stageOverridable, setStageOverridable] = useState(false);
 
   // Task #88 — status change flow (On Hold / Inactive), separate from stage
   const [statusModal, setStatusModal] = useState<'ON_HOLD' | 'INACTIVE' | null>(null);
@@ -736,10 +737,11 @@ export default function LeadDetail() {
     setStageCapture({ targetStage: newStage });
   };
 
-  const handleStageCaptureConfirm = async (rating: number, value: number | null, reason: string, _sendNpsSurvey: boolean) => {
+  const handleStageCaptureConfirm = async (rating: number, value: number | null, reason: string, _sendNpsSurvey: boolean, overrideReason?: string) => {
     if (!stageCapture || !lead) return;
     setChangingStage(true);
     setStageCaptureError(null);
+    setStageOverridable(false);
     try {
       // Only touch the intent rating if it's actually changing — resubmitting
       // an unchanged value that happens to differ from the system-computed
@@ -762,6 +764,7 @@ export default function LeadDetail() {
         {
           stage: stageCapture.targetStage,
           ...(value !== null && { estimatedValue: value }),
+          ...(overrideReason && { overrideReason }),
         },
       );
       toast.success(`Stage → ${stageLabel(stageCapture.targetStage)}${result.blAutoAssignment === 'assigned' ? ' — BL assigned automatically' : ''}`);
@@ -781,6 +784,8 @@ export default function LeadDetail() {
       }
     } catch (e: any) {
       setStageCaptureError(e.message ?? 'Could not change stage');
+      // Blocked by missing items: offer the emergency override when this role has it.
+      setStageOverridable(!!e?.data?.overridable && can('STAGE_OVERRIDE'));
     } finally {
       setChangingStage(false);
     }
@@ -1151,7 +1156,8 @@ export default function LeadDetail() {
           initialValue={lead.estimatedValue}
           saving={changingStage}
           error={stageCaptureError}
-          onCancel={() => { setStageCapture(null); setStageCaptureError(null); }}
+          canOverride={stageOverridable}
+          onCancel={() => { setStageCapture(null); setStageCaptureError(null); setStageOverridable(false); }}
           onConfirm={handleStageCaptureConfirm}
         />
       )}

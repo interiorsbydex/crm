@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import StatusBadge from '../components/StatusBadge';
 import PDOBChecklistPanel from '../components/PDOBChecklistPanel';
 import DIPChecklistPanel from '../components/DIPChecklistPanel';
+import { usePermissions } from '../lib/permissions';
 import StageCaptureModal from '../components/StageCaptureModal';
 import { DateInput } from '../components/ui/DateTimeInputs';
 import { stageLabel, crmSettings, sourceLabel } from '../lib/crmSettings';
@@ -388,13 +389,17 @@ function GateBlockedModal({
   details,
   onClose,
   onOpenChecklist,
+  onOverride,
 }: {
   lead: Lead;
   targetStageLabel: string;
   details: { label: string; satisfied: boolean; type: string }[];
   onClose: () => void;
   onOpenChecklist: (lead: Lead) => void;
+  /** Present when this role may push the lead forward anyway (Admin → Permissions). */
+  onOverride?: (reason: string) => void;
 }) {
+  const [overrideReason, setOverrideReason] = useState('');
   const hasPdObChecklist = details.some((d) => !d.satisfied && d.type === 'pdObChecklist');
   const hasDip = details.some((d) => !d.satisfied && d.type === 'dip');
   const canOpenInlineChecklist = (hasPdObChecklist && (lead.stage === 'PROPOSAL_PRESENTED' || lead.stage === 'PROPOSAL_DISCUSSION'))
@@ -439,6 +444,19 @@ function GateBlockedModal({
               Open lead
             </Link>
           </div>
+          {onOverride && (
+            <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="stage-override">
+              <p className="font-semibold">Push forward anyway?</p>
+              <p className="mt-0.5">The lead moves now even though the items above are missing. Your reason and the missing items are recorded on the lead's activity.</p>
+              <textarea value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} rows={2} maxLength={1000}
+                placeholder="Why must this lead move now? (at least 10 characters)" aria-label="Reason for pushing forward"
+                className="mt-2 w-full rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-xs text-stone-800" />
+              <button type="button" disabled={overrideReason.trim().length < 10} onClick={() => onOverride(overrideReason.trim())}
+                className="mt-2 w-full rounded-lg bg-amber-600 py-2 font-semibold text-white hover:bg-amber-700 disabled:opacity-50">
+                Push forward with this reason
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -717,6 +735,7 @@ const STAGE_FILTER_OPTIONS_DESIGNER = [
 ];
 
 function SalesPipelineView({ userRole }: { userRole: string }) {
+  const { can } = usePermissions();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [teamMembers, setTeamMembers] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -897,7 +916,10 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
       } else {
         const body = await res.json().catch(() => ({}));
         setLeads((prev) => prev.map((l) => l.id === lead.id ? { ...l, stage: originalStage } : l));
-        if (body.details?.length) {
+        if (extraFields.overrideReason) {
+          // An override was refused (e.g. payment proof can't be overridden): say why.
+          toast.error(body.error ?? `Stage update failed (${res.status})`, { duration: 9000 });
+        } else if (body.details?.length) {
           // Actionable modal instead of a plain toast — lists exactly what's
           // missing and, where possible, a way to fix it without leaving the board.
           setGateBlocked({ lead: { ...lead, stage: originalStage }, targetStage, details: body.details });
@@ -1375,6 +1397,11 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
           details={gateBlocked.details}
           onClose={() => setGateBlocked(null)}
           onOpenChecklist={(lead) => { setGateBlocked(null); setChecklistLead(lead); }}
+          onOverride={can('STAGE_OVERRIDE') ? (reason) => {
+            const { lead, targetStage } = gateBlocked;
+            setGateBlocked(null);
+            commitDrop(lead, targetStage, { overrideReason: reason });
+          } : undefined}
         />
       )}
 

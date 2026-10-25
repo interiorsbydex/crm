@@ -9,7 +9,7 @@ import { sendEmail, stageMoveBackwardEmail, intentRatingChangedEmail } from '../
 import { createAndSendNps, getNpsSendState } from '../lib/npsHelper.js';
 import { npsSurveyForStage } from '../lib/reportDefinitions.js';
 import { designerAssignmentDates, designerAssignmentAgeDays } from '../lib/designerAssignmentAge.js';
-import { logGateBypass } from '../lib/lenientMode.js';
+import { logGateBypass, isStrictStage } from '../lib/lenientMode.js';
 import { selectBLForLead, assignLeadToDesigner, incrementAssigned } from '../services/assignmentService.js';
 import { checkStageRequirements, isStageJumpAllowed, FUNNEL_ORDER, getEffectiveStageRules, describeAllowedSkips } from '../config/stageRequirements.js';
 import { computeSystemRating } from '../services/intentScoring.js';
@@ -30,7 +30,7 @@ import {
   type CommercialContext,
 } from '../lib/stageTimeline.js';
 import { isAutomationOn } from '../lib/automations.js';
-import { requirePermission } from '../lib/permissions.js';
+import { requirePermission, hasPermission } from '../lib/permissions.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -1090,6 +1090,9 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       // reaches DESIGN_IN_PROGRESS/HANDED_OVER — mandatory checkbox on the
       // stage-move form. Defaults to true for callers that predate it.
       sendNpsSurvey,
+      // Emergency override (Admin → Permissions → "Push a stuck lead forward"):
+      // a written reason that lets a blocked stage move go ahead anyway.
+      overrideReason,
     } = req.body as Record<string, any>;
 
     // Batch 12c Round 3b — the automatic sign-off NPS survey (fired below on
@@ -1098,6 +1101,8 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
     let stageNpsPendingMail: Awaited<ReturnType<typeof createAndSendNps>> = null;
     // Lenient launch: gate items that were missing when the move was allowed.
     let gateWarnings: string[] = [];
+    // Set when a blocked move went ahead on an emergency override.
+    let gateOverride: { reason: string; missing: string[] } | null = null;
     // Fix D — PROPOSAL_READY email draft (auto-created, no attachment).
     let stageProposalPendingMail: { draftKey: string; type: string; to: string; subject: string; html: string } | null = null;
 
@@ -1260,11 +1265,33 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         // Lenient launch: the move proceeds; what was missing is returned to the
         // caller as a warning and recorded (see GATE_BYPASSED below).
         gateWarnings = gate.missing;
+      } else if (!gate.ok && typeof overrideReason === 'string' && overrideReason.trim()) {
+        // Emergency override: the move goes ahead despite missing items, with a
+        // written reason that is recorded. Payment proof is never overridden
+        // from Onboarding onward (client decision: it is what confirms a booking).
+        const reasonText = overrideReason.trim();
+        if (!(await hasPermission(user.role, 'STAGE_OVERRIDE'))) {
+          res.status(403).json({ error: 'Your role can\'t push a lead past missing requirements. A Branch Head can change this in Admin → Permissions.' });
+          return;
+        }
+        if (reasonText.length < 10) {
+          res.status(400).json({ error: 'Write a reason of at least 10 characters for pushing this lead forward.', missing: gate.missing, details: gate.details });
+          return;
+        }
+        if (isStrictStage(stage) && !(await prisma.leadFile.findFirst({ where: { leadId: id, fileType: 'PAYMENT_SCREENSHOT' }, select: { id: true } }))) {
+          res.status(400).json({
+            error: 'A payment screenshot is required from Onboarding onward and can\'t be overridden. Upload it on the Files tab first.',
+            missing: gate.missing, details: gate.details, overrideBlocked: true,
+          });
+          return;
+        }
+        gateWarnings = gate.missing;
+        gateOverride = { reason: reasonText.slice(0, 1000), missing: gate.missing };
       } else if (!gate.ok) {
         // `details` (with per-item `type`) rides along so callers like the
         // Pipeline board can offer an actionable fix — e.g. open the PD→OB
         // or OBM→DIP checklist inline — instead of just showing text.
-        res.status(400).json({ error: `Cannot move to ${stage}`, missing: gate.missing, details: gate.details });
+        res.status(400).json({ error: `Cannot move to ${stage}`, missing: gate.missing, details: gate.details, overridable: true });
         return;
       }
     }
@@ -1656,7 +1683,11 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         toCommercialContext,
       });
 
-      await logGateBypass(user.id, id, 'STAGE_GATE', gateWarnings, { from: prevStage, to: stage });
+      if (gateOverride) {
+        await logActivity(user.id, 'GATE_OVERRIDDEN', id, { from: prevStage, to: stage, reason: gateOverride.reason, missing: gateOverride.missing });
+      } else {
+        await logGateBypass(user.id, id, 'STAGE_GATE', gateWarnings, { from: prevStage, to: stage });
+      }
     }
 
     // Include the server-owned assignment in the response as well as in the

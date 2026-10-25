@@ -17,14 +17,17 @@ interface Props {
   triggersNpsSurvey?: boolean;
   /** Fix D — True when this move targets PROPOSAL_READY — shows an info note that a draft notification will be created. */
   triggersProposalEmail?: boolean;
+  /** The move was blocked by missing items and this user may push it forward with a reason (Admin → Permissions). */
+  canOverride?: boolean;
   onCancel: () => void;
   /** In lenient launch rating may be 0 and value null — the user skipped them. */
-  onConfirm: (rating: number, value: number | null, reason: string, sendNpsSurvey: boolean) => void;
+  onConfirm: (rating: number, value: number | null, reason: string, sendNpsSurvey: boolean, overrideReason?: string) => void;
 }
 
 export default function StageCaptureModal({
-  leadName, targetStageLabel, initialRating, initialValue, saving, error, triggersNpsSurvey, triggersProposalEmail, onCancel, onConfirm,
+  leadName, targetStageLabel, initialRating, initialValue, saving, error, triggersNpsSurvey, triggersProposalEmail, canOverride, onCancel, onConfirm,
 }: Props) {
+  const [overrideReason, setOverrideReason] = useState('');
   const [rating, setRating] = useState(initialRating || 0);
   const [value, setValue] = useState(initialValue != null ? String(initialValue) : '');
   const [reason, setReason] = useState('');
@@ -106,6 +109,21 @@ export default function StageCaptureModal({
           <div className="mb-3 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-3 py-2 text-xs">
             <AlertTriangle size={13} className="mt-0.5 shrink-0" />
             <span>{error}</span>
+          </div>
+        )}
+
+        {error && canOverride && (
+          <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="stage-override">
+            <p className="font-semibold">Push forward anyway?</p>
+            <p className="mt-0.5">The lead moves now even though the items above are missing. Your reason and the missing items are recorded on the lead's activity.</p>
+            <textarea value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} rows={2} maxLength={1000}
+              placeholder="Why must this lead move now? (at least 10 characters)" aria-label="Reason for pushing forward"
+              className="mt-2 w-full rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-xs text-stone-800" />
+            <button type="button" disabled={saving || overrideReason.trim().length < 10}
+              onClick={() => onConfirm(rating, valueOk ? parsedValue : null, reason.trim(), sendNpsSurvey, overrideReason.trim())}
+              className="mt-2 w-full rounded-lg bg-amber-600 py-2 font-semibold text-white hover:bg-amber-700 disabled:opacity-50">
+              {saving ? 'Saving…' : 'Push forward with this reason'}
+            </button>
           </div>
         )}
 

@@ -14,13 +14,15 @@ import { ConfigError, describeIssues, versionedConfig } from './versionedConfig.
 
 export type PermRole = 'DESIGNER' | 'DESIGN_MANAGER' | 'CRE' | 'BL' | 'BRANCH_HEAD';
 
-export interface PermissionDef { key: string; label: string; area: string; roles: PermRole[] }
+/** `roles`: the roles the action was built for. `defaultRoles`: who has it before an admin changes anything (default: all of `roles`). */
+export interface PermissionDef { key: string; label: string; area: string; roles: PermRole[]; defaultRoles?: PermRole[] }
 
 export const PERMISSIONS: PermissionDef[] = [
   { key: 'LEAD_CREATE_MANUAL', area: 'Leads', label: 'Quick-capture walk-in and referral leads', roles: ['CRE', 'BL', 'BRANCH_HEAD'] },
   { key: 'LEAD_IMPORT', area: 'Leads', label: 'Import leads from a spreadsheet', roles: ['BL', 'BRANCH_HEAD'] },
   { key: 'LEAD_ALLOCATE_BL', area: 'Leads', label: 'Allocate an MQL lead to a Business Lead', roles: ['CRE', 'BRANCH_HEAD'] },
   { key: 'LEAD_PUSHBACK_MQL', area: 'Leads', label: 'Send an MQL lead back to Effective Lead', roles: ['BL', 'BRANCH_HEAD'] },
+  { key: 'STAGE_OVERRIDE', area: 'Leads', label: 'Push a stuck lead forward past missing requirements (reason required)', roles: ['BL', 'BRANCH_HEAD'], defaultRoles: ['BRANCH_HEAD'] },
   { key: 'LEAD_ASSIGN_DIRECT', area: 'Leads', label: 'Assign a lead directly to a designer', roles: ['BL'] },
   { key: 'PROJECT_TEAM_REQUEST', area: 'Projects', label: 'Add or request project team members', roles: ['DESIGNER', 'BL', 'BRANCH_HEAD'] },
   { key: 'PROJECT_TEAM_APPROVE', area: 'Projects', label: 'Approve or reject team members, and choose the primary', roles: ['BL', 'BRANCH_HEAD'] },
@@ -36,7 +38,7 @@ const BY_KEY = new Map(PERMISSIONS.map((p) => [p.key, p]));
 export type PermissionSettings = Record<string, PermRole[]>;
 
 export function defaultPermissions(): PermissionSettings {
-  return Object.fromEntries(PERMISSIONS.map((p) => [p.key, [...p.roles]]));
+  return Object.fromEntries(PERMISSIONS.map((p) => [p.key, [...(p.defaultRoles ?? p.roles)]]));
 }
 
 function mergePermissions(saved: Partial<PermissionSettings> | undefined): PermissionSettings {
