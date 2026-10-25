@@ -27,7 +27,7 @@ import OBOBMChecklistPanel from '../components/OBOBMChecklistPanel';
 import StageCaptureModal from '../components/StageCaptureModal';
 import EmailPreviewModal from '../components/EmailPreviewModal';
 import { getStoredUser } from '../lib/auth';
-import { stageLabel, sourceValue, useCrmSettings, sourceLabel } from '../lib/crmSettings';
+import { stageLabel, stageShortLabel, sourceValue, useCrmSettings, sourceLabel } from '../lib/crmSettings';
 import { usePermissions } from '../lib/permissions';
 import { crmSettings } from '../lib/crmSettings';
 
@@ -546,7 +546,7 @@ export default function LeadDetail() {
     } catch {
       return; // endpoint unavailable — don't prompt
     }
-    setStagePushPrompt({ targetStage: p.targetStage, label: p.label });
+    setStagePushPrompt({ targetStage: p.targetStage, label: stageLabel(p.targetStage) });
   }, [lead]);
 
   useEffect(() => {
@@ -1067,9 +1067,11 @@ export default function LeadDetail() {
   const currentUser = getStoredUser();
   // CRE qualification runs from Effective Lead to MQL. Keep later stages out of
   // the CRE overview roadmap and timeline while preserving other roles' full funnel.
+  // Stages switched off in Admin → CRM Settings drop out of the roadmap,
+  // unless this lead is in one or has passed through it.
   const visibleFunnelStages = currentUser?.role === 'CRE'
     ? ['EFFECTIVE_LEAD', 'MQL']
-    : FUNNEL_STAGES;
+    : FUNNEL_STAGES.filter((s) => !crmSettings().hiddenStages.includes(s) || s === lead?.stage || stageHistory.some((v) => v.stage === s));
   const visibleStageHistory = stageHistory.filter((visit) => visibleFunnelStages.includes(visit.stage));
   const canChangeStage = !isLocked && (currentUser?.role !== 'CRE' || lead?.stage === 'EFFECTIVE_LEAD');
   const stageChangeTitle = isLocked
@@ -2034,7 +2036,7 @@ export default function LeadDetail() {
                                     aria-label={lead.slaStatus === 'breach' ? 'SLA breached' : 'SLA approaching'}
                                   />
                                 )}
-                                <span className="text-[10px] font-bold leading-none">{FUNNEL_ABBREV[stage]}</span>
+                                <span className="text-[10px] font-bold leading-none">{stageShortLabel(stage, FUNNEL_ABBREV[stage])}</span>
                                 {wasVisited && visit?.tatDays !== undefined && (
                                   <span className="text-[8px] leading-tight mt-0.5 opacity-80">{visit.tatDays}d</span>
                                 )}
@@ -2133,7 +2135,7 @@ export default function LeadDetail() {
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-                                        Gate to {FUNNEL_ABBREV[nextStage ?? stage]}
+                                        Gate to {stageShortLabel(nextStage ?? stage, FUNNEL_ABBREV[nextStage ?? stage])}
                                       </p>
                                       {gateDetailsLoading && !gateDetails[stage] ? (
                                         <p className="text-[9px] text-gray-400">Checking…</p>

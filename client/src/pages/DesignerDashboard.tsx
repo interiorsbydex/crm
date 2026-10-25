@@ -15,7 +15,7 @@ import {
   TrendingUp, TrendingDown, Minus, Calendar, Star, Bell,
   AlertTriangle, Target, RefreshCw, ChevronRight, FileText, BarChart3, Heart,
 } from 'lucide-react';
-import { cycleDescription } from '../lib/crmSettings';
+import { cycleDescription, crmSettings, stageShortLabel } from '../lib/crmSettings';
 import { Tile, TileGroup, useDashboardLayout } from '../lib/dashboardLayout';
 import { formulas } from '../lib/formulas';
 
@@ -534,7 +534,10 @@ export default function DesignerDashboard({ designerId, designerName }: { design
               { stage: 'ONBOARDING', label: 'Onboarding', color: '#9333ea' },
               { stage: 'ONBOARDING_MEETING', label: 'OBM', color: '#2563eb' },
               { stage: 'CONVERSION', label: 'DIP', color: '#0891b2' },
-            ];
+            ]
+              // Renamed stages show their new name; switched-off stages drop out (Admin → CRM Settings).
+              .filter((step) => !crmSettings().hiddenStages.includes(step.stage))
+              .map((step) => (step.stage === 'CONVERSION' ? step : { ...step, label: stageShortLabel(step.stage, step.label) }));
             const rows = new Map(funnelRows?.map((row) => [row.stage, row]));
             return (
               <Panel className="p-5">

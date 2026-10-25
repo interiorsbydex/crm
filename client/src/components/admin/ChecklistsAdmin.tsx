@@ -83,6 +83,8 @@ export default function ChecklistsAdmin() {
   };
 
   const save = async () => {
+    // A typed-but-not-added item would otherwise be silently left out.
+    if (newLabel.trim()) { toast.error(`You typed "${newLabel.trim()}" but didn't click "Add item". Click Add item, or clear the box, then save.`); return; }
     setBusy(true);
     try {
       await api.put('/admin/checklists', { value: draft, revision: data.revision, note: note.trim() || undefined });

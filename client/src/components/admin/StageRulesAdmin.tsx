@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ArrowDown, ArrowUp, Lock, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { stageLabel as crmStageLabel } from '../../lib/crmSettings';
 
 // Admin → Stage Rules: what a lead needs before it can move to the next stage.
 // The server (config/stageRequirements.ts) is the only place these rules are
@@ -60,7 +61,8 @@ const STAGE_LABELS: Record<string, string> = {
   PROPOSAL_DISCUSSION: 'PD (Pitch Discussion)', ONBOARDING: 'Onboarding',
   ONBOARDING_MEETING: 'Onboarding Meeting', DESIGN_IN_PROGRESS: 'Design in Progress',
 };
-const stageLabel = (s: string) => STAGE_LABELS[s] ?? s;
+// Follows the names set in Admin → CRM Settings.
+const stageLabel = (s: string) => crmStageLabel(s) || STAGE_LABELS[s] || s;
 const edgeLabel = (edge: string) => edge.split('->').map(stageLabel).join(' → ');
 /** Stages a lead can jump over (directly, or PP via the MQL → Onboarding shortcut). */
 const JUMPABLE = ['DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION'];

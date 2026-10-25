@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
+import { stageLabel as crmStageLabel } from '../lib/crmSettings';
 
 const STAGES: { value: string; label: string }[] = [
   { value: 'MQL', label: 'MQL' },
@@ -16,7 +17,8 @@ const STAGES: { value: string; label: string }[] = [
   { value: 'ONBOARDING_MEETING', label: 'Onboarding Meeting' },
   { value: 'DESIGN_IN_PROGRESS', label: 'Design in Progress' },
 ];
-const stageLabel = (s?: string | null) => STAGES.find((x) => x.value === s)?.label ?? (s ? s.replace(/_/g, ' ') : '—');
+// Names follow Admin → CRM Settings.
+const stageLabel = (s?: string | null) => (s ? crmStageLabel(s) || STAGES.find((x) => x.value === s)?.label || s.replace(/_/g, ' ') : '—');
 
 interface Person { id: string; name: string; role: string }
 interface LeadRef { id: string; leadId: string; name: string }
@@ -81,7 +83,7 @@ function BypassLog({ includeTest }: { includeTest: boolean }) {
         </select>
         <select className={selectCls} style={selectStyle} value={stage} onChange={(e) => setStage(e.target.value)}>
           <option value="">All stages moved into</option>
-          {STAGES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          {STAGES.map((s) => <option key={s.value} value={s.value}>{stageLabel(s.value)}</option>)}
         </select>
         <input type="date" className={selectCls} style={selectStyle} value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" />
         <input type="date" className={selectCls} style={selectStyle} value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" />
@@ -159,7 +161,7 @@ function Completeness({ includeTest }: { includeTest: boolean }) {
         </select>
         <select className={selectCls} style={selectStyle} value={stage} onChange={(e) => setStage(e.target.value)}>
           <option value="">All current stages</option>
-          {STAGES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          {STAGES.map((s) => <option key={s.value} value={s.value}>{stageLabel(s.value)}</option>)}
         </select>
         <select className={selectCls} style={selectStyle} value={item} onChange={(e) => setItem(e.target.value)}>
           <option value="">All missing items</option>

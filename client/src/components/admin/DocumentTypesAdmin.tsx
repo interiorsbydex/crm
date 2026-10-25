@@ -59,7 +59,18 @@ export default function DocumentTypesAdmin() {
         if (o.pdfOnly !== undefined) entry.pdfOnly = o.pdfOnly;
         if (entry.label !== undefined || entry.pdfOnly !== undefined) builtIn[key] = entry;
       }
-      await api.put('/admin/document-types', { overrides: { builtIn, custom: draft.custom }, revision: data.revision });
+      // A name typed in the "new type" box but not yet added is saved too,
+      // rather than silently dropped.
+      let custom = draft.custom;
+      const pending = newName.trim();
+      if (pending) {
+        const key = slug(pending);
+        if (key.length < 2) { toast.error('Use at least 2 letters or numbers in the new type\'s name'); return; }
+        if (custom.some((c) => c.key === key)) { toast.error(`"${pending}" already exists`); return; }
+        custom = [...custom, { key, label: pending, pdfOnly: false, active: true }];
+      }
+      await api.put('/admin/document-types', { overrides: { builtIn, custom }, revision: data.revision });
+      setNewName('');
       toast.success('Document types saved');
       await load();
     } catch (e: any) {

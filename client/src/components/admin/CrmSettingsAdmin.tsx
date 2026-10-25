@@ -109,6 +109,9 @@ export default function CrmSettingsAdmin() {
   const set = <K extends keyof CrmSettings>(k: K, v: CrmSettings[K]) => setDraft({ ...draft, [k]: v });
 
   const save = async () => {
+    // A typed-but-not-added source or city would otherwise be silently left out.
+    const pending = [newSource.trim() && `source "${newSource.trim()}"`, newCity.trim() && `city "${newCity.trim()}"`].filter(Boolean);
+    if (pending.length) { toast.error(`You typed the ${pending.join(' and ')} but didn't click Add. Click Add, or clear the box, then save.`); return; }
     setBusy(true);
     try {
       await api.put('/admin/crm-settings', { settings: effective, revision: data.revision, note: note.trim() || undefined });

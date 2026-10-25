@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { stageLabel } from '../../lib/crmSettings';
 
 type DrillLead = { id: string; leadId: string; name: string; [k: string]: unknown };
 export type TableData = {
@@ -187,7 +188,7 @@ export default function BlAdminReports({ role }: { role: string }) {
             <select data-testid="bl-stage-select" value={f.stage} onChange={(e) => setF({ ...f, stage: e.target.value })}
               className="mt-1 block w-44 rounded-lg border border-gray-200 px-2 py-1.5 text-sm">
               <option value="">All</option>
-              {STAGE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {STAGE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{['EFFECTIVE_LEAD', 'HANDED_OVER', 'INACTIVE', 'ON_HOLD'].includes(o.value) ? o.label : stageLabel(o.value)}</option>)}
             </select>
           </label>
           {field('projectType', 'Project type')}{field('location', 'Location')}

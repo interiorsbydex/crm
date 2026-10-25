@@ -1270,7 +1270,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
           : existing.possessionTimeline;
         if (!effectivePossession) {
           res.status(400).json({
-            error: 'Cannot move to MQL — Possession Timeline is required. Please fill it in before qualifying this lead.',
+            error: `Cannot move to ${stageName(crmSettings, 'MQL')} — Possession Timeline is required. Please fill it in before qualifying this lead.`,
           });
           return;
         }
@@ -1306,7 +1306,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         // `details` (with per-item `type`) rides along so callers like the
         // Pipeline board can offer an actionable fix — e.g. open the PD→OB
         // or OBM→DIP checklist inline — instead of just showing text.
-        res.status(400).json({ error: `Cannot move to ${stage}`, missing: gate.missing, details: gate.details, overridable: true });
+        res.status(400).json({ error: `Cannot move to ${stageName(crmSettings, stage)}`, missing: gate.missing, details: gate.details, overridable: true });
         return;
       }
     }
