@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, Target, Megaphone, Route, FileText, type LucideIcon } from 'lucide-react';
+import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, Target, Megaphone, Route, FileText, SlidersHorizontal, type LucideIcon } from 'lucide-react';
 import { api, uploadFile } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
 import { DateInput } from '../components/ui/DateTimeInputs';
@@ -9,6 +9,7 @@ import IncentiveRulesAdmin from '../components/admin/IncentiveRulesAdmin';
 import DashboardContentAdmin from '../components/admin/DashboardContentAdmin';
 import StageRulesAdmin from '../components/admin/StageRulesAdmin';
 import DocumentTypesAdmin from '../components/admin/DocumentTypesAdmin';
+import CrmSettingsAdmin from '../components/admin/CrmSettingsAdmin';
 
 interface User {
   id: string; name: string; email: string; role: string;
@@ -43,7 +44,7 @@ const ROLE_COLORS: Record<string, string> = {
   BRANCH_HEAD: 'bg-green-100 text-green-700',
 };
 
-type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers' | 'import' | 'targets' | 'credits' | 'content' | 'stageRules' | 'docTypes';
+type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers' | 'import' | 'targets' | 'credits' | 'content' | 'stageRules' | 'docTypes' | 'crmSettings';
 
 interface ImportPreviewRow {
   row: number; status: 'WILL_IMPORT' | 'DUPLICATE' | 'INVALID';
@@ -453,6 +454,7 @@ export default function Admin() {
     { id: 'content', label: 'Dashboard Content', Icon: Megaphone },
     { id: 'stageRules', label: 'Stage Rules', Icon: Route },
     { id: 'docTypes', label: 'Document Types', Icon: FileText },
+    { id: 'crmSettings', label: 'CRM Settings', Icon: SlidersHorizontal },
   ];
 
   const hasLeads = (deactivatePreview?.activeLeads ?? 0) > 0;
@@ -1198,6 +1200,7 @@ export default function Admin() {
 
         {tab === 'stageRules' && <StageRulesAdmin />}
         {tab === 'docTypes' && <DocumentTypesAdmin />}
+        {tab === 'crmSettings' && <CrmSettingsAdmin />}
       </div>
     </div>
   );

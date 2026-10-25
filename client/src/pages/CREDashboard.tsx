@@ -16,6 +16,7 @@ import {
   RefreshCw, AlertTriangle, ChevronRight, Clock, Users, CheckCircle2,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { sourceLabel } from '../lib/crmSettings';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface CRELead {
@@ -115,7 +116,7 @@ function LeadRow({ lead }: { lead: CRELead }) {
         </div>
       </td>
       <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-        {SOURCE_SHORT[lead.source ?? ''] ?? lead.source?.replace(/_/g, ' ') ?? '—'}
+        {SOURCE_SHORT[lead.source ?? ''] ?? (lead.source ? sourceLabel(lead.source) : '—')}
       </td>
       <td className="px-4 py-3">
         <StarRating rating={lead.intentRating} />

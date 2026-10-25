@@ -1,4 +1,5 @@
 import { Worker, Queue } from 'bullmq';
+import { scheduleDaily0800Ist, isWeeklyDigestDay } from './weeklyDigestDay.js';
 import { connection } from './index.js';
 import { prisma } from '../lib/prisma.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
@@ -24,15 +25,8 @@ const QUEUE_NAME = 'client-tuesday-digest';
 export const clientTuesdayDigestQueue = new Queue(QUEUE_NAME, { connection });
 
 export async function scheduleClientTuesdayDigest() {
-  await clientTuesdayDigestQueue.add(
-    'tuesday-digest',
-    {},
-    {
-      repeat: { pattern: '30 2 * * 2' }, // Tuesday 08:00 IST (UTC+5:30 → UTC 02:30)
-      jobId: 'client-tuesday-digest-singleton',
-    },
-  );
-  console.log('[jobs] Client Tuesday digest scheduled (every Tuesday 08:00 IST)');
+  await scheduleDaily0800Ist(clientTuesdayDigestQueue, 'tuesday-digest', 'client-tuesday-digest-singleton');
+  console.log('[jobs] Client weekly digest scheduled (08:00 IST on the day set in CRM Settings)');
 }
 
 export async function runClientTuesdayDigest(): Promise<{ digests: number }> {
@@ -143,6 +137,6 @@ export async function runClientTuesdayDigest(): Promise<{ digests: number }> {
 
 export const clientTuesdayDigestWorker = new Worker(
   QUEUE_NAME,
-  async () => { await runClientTuesdayDigest(); },
+  async () => { if (await isWeeklyDigestDay()) await runClientTuesdayDigest(); },
   { connection },
 );

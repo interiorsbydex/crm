@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Table as ServerReportTable, type TableData } from './BlAdminReports';
+import { stageLabel } from '../../lib/crmSettings';
 
 type DrillLead = { id: string; leadId: string; name: string; [k: string]: unknown };
 type Designer = { id: string; name: string };
@@ -214,11 +215,6 @@ function MyPerformance({ data, showBlBookingDefinition = false }: { data: PerfDa
 
 // ── Shared helpers for reports 2-6 ────────────────────────────────────────────
 type Row = Record<string, any>;
-const STAGE_LABEL: Record<string, string> = {
-  MQL: 'MQL', DQL: 'DQL', PROPOSAL_READY: 'Proposal Ready', PROPOSAL_PRESENTED: 'Proposal Presented',
-  PROPOSAL_DISCUSSION: 'Proposal Discussion', ONBOARDING: 'Onboarding',
-  ONBOARDING_MEETING: 'Onboarding Meeting', DESIGN_IN_PROGRESS: 'Design in Progress',
-};
 const dash = (v: unknown) => (v == null ? 'N/A' : String(v));
 
 function Note({ children }: { children: React.ReactNode }) {
@@ -301,10 +297,10 @@ function DrillTableCards({ title, rows, headers }: {
   );
 }
 
-const funnelRows = (data: Row): Row[] => data.stages.map((s: Row) => ({ ...s, stageLabel: s.label ?? STAGE_LABEL[s.stage] ?? s.stage }));
+const funnelRows = (data: Row): Row[] => data.stages.map((s: Row) => ({ ...s, stageLabel: s.label ?? stageLabel(s.stage) }));
 type Hdr = { key: string; label: string; fmt?: (v: any, row: Row) => string; drill?: { path: (row: Row) => Row[]; cols?: Col[] } };
 const funnelDrillCols: Col[] = [
-  { key: 'currentStage', label: 'Current stage', fmt: (v) => STAGE_LABEL[v] ?? v },
+  { key: 'currentStage', label: 'Current stage', fmt: (v) => stageLabel(v) },
   { key: 'status', label: 'Status', fmt: (v) => String(v ?? '').replace('_', ' ') },
   dateCol('reachedAt', 'Reached'),
   { key: 'tatDays', label: 'TAT (days)' },

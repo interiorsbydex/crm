@@ -77,7 +77,7 @@ async function createLeadFromWebhook(data: {
   // leadMandatoryFields.ts. This data shape has no project-detail fields at
   // all, so the check is always false today, but stays correct if a future
   // webhook payload starts supplying them.
-  const initialStage = hasAllMqlMandatoryFields({}) ? 'MQL' : 'EFFECTIVE_LEAD';
+  const initialStage = (await hasAllMqlMandatoryFields({})) ? 'MQL' : 'EFFECTIVE_LEAD';
   const lead = await prisma.lead.create({
     data: {
       leadId,
@@ -215,7 +215,7 @@ leadWebhooksRouter.post('/google', async (req, res) => {
         // scope/possessionTimeline, so it still can't qualify straight into
         // MQL. Reuses the shared mandatory list, not a new one.
         const googleLeadLocation = b.city || b.location || undefined;
-        const initialStage = hasAllMqlMandatoryFields({ location: googleLeadLocation }) ? 'MQL' : 'EFFECTIVE_LEAD';
+        const initialStage = (await hasAllMqlMandatoryFields({ location: googleLeadLocation })) ? 'MQL' : 'EFFECTIVE_LEAD';
         const lead = await prisma.lead.create({
           data: {
             leadId,

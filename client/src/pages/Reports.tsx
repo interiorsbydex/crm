@@ -11,6 +11,7 @@ import { DateInput } from '../components/ui/DateTimeInputs';
 import DesignerReports from '../components/reports/DesignerReports';
 import BlAdminReports from '../components/reports/BlAdminReports';
 import CreditsPanel from '../components/reports/CreditsPanel';
+import { stageShortLabel } from '../lib/crmSettings';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type AnyRow = Record<string, unknown>;
@@ -44,7 +45,7 @@ type DesignerReportData = {
 // server, which reports use to build stage-shaped rows).
 // Short labels used ONLY in the reports chart axes (space-constrained).
 // Full label is 'PD (Pitch Discussion)' — see LeadList.tsx / LeadDetail.tsx STAGE_LABELS.
-const STAGE_LABEL: Record<string, string> = {
+const STAGE_LABEL_SHORT: Record<string, string> = {
   NEW_LEAD: 'New', EFFECTIVE_LEAD: 'Effective', MQL: 'MQL',
   DQL: 'DQL', PROPOSAL_READY: 'Prop. Ready',
   PROPOSAL_PRESENTED: 'Prop. Presented',
@@ -365,7 +366,7 @@ export default function Reports() {
 
   // Pipeline chart data
   const pipelineChartData = pipelineRows.map((row) => ({
-    stage: STAGE_LABEL[row.stage as string] ?? String(row.stage),
+    stage: stageShortLabel(String(row.stage as string), STAGE_LABEL_SHORT[row.stage as string]),
     stageKey: row.stage as string,
     count: row.count as number,
   }));
@@ -609,7 +610,7 @@ export default function Reports() {
                           rows={pipelineRows.map((row) => {
                             const total = pipelineRows.reduce((s, r) => s + ((r.count as number) || 0), 0);
                             return {
-                              stage: STAGE_LABEL[row.stage as string] ?? String(row.stage),
+                              stage: stageShortLabel(String(row.stage as string), STAGE_LABEL_SHORT[row.stage as string]),
                               count: row.count,
                               _share: total > 0 ? (((row.count as number) / total) * 100).toFixed(1) + '%' : '—',
                             };
@@ -833,7 +834,7 @@ export default function Reports() {
                             <tr key={i} className="hover:bg-gray-50">
                               <td className="py-2.5 px-2 font-mono text-gray-500">{String(row.leadId ?? '—')}</td>
                               <td className="py-2.5 px-2 text-gray-800 font-medium">{String(row.name ?? '—')}</td>
-                              <td className="py-2.5 px-2 text-gray-600">{STAGE_LABEL[row.stage] ?? String(row.stage ?? '—')}</td>
+                              <td className="py-2.5 px-2 text-gray-600">{stageShortLabel(String(row.stage), STAGE_LABEL_SHORT[row.stage])}</td>
                               <td className="py-2.5 px-2 text-gray-600">{String(row.reason ?? '—')}</td>
                               <td className="py-2.5 px-2">
                                 {row.feedbackFormSentAt ? (
@@ -947,7 +948,7 @@ export default function Reports() {
                   ]}
                   rows={agingRows.map((row) => ({
                     ...row,
-                    _stage: STAGE_LABEL[row.stage as string] ?? String(row.stage),
+                    _stage: stageShortLabel(String(row.stage as string), STAGE_LABEL_SHORT[row.stage as string]),
                   }))}
                 />
               )}
@@ -971,8 +972,8 @@ export default function Reports() {
                   ]}
                   rows={conversionRows.map((row) => ({
                     ...row,
-                    _from: STAGE_LABEL[row.from as string] ?? String(row.from),
-                    _to: STAGE_LABEL[row.to as string] ?? String(row.to),
+                    _from: stageShortLabel(String(row.from as string), STAGE_LABEL_SHORT[row.from as string]),
+                    _to: stageShortLabel(String(row.to as string), STAGE_LABEL_SHORT[row.to as string]),
                     _rate: typeof row.rate === 'number' ? row.rate.toFixed(1) + '%' : '—',
                   }))}
                 />
@@ -1008,7 +1009,7 @@ export default function Reports() {
                         >
                           <div className="min-w-0">
                             <p className="truncate text-sm font-semibold text-gray-900">{lead.clientName}</p>
-                            <p className="mt-0.5 text-xs text-gray-400">Lead · {STAGE_LABEL[lead.stage] ?? lead.stage}</p>
+                            <p className="mt-0.5 text-xs text-gray-400">Lead · {stageShortLabel(String(lead.stage), STAGE_LABEL_SHORT[lead.stage])}</p>
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
                             {lead.attentionCount > 0 && <span className="text-xs font-semibold text-red-500">{lead.attentionCount} alert{lead.attentionCount === 1 ? '' : 's'}</span>}

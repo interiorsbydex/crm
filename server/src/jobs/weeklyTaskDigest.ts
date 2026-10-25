@@ -1,4 +1,5 @@
 import { Worker, Queue } from 'bullmq';
+import { scheduleDaily0800Ist, isWeeklyDigestDay } from './weeklyDigestDay.js';
 import { connection } from './index.js';
 import { prisma } from '../lib/prisma.js';
 import { sendEmail } from '../lib/email.js';
@@ -18,15 +19,8 @@ const QUEUE_NAME = 'weekly-task-digest';
 export const weeklyTaskDigestQueue = new Queue(QUEUE_NAME, { connection });
 
 export async function scheduleWeeklyTaskDigest() {
-  await weeklyTaskDigestQueue.add(
-    'weekly-digest',
-    {},
-    {
-      repeat: { pattern: '30 2 * * 2' }, // Tuesday 08:00 IST = 02:30 UTC
-      jobId: 'weekly-task-digest-singleton',
-    },
-  );
-  console.log('[jobs] Weekly task digest scheduled (Tuesday 08:00 IST — tasks + meetings)');
+  await scheduleDaily0800Ist(weeklyTaskDigestQueue, 'weekly-digest', 'weekly-task-digest-singleton');
+  console.log('[jobs] Weekly task digest scheduled (08:00 IST on the day set in CRM Settings)');
 }
 
 const MEETING_TYPE_LABELS: Record<string, string> = {
@@ -176,6 +170,6 @@ export async function runWeeklyTaskDigest(): Promise<{ emailsSent: number }> {
 
 export const weeklyTaskDigestWorker = new Worker(
   QUEUE_NAME,
-  async () => { await runWeeklyTaskDigest(); },
+  async () => { if (await isWeeklyDigestDay()) await runWeeklyTaskDigest(); },
   { connection },
 );

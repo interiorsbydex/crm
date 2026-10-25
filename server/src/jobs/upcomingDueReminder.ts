@@ -4,9 +4,10 @@ import { prisma } from '../lib/prisma.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendEmail } from '../lib/email.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
+import { getCrmSettings } from '../lib/crmSettings.js';
 
 /**
- * Batch 14 item 3 — "1 hour before" in-app reminder for follow-up tasks and
+ * Batch 14 item 3 — "1 hour before" (Admin → CRM Settings → reminder timing) in-app reminder for follow-up tasks and
  * meetings. Runs every 15 minutes (finer than the 60-minute window itself,
  * so a task/meeting due 61 minutes after the previous run isn't missed) and
  * notifies the assignee once per task/meeting, deduped via notificationLog.
@@ -17,7 +18,6 @@ import { renderMailTemplate } from '../lib/mailTemplates.js';
  */
 
 const QUEUE_NAME = 'upcoming-due-reminder';
-const WINDOW_MS = 60 * 60 * 1000; // 60 minutes
 
 export const upcomingDueReminderQueue = new Queue(QUEUE_NAME, { connection });
 
@@ -48,7 +48,12 @@ function taskDueAt(dueDate: Date, hhmm: string | null): Date | null {
 
 export async function runUpcomingDueReminder(): Promise<{ taskReminders: number; meetingReminders: number; obReminders: number }> {
   const now = new Date();
-  const windowEnd = new Date(now.getTime() + WINDOW_MS);
+  // How far ahead to remind: Admin → CRM Settings (default 60 minutes).
+  const reminderMinutes = (await getCrmSettings()).reminderMinutesBefore;
+  const windowEnd = new Date(now.getTime() + reminderMinutes * 60 * 1000);
+  const inAbout = reminderMinutes % 60 === 0
+    ? `${reminderMinutes / 60} hour${reminderMinutes === 60 ? '' : 's'}`
+    : `${reminderMinutes} minutes`;
 
   // ── Follow-up tasks with a specific due time, due within the next hour ──────
   const candidateTasks = await prisma.followUpTask.findMany({
@@ -102,7 +107,7 @@ export async function runUpcomingDueReminder(): Promise<{ taskReminders: number;
     await createNotification(
       t.assignedToId,
       'TASK_DUE_SOON',
-      `Reminder: follow-up for lead ${t.lead.leadId} (${t.lead.name}) is due in about an hour${t.timeFrom ? ` at ${t.timeFrom}` : ''}`,
+      `Reminder: follow-up for lead ${t.lead.leadId} (${t.lead.name}) is due in about ${inAbout}${t.timeFrom ? ` at ${t.timeFrom}` : ''}`,
       t.leadId,
       dueAt,
       t.id,
@@ -170,7 +175,7 @@ export async function runUpcomingDueReminder(): Promise<{ taskReminders: number;
       await createNotification(
         recipient.id,
         'MEETING_DUE_SOON',
-        `Reminder: ${m.type} meeting for lead ${m.lead.leadId} (${m.lead.name}) starts in about an hour`,
+        `Reminder: ${m.type} meeting for lead ${m.lead.leadId} (${m.lead.name}) starts in about ${inAbout}`,
         m.lead.id,
         m.scheduledAt,
       );

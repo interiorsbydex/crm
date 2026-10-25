@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { computeDesignPipelineTimeline } from '../config/slaConfig.js';
+import { getCrmSettings } from '../lib/crmSettings.js';
 import { isAuthorizedForProject, isBLForProject } from '../lib/projectAuth.js';
 import { createNotification } from '../lib/notifications.js';
 import { buildLeadRoleWhere } from '../lib/leadScope.js';
@@ -242,6 +243,8 @@ projectsRouter.get('/pipeline', verifyToken, async (req, res) => {
     });
 
     const now = Date.now();
+    const crm = await getCrmSettings();
+    const designBudget = { phaseDays: crm.designPhaseDays, overallDays: crm.designOverallDays };
     const result = projects.map((p) => ({
       id: p.id,
       projectCode: p.projectCode,
@@ -257,8 +260,8 @@ projectsRouter.get('/pipeline', verifyToken, async (req, res) => {
       collectionsCount: p._count.collections,
       attentionFlags: p.attentionFlags,
       // Design Pipeline 8-stage timeline (task #56) — derived from the OB→OBM
-      // checklist's manual timeline dates, with a 45-day overall SLA.
-      designTimeline: computeDesignPipelineTimeline(p.lead.obObmChecklist, p.createdAt),
+      // checklist's manual timeline dates, with the overall SLA from CRM Settings (default 45 days).
+      designTimeline: computeDesignPipelineTimeline(p.lead.obObmChecklist, p.createdAt, undefined, designBudget),
       lead: {
         id: p.lead.id,
         leadId: p.lead.leadId,

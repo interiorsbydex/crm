@@ -10,6 +10,7 @@ import { getStoredUser } from '../lib/auth';
 import DesignerDashboard from './DesignerDashboard';
 import BLTeamDashboard from './BLTeamDashboard';
 import CREDashboard from './CREDashboard';
+import { stageShortLabel, sourceLabel } from '../lib/crmSettings';
 
 interface NpsBreakdown {
   salesNps: number | null;
@@ -66,7 +67,7 @@ const fmt = (n: number) => {
 // the active funnel (see .agents/memory/funnel-restructure.md).
 // Short labels used ONLY in the pipeline bar-chart axis (space-constrained).
 // Full label is 'PD (Pitch Discussion)' — see LeadList.tsx / LeadDetail.tsx STAGE_LABELS.
-const STAGE_LABELS: Record<string, string> = {
+const STAGE_LABELS_SHORT: Record<string, string> = {
   EFFECTIVE_LEAD: 'Eff. Lead', MQL: 'MQL', DQL: 'DQL',
   PROPOSAL_READY: 'Prop. Ready', PROPOSAL_PRESENTED: 'Prop. Done',
   PROPOSAL_DISCUSSION: 'PD', /* chart axis abbreviation — full label is 'PD (Pitch Discussion)' */
@@ -166,7 +167,7 @@ function hoursOverdue(breachedAt: string) {
 
 function BHDashboard({ data }: { data: DashboardData }) {
   const funnelData = data.stageFunnel.map((s) => ({
-    stage: STAGE_LABELS[s.stage] ?? s.stage,
+    stage: stageShortLabel(String(s.stage), STAGE_LABELS_SHORT[s.stage]),
     count: s.count,
     fill: STAGE_COLORS[s.stage] ?? '#d95f32',
   }));
@@ -334,7 +335,7 @@ function BHDashboard({ data }: { data: DashboardData }) {
                 {data.sourceBreakdown.map((s, i) => (
                   <div key={s.source} className="flex items-center gap-2 text-xs">
                     <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
-                    <span className="text-gray-600 truncate flex-1">{s.source.replace(/_/g, ' ')}</span>
+                    <span className="text-gray-600 truncate flex-1">{sourceLabel(s.source)}</span>
                     <span className="text-gray-400 shrink-0">{totalSource > 0 ? Math.round(s.count / totalSource * 100) : 0}%</span>
                   </div>
                 ))}
@@ -360,7 +361,7 @@ function BHDashboard({ data }: { data: DashboardData }) {
           <div className="space-y-3">
             {(data.stageConversion ?? []).map((r) => (
               <div key={r.stage} className="flex items-center gap-3">
-                <span className="text-xs text-stone-500 w-28 shrink-0">{STAGE_LABELS[r.stage] ?? r.stage}</span>
+                <span className="text-xs text-stone-500 w-28 shrink-0">{stageShortLabel(String(r.stage), STAGE_LABELS_SHORT[r.stage])}</span>
                 <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: '#EDE8E3' }}>
                   <div
                     className="h-full bg-brand-500 rounded-full transition-all"

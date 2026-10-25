@@ -7,6 +7,7 @@ import { createNotification } from '../lib/notifications.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
+import { getCrmSettings, type CrmSettings } from '../lib/crmSettings.js';
 
 export const discountsRouter = Router();
 export const leadDiscountRouter = Router({ mergeParams: true });
@@ -17,48 +18,49 @@ const QUOTE_FILES_BUCKET = 'crm-quote-files';
 const ALLOWED_QUOTE_MIMES = new Set(['application/pdf']);
 const ALLOWED_QUOTE_EXTS = new Set(['pdf']);
 
-// ── Discount approval authority ceiling (used in approve/reject check) ────────
-const AUTHORITY_CEILING: Record<string, number> = {
-  DESIGNER: 10,
-  CRE: 10,
-  BL: 15,
-  BRANCH_HEAD: 100,
-};
-
-// ── Threshold constants ───────────────────────────────────────────────────────
-const WOODWORK_SPECIAL_CASE_THRESHOLD = 500_000; // ₹5,00,000
+// ── Discount approval limits (Admin → CRM Settings → Discount limits) ────────
+// Defaults: ≤ 10% designer self-approves, 11–15% BL, 16–20% Branch Head,
+// > 20% Branch Head as a special case; post-discount woodwork below ₹5,00,000
+// always goes to the Branch Head as a special case.
+type DiscountLimits = CrmSettings['discount'];
 
 /**
  * Compute approval routing from the discount % and post-discount woodwork value.
  *
  * Rules:
- *  ≤ 10%                   → SELF (auto-approved, no request sent upstream)
- *  11–15%                  → BL approval
- *  16–20%                  → BRANCH_HEAD approval (direct, no BL step)
- *  > 20%                   → BRANCH_HEAD, isSpecialCase = true
+ *  ≤ self limit             → SELF (auto-approved, no request sent upstream)
+ *  ≤ BL limit               → BL approval
+ *  ≤ Branch Head limit      → BRANCH_HEAD approval (direct, no BL step)
+ *  > Branch Head limit      → BRANCH_HEAD, isSpecialCase = true
  *  Post-discount woodwork
- *    < ₹5L (any %)         → BRANCH_HEAD override, isSpecialCase = true
+ *    < woodwork threshold   → BRANCH_HEAD override, isSpecialCase = true
  */
-function computeApprovalRouting(
+export function computeApprovalRouting(
   discountPct: number,
   woodworkValueExGst: number,
+  limits: DiscountLimits,
 ): { approverRole: 'SELF' | 'BL' | 'BRANCH_HEAD'; isSpecialCase: boolean } {
   const postDiscountWoodwork = woodworkValueExGst * (1 - discountPct / 100);
-  const woodworkBelowThreshold = postDiscountWoodwork < WOODWORK_SPECIAL_CASE_THRESHOLD;
+  const woodworkBelowThreshold = postDiscountWoodwork < limits.woodworkSpecialCaseBelow;
 
-  if (woodworkBelowThreshold || discountPct > 20) {
+  if (woodworkBelowThreshold || discountPct > limits.branchHeadUpToPct) {
     return { approverRole: 'BRANCH_HEAD', isSpecialCase: true };
   }
-  if (discountPct > 15) {
-    // 16–20%: BH direct, not a special case
+  if (discountPct > limits.blApproveUpToPct) {
     return { approverRole: 'BRANCH_HEAD', isSpecialCase: false };
   }
-  if (discountPct > 10) {
-    // 11–15%: BL approval
+  if (discountPct > limits.selfApproveUpToPct) {
     return { approverRole: 'BL', isSpecialCase: false };
   }
-  // 0–10%: self-approve
   return { approverRole: 'SELF', isSpecialCase: false };
+}
+
+/** Highest discount % each role may approve themselves. */
+function authorityCeiling(role: string, limits: DiscountLimits): number {
+  if (role === 'BRANCH_HEAD') return 100;
+  if (role === 'BL') return limits.blApproveUpToPct;
+  if (role === 'DESIGNER' || role === 'CRE') return limits.selfApproveUpToPct;
+  return 0;
 }
 
 const discountInclude = {
@@ -164,7 +166,8 @@ leadDiscountRouter.post('/', verifyToken, upload.array('quoteFiles', 10) as any,
     }
 
     // ── Route by new thresholds ───────────────────────────────────────────────
-    const { approverRole, isSpecialCase } = computeApprovalRouting(computed, woodworkValueExGst);
+    const limits = (await getCrmSettings()).discount;
+    const { approverRole, isSpecialCase } = computeApprovalRouting(computed, woodworkValueExGst, limits);
 
     // ≤ 10%: auto-approve (designer has authority; no upstream review needed)
     const isAutoApproved = approverRole === 'SELF';
@@ -209,7 +212,7 @@ leadDiscountRouter.post('/', verifyToken, upload.array('quoteFiles', 10) as any,
         ...(isAutoApproved && {
           reviewedById: user.id,
           reviewedAt: new Date(),
-          reviewerComment: 'Auto-approved: discount ≤ 10%',
+          reviewerComment: `Auto-approved: discount ≤ ${limits.selfApproveUpToPct}%`,
         }),
         files: uploaded.length
           ? { create: uploaded.map((u) => ({ fileName: u.fileName, storagePath: u.storagePath, uploadedById: user.id })) }
@@ -229,7 +232,7 @@ leadDiscountRouter.post('/', verifyToken, upload.array('quoteFiles', 10) as any,
     // ── Send notifications based on routing ───────────────────────────────────
     if (!isAutoApproved) {
       if (approverRole === 'BL') {
-        // 11–15%: notify the assigned BL
+        // BL range: notify the assigned BL
         if (lead.assignedBLId) {
           await createNotification(
             lead.assignedBLId,
@@ -239,7 +242,7 @@ leadDiscountRouter.post('/', verifyToken, upload.array('quoteFiles', 10) as any,
           );
         }
       } else {
-        // 16–20%, >20%, or woodwork < ₹5L: notify Branch Head(s) directly
+        // Branch Head range, special case, or low woodwork value: notify Branch Head(s) directly
         const branchHeads = await prisma.user.findMany({
           where: { role: 'BRANCH_HEAD', isActive: true },
           select: { id: true },
@@ -329,7 +332,7 @@ discountsRouter.get('/', verifyToken, async (req, res) => {
 });
 
 // ── PATCH /api/discount-requests/:id/forward — BL escalates to BH ────────────
-// Applicable for BL-routed (11–15%) requests only. Requests already routed to
+// Applicable for BL-routed requests only. Requests already routed to
 // BRANCH_HEAD do not require manual forwarding.
 // The acting BL must own the lead's team (same check as approve/reject).
 discountsRouter.patch('/:id/forward', verifyToken, requireRole('BL'), async (req, res) => {
@@ -355,7 +358,7 @@ discountsRouter.patch('/:id/forward', verifyToken, requireRole('BL'), async (req
       res.status(400).json({ error: 'This request is already routed to Branch Head — no forwarding needed.' });
       return;
     }
-    if (Number(existing.discountPct) <= 10) {
+    if (existing.approverRole === 'SELF') {
       res.status(400).json({ error: 'This discount was auto-approved — no forwarding needed.' });
       return;
     }
@@ -448,7 +451,11 @@ discountsRouter.patch('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), asy
     if (isLeadLocked(existing.lead.status)) { sendLeadLockedError(res); return; }
 
     const discountPctNum = Number(existing.discountPct);
-    const effectiveApproverRole = existing.approverRole ?? (discountPctNum <= 10 ? 'SELF' : discountPctNum <= 15 ? 'BL' : 'BRANCH_HEAD');
+    const limits = (await getCrmSettings()).discount;
+    // Requests store their routing when raised; only legacy rows without it
+    // fall back to today's limits.
+    const effectiveApproverRole = existing.approverRole
+      ?? (discountPctNum <= limits.selfApproveUpToPct ? 'SELF' : discountPctNum <= limits.blApproveUpToPct ? 'BL' : 'BRANCH_HEAD');
     const isRoutedToBH = effectiveApproverRole === 'BRANCH_HEAD' || existing.forwardedToRole === 'BRANCH_HEAD';
     const isRoutedToBL = !isRoutedToBH && (effectiveApproverRole === 'BL' || existing.approverRole === null);
 
@@ -469,7 +476,7 @@ discountsRouter.patch('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), asy
         return;
       }
       // Percentage ceiling guard (secondary)
-      const ceiling = AUTHORITY_CEILING[user.role] ?? 0;
+      const ceiling = authorityCeiling(user.role, limits);
       if (status === 'APPROVED' && discountPctNum > ceiling) {
         res.status(403).json({ error: `Exceeds your approval authority (max ${ceiling}%). Use /forward to escalate.` });
         return;

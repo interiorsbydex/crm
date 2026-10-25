@@ -3,6 +3,7 @@ import { Tag } from 'lucide-react';
 import { api } from '../lib/api';
 import { getStoredUser } from '../lib/auth';
 import toast from 'react-hot-toast';
+import { useCrmSettings } from '../lib/crmSettings';
 
 interface Lead { id: string; leadId: string; name: string; }
 interface AppUser { id: string; name: string; role: string; }
@@ -56,6 +57,7 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string | 
 }
 
 export default function Discounts() {
+  const limits = useCrmSettings().discount;
   const currentUser = getStoredUser();
   const userRole = currentUser?.role ?? '';
 
@@ -203,15 +205,15 @@ export default function Discounts() {
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">⊙ Approval Authority</span>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-green-400" />
-            <span className="text-xs text-gray-600">≤10% <span className="text-gray-400">Designer</span></span>
+            <span className="text-xs text-gray-600">≤{limits.selfApproveUpToPct}% <span className="text-gray-400">Designer</span></span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-amber-400" />
-            <span className="text-xs text-gray-600">10–15% <span className="text-gray-400">Business Lead</span></span>
+            <span className="text-xs text-gray-600">{limits.selfApproveUpToPct}–{limits.blApproveUpToPct}% <span className="text-gray-400">Business Lead</span></span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-red-400" />
-            <span className="text-xs text-gray-600">&gt;15% <span className="text-gray-400">Branch Head</span></span>
+            <span className="text-xs text-gray-600">&gt;{limits.blApproveUpToPct}% <span className="text-gray-400">Branch Head</span></span>
           </div>
           <span className="text-xs text-gray-300 ml-auto hidden lg:block">Enforced server-side</span>
         </div>

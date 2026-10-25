@@ -1,60 +1,36 @@
 import { useEffect, useRef, useState } from 'react';
+import { useCrmSettings } from '../lib/crmSettings';
 
-const CITIES = [
-  'Chennai', 'Bengaluru', 'Hyderabad', 'Coimbatore', 'Madurai', 'Trichy',
-  'Salem', 'Tiruppur', 'Erode', 'Hosur', 'Vellore', 'Thanjavur', 'Puducherry',
-  'Pondicherry',
-] as const;
-
-const CHENNAI_AREAS = [
-  'Alwarpet', 'Abiramapuram', 'Teynampet', 'Gopalapuram', 'Royapettah', 'Mylapore',
-  'R.A. Puram', 'Nandanam', 'Thousand Lights', 'Nungambakkam', 'Egmore', 'Chetpet',
-  'Kilpauk', 'Purasawalkam', 'Choolaimedu', 'Choolai', 'Anna Salai', 'T. Nagar',
-  'West Mambalam', 'Saidapet', 'Kodambakkam', 'Ashok Nagar', 'K.K. Nagar',
-  'Vadapalani', 'Saligramam', 'Virugambakkam', 'Adyar', 'Besant Nagar',
-  'Gandhi Nagar', 'Indira Nagar', 'Kasturba Nagar', 'Thiruvanmiyur', 'Kotturpuram',
-  'Kottur', 'Velachery', 'Taramani', 'Perungudi', 'Kandanchavadi', 'Sholinganallur',
-  'Karapakkam', 'Thoraipakkam', 'Okkiyam Thoraipakkam', 'Kottivakkam', 'Palavakkam',
-  'Neelankarai', 'Injambakkam', 'Uthandi', 'Akkarai', 'Semmenchery', 'Pallikaranai',
-  'Medavakkam', 'Madipakkam', 'Keelkattalai', 'Adambakkam', 'Alandur',
-  'Guindy', 'Ekkatuthangal', 'Nanganallur', 'Manapakkam', 'Mugalivakkam', 'Porur',
-  'Ramapuram', 'Valasaravakkam', 'Maduravoyal', 'Anna Nagar', 'Anna Nagar West',
-  'Anna Nagar East', 'Aminjikarai', 'Arumbakkam', 'Mogappair', 'Mogappair East',
-  'Mogappair West', 'Nolambur', 'Koyambedu', 'Villivakkam', 'Padi', 'Korattur',
-  'Ambattur', 'Pattaravakkam', 'Avadi', 'Thirumullaivoyal', 'Ayappakkam',
-  'Perambur', 'Kolathur', 'Ayanavaram', 'Madhavaram', 'Manali', 'Tondiarpet',
-  'Royapuram', 'Washermanpet', 'George Town', 'Broadway', 'Basin Bridge',
-  'Vyasarpadi', 'Ennore', 'Thiruvottiyur', 'Red Hills', 'Tambaram', 'West Tambaram',
-  'East Tambaram', 'Chromepet', 'Pallavaram', 'Pammal', 'Anakaputhur', 'Chitlapakkam',
-  'Sembakkam', 'Selaiyur', 'Perungalathur', 'Vandalur', 'Guduvanchery', 'Urapakkam',
-  'Kelambakkam',
-] as const;
+// Cities and their areas come from Admin → CRM Settings. A city with areas
+// listed gets an area dropdown (plus "Others", typable); a city without gets a
+// typable area box. "Other" lets the user type a city that isn't listed.
+type City = { name: string; areas: string[] };
 
 type ParsedLocation = { city: string; area: string; customArea: string; otherCity: string; customMode?: boolean };
 
 const OTHER_AREA_VALUE = '__other_area__';
 
-function canonicalCity(value: string): string | undefined {
-  return CITIES.find((city) => city.toLowerCase() === value.toLowerCase());
+function canonicalCity(cities: City[], value: string): City | undefined {
+  return cities.find((city) => city.name.toLowerCase() === value.toLowerCase());
 }
 
-function parseLocation(value: string): ParsedLocation {
+function parseLocation(cities: City[], value: string): ParsedLocation {
   const trimmed = value.trim();
   if (!trimmed) return { city: '', area: '', customArea: '', otherCity: '' };
 
-  const exactCity = canonicalCity(trimmed);
-  if (exactCity) return { city: exactCity, area: '', customArea: '', otherCity: '' };
+  const exactCity = canonicalCity(cities, trimmed);
+  if (exactCity) return { city: exactCity.name, area: '', customArea: '', otherCity: '' };
 
   const commaIndex = trimmed.lastIndexOf(',');
   if (commaIndex > 0) {
     const area = trimmed.slice(0, commaIndex).trim();
-    const city = canonicalCity(trimmed.slice(commaIndex + 1).trim());
+    const city = canonicalCity(cities, trimmed.slice(commaIndex + 1).trim());
     if (city) {
-      if (city === 'Chennai') {
-        const knownArea = CHENNAI_AREAS.find((candidate) => candidate.toLowerCase() === area.toLowerCase());
-        return { city, area: knownArea ?? '', customArea: knownArea ? '' : area, otherCity: '' };
+      if (city.areas.length) {
+        const knownArea = city.areas.find((candidate) => candidate.toLowerCase() === area.toLowerCase());
+        return { city: city.name, area: knownArea ?? '', customArea: knownArea ? '' : area, otherCity: '' };
       }
-      return { city, area, customArea: '', otherCity: '' };
+      return { city: city.name, area, customArea: '', otherCity: '' };
     }
 
     return { city: 'Other', area, customArea: '', otherCity: trimmed.slice(commaIndex + 1).trim() };
@@ -81,15 +57,17 @@ export default function LeadLocationSelector({
   hasError = false,
   areaOptional = false,
 }: LeadLocationSelectorProps) {
-  const [selection, setSelection] = useState<ParsedLocation>(() => parseLocation(value));
+  const cities = useCrmSettings().cities;
+  const [selection, setSelection] = useState<ParsedLocation>(() => parseLocation(cities, value));
+  const cityAreas = cities.find((c) => c.name === selection.city)?.areas ?? [];
   const lastEmitted = useRef<string | null>(null);
   const emit = (next: string) => { lastEmitted.current = next; onChange(next); };
 
   useEffect(() => {
     // Ignore echoes of values this component itself just emitted.
     if (lastEmitted.current !== null && value === lastEmitted.current) return;
-    setSelection(parseLocation(value));
-  }, [value]);
+    setSelection(parseLocation(cities, value));
+  }, [value, cities]);
 
   const controlStyle = {
     border: hasError ? '1px solid #EF4444' : '1px solid #EDE8E3',
@@ -106,10 +84,11 @@ export default function LeadLocationSelector({
 
   const chooseArea = (area: string) => {
     setSelection((current) => ({ ...current, area: area === OTHER_AREA_VALUE ? '' : area, customArea: '', customMode: area === OTHER_AREA_VALUE }));
+    const city = selection.city;
     if (area === OTHER_AREA_VALUE) {
-      emit(areaOptional ? 'Chennai' : '');
+      emit(areaOptional ? city : '');
     } else {
-      emit(area ? `${area}, Chennai` : areaOptional ? 'Chennai' : '');
+      emit(area ? `${area}, ${city}` : areaOptional ? city : '');
     }
   };
 
@@ -120,9 +99,9 @@ export default function LeadLocationSelector({
     emit(area.trim() && city ? `${area.trim()}, ${city}` : areaOptional && city ? city : '');
   };
 
-  const changeCustomChennaiArea = (customArea: string) => {
+  const changeCustomArea = (customArea: string) => {
     setSelection((current) => ({ ...current, customArea, area: '', customMode: true }));
-    emit(customArea.trim() ? `${customArea.trim()}, Chennai` : areaOptional ? 'Chennai' : '');
+    emit(customArea.trim() ? `${customArea.trim()}, ${selection.city}` : areaOptional ? selection.city : '');
   };
 
   const changeOtherCity = (otherCity: string) => {
@@ -143,14 +122,14 @@ export default function LeadLocationSelector({
         style={controlStyle}
       >
         <option value="">Select city…</option>
-        {CITIES.map((city) => <option key={city} value={city}>{city}</option>)}
+        {cities.map((city) => <option key={city.name} value={city.name}>{city.name}</option>)}
         <option value="Other">Other</option>
       </select>
 
-      {selection.city === 'Chennai' && (
+      {cityAreas.length > 0 && (
         <>
           <select
-            aria-label="Chennai area"
+            aria-label={`${selection.city} area`}
             value={selection.customMode || selection.customArea ? OTHER_AREA_VALUE : selection.area}
             onChange={(event) => chooseArea(event.target.value)}
             onBlur={onBlur}
@@ -158,18 +137,18 @@ export default function LeadLocationSelector({
             className={controlClass}
             style={controlStyle}
           >
-            <option value="">Select Chennai area…</option>
-            {CHENNAI_AREAS.map((area) => <option key={area} value={area}>{area}</option>)}
+            <option value="">Select {selection.city} area…</option>
+            {cityAreas.map((area) => <option key={area} value={area}>{area}</option>)}
             <option value={OTHER_AREA_VALUE}>Others</option>
           </select>
           {(selection.customMode || selection.customArea !== '') && (
             <input
-              aria-label="Other Chennai area"
+              aria-label={`Other ${selection.city} area`}
               value={selection.customArea}
-              onChange={(event) => changeCustomChennaiArea(event.target.value)}
+              onChange={(event) => changeCustomArea(event.target.value)}
               onBlur={onBlur}
               required={!areaOptional}
-              placeholder="Enter Chennai area"
+              placeholder={`Enter ${selection.city} area`}
               className={controlClass}
               style={controlStyle}
             />
@@ -190,7 +169,7 @@ export default function LeadLocationSelector({
         />
       )}
 
-      {selection.city !== '' && selection.city !== 'Chennai' && (
+      {selection.city !== '' && cityAreas.length === 0 && (
         <input
           aria-label={`${selection.city === 'Other' ? 'Selected city' : selection.city} area`}
           value={selection.area}

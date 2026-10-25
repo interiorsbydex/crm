@@ -30,6 +30,7 @@ import { downloadMasterMailAttachments } from '../lib/mailTemplateAttachments.js
 import { saveDraft, registerOnSentHandler } from '../lib/emailService.js';
 import { getNpsSendState } from '../lib/npsHelper.js';
 import { DESIGN_PHASES, DESIGN_PHASE_DEFAULT_DAYS, MS_PER_DAY } from '../config/slaConfig.js';
+import { getCrmSettings } from '../lib/crmSettings.js';
 import { isLenientForStage, logGateBypass } from '../lib/lenientMode.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 import { getCommercialContextForLead } from '../lib/stageTimeline.js';
@@ -98,13 +99,14 @@ function allDocsDone(c: Record<string, any>): boolean {
  * OBM welcome mail can show the client an estimated schedule rather than
  * just the phases already booked. Each unrecorded phase's projected date is
  * the previous phase's date (actual or projected) plus that previous
- * phase's default day budget (config/slaConfig.ts) — mirrors the allocation
+ * phase's day budget (Admin → CRM Settings, default config/slaConfig.ts) — mirrors the allocation
  * model already used for SLA status on the Design Pipeline view. EIP has no
  * date field of its own and simply starts when Sign Off does.
  */
 function projectDesignPhaseDates(
   checklist: Record<string, any> | null | undefined,
   fallbackStart: Date,
+  phaseDays: Record<string, number> = DESIGN_PHASE_DEFAULT_DAYS,
 ): { label: string; date: Date; isProjected: boolean }[] {
   const results: { label: string; date: Date; isProjected: boolean }[] = [];
   let prevDate: Date | null = null;
@@ -120,7 +122,7 @@ function projectDesignPhaseDates(
       date = prevDate ?? fallbackStart;
     } else {
       const base = prevDate ?? fallbackStart;
-      const addDays = prevKey ? (DESIGN_PHASE_DEFAULT_DAYS[prevKey] ?? 0) : 0;
+      const addDays = prevKey ? (phaseDays[prevKey] ?? 0) : 0;
       date = new Date(base.getTime() + addDays * MS_PER_DAY);
     }
     results.push({ label: phase.label, date, isProjected: !actual });
@@ -158,7 +160,7 @@ obObmChecklistRouter.get('/', verifyToken, async (req, res) => {
     const checklist = await prisma.oBOBMChecklist.findUnique({ where: { leadId } });
     const nps = await getNpsSendState(leadId, 'ONBOARDING');
     const timelineHtml = renderTimelineHtml(
-      projectDesignPhaseDates(checklist, lead.createdAt),
+      projectDesignPhaseDates(checklist, lead.createdAt, (await getCrmSettings()).designPhaseDays),
       checklist?.tentativeInteriorHandoverAt,
     );
     res.json({
@@ -269,7 +271,7 @@ obObmChecklistRouter.post('/send-obm-mail', verifyToken, async (req, res) => {
 
     const { subject, html } = req.body as { subject?: string; html?: string };
     const timelineHtml = renderTimelineHtml(
-      projectDesignPhaseDates(checklist, lead.createdAt),
+      projectDesignPhaseDates(checklist, lead.createdAt, (await getCrmSettings()).designPhaseDays),
       checklist.tentativeInteriorHandoverAt,
     );
     const template = await obmMailTemplate(lead.name, timelineHtml);

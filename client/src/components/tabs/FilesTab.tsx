@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Upload, FileText, Download, ChevronDown, ChevronRight, Loader2, Paperclip } from 'lucide-react';
 import { api, uploadFile } from '../../lib/api';
 import toast from 'react-hot-toast';
+import { stageLabel } from '../../lib/crmSettings';
 
 interface LeadFile {
   id: string;
@@ -35,13 +36,6 @@ const STAGE_ORDER = [
   'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
   'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER',
 ];
-const STAGE_LABELS: Record<string, string> = {
-  EFFECTIVE_LEAD: 'Effective Lead', MQL: 'MQL', DQL: 'DQL',
-  PROPOSAL_READY: 'Proposal Ready', PROPOSAL_PRESENTED: 'Proposal Presented',
-  PROPOSAL_DISCUSSION: 'PD (Pitch Discussion)',
-  ONBOARDING: 'Onboarding', ONBOARDING_MEETING: 'Onboarding Meeting',
-  DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',
-};
 
 /** Upload types and their PDF-only rule come from Admin → Document Types. */
 interface DocumentType {
@@ -228,7 +222,7 @@ export default function FilesTab({ leadId, currentStage, isLocked, onFilesChange
             >
               {isOpen ? <ChevronDown size={14} strokeWidth={2.5} className="text-gray-400" /> : <ChevronRight size={14} strokeWidth={2.5} className="text-gray-400" />}
               <span className={`text-sm font-medium ${isActive ? 'text-brand-700' : 'text-gray-700'}`}>
-                {STAGE_LABELS[stage] ?? stage}
+                {stageLabel(stage)}
               </span>
               {isActive && (
                 <span className="text-[10px] font-bold bg-brand-100 text-brand-600 px-2 py-0.5 rounded-full ml-1">Current</span>

@@ -9,6 +9,7 @@ import PDOBChecklistPanel from '../components/PDOBChecklistPanel';
 import DIPChecklistPanel from '../components/DIPChecklistPanel';
 import StageCaptureModal from '../components/StageCaptureModal';
 import { DateInput } from '../components/ui/DateTimeInputs';
+import { stageLabel, crmSettings, sourceLabel } from '../lib/crmSettings';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Lead {
@@ -124,20 +125,6 @@ const STAGE_GROUPING_ORDER = [
   'HANDED_OVER',
 ] as const;
 
-const STAGE_LABELS: Record<string, string> = {
-  EFFECTIVE_LEAD: 'Effective Lead',
-  MQL: 'MQL',
-  DQL: 'DQL',
-  PROPOSAL_READY: 'Proposal Ready',
-  PROPOSAL_PRESENTED: 'Proposal Presented',
-  PROPOSAL_DISCUSSION: 'PD (Pitch Discussion)',
-  ONBOARDING: 'Onboarding',
-  ONBOARDING_MEETING: 'Onboarding Meeting',
-  DESIGN_IN_PROGRESS: 'Design in Progress',
-  HANDED_OVER: 'Handed Over',
-  INACTIVE: 'Inactive',
-  ON_HOLD: 'On Hold',
-};
 
 const STAGE_ACCENT: Record<string, string> = {
   EFFECTIVE_LEAD: 'bg-stone-400',
@@ -303,7 +290,7 @@ function LeadCard({
       <div className="flex items-center gap-2 mb-2">
         {val && <span className="text-sm font-bold text-stone-800">{val}</span>}
         <span className="text-[10px] font-semibold text-stone-400 px-1.5 py-0.5 rounded-full shrink-0" style={{ background: '#F5F0EB' }}>
-          {STAGE_LABELS[lead.stage] ?? lead.stage}
+          {stageLabel(lead.stage)}
         </span>
         {lead.location && <span className="text-xs text-stone-400 truncate flex-1">{lead.location}</span>}
       </div>
@@ -352,7 +339,7 @@ function LeadCard({
           <span className="text-[10px] text-stone-300 flex-1">Unassigned</span>
         )}
         {lead.source && (
-          <span className="text-[10px] text-stone-400 shrink-0 hidden sm:block">{lead.source.replace(/_/g, ' ')}</span>
+          <span className="text-[10px] text-stone-400 shrink-0 hidden sm:block">{sourceLabel(lead.source)}</span>
         )}
         <span className="text-[10px] text-stone-400 shrink-0">{relTime(lead.createdAt)} ago</span>
       </div>
@@ -710,7 +697,6 @@ const EMPTY_SALES_FILTERS: SalesFilters = {
   projectedObFrom: '', projectedObTo: '',
 };
 
-const SOURCE_FILTER_OPTIONS = ['META_ADS', 'GOOGLE_ADS', 'REFERRAL', 'WALK_IN', 'ORGANIC', 'OTHER'];
 const STATUS_FILTER_OPTIONS = [
   { value: 'ACTIVE', label: 'Active' },
   { value: 'ON_HOLD', label: 'On Hold' },
@@ -903,7 +889,7 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
         body: JSON.stringify({ stage: targetStage, ...extraFields }),
       });
       if (res.ok) {
-        toast.success(`${lead.name} → ${STAGE_LABELS[targetStage] ?? targetStage}`);
+        toast.success(`${lead.name} → ${stageLabel(targetStage)}`);
         const okBody = await res.json().catch(() => ({}));
         if (okBody.gateWarnings?.length) {
           toast(`Moved with missing items: ${okBody.gateWarnings.join('; ')}`, { duration: 9000, icon: '⚠️' });
@@ -988,7 +974,12 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
         (s) => !(KANBAN_STAGES as readonly string[]).includes(s) && byStage(s).length > 0,
       )
     : [];
-  const kanbanColumns = [...KANBAN_STAGES, ...legacyStagesInView];
+  // Stages switched off in Admin → CRM Settings get no column, unless a lead is still in one.
+  const hiddenStages = crmSettings().hiddenStages;
+  const kanbanColumns = [
+    ...KANBAN_STAGES.filter((st) => !hiddenStages.includes(st) || byStage(st).length > 0),
+    ...legacyStagesInView,
+  ];
 
   const setSF = (k: keyof SalesFilters, v: string) =>
     setSalesFilters((prev) => ({ ...prev, [k]: v }));
@@ -1034,7 +1025,7 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
               {selectedStages.length === 0
                 ? 'All stages'
                 : selectedStages.length <= 2
-                  ? selectedStages.map((stage) => STAGE_LABELS[stage] ?? stage).join(', ')
+                  ? selectedStages.map((stage) => stageLabel(stage)).join(', ')
                   : `${selectedStages.length} stages selected`}
             </span>
             <span className="text-stone-400" aria-hidden="true">⌄</span>
@@ -1056,7 +1047,7 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
                 return (
                   <label key={stage} className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-stone-700 hover:bg-stone-50">
                     <input type="checkbox" checked={checked} onChange={() => toggleStage(stage)} className="accent-brand-500" />
-                    {STAGE_LABELS[stage] ?? stage}
+                    {stageLabel(stage)}
                   </label>
                 );
               })}
@@ -1108,7 +1099,7 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
           className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
           style={{ border: '1px solid #EDE8E3', background: salesFilters.source ? '#FDF4EF' : '#FDFAF7' }}>
           <option value="">All sources</option>
-          {SOURCE_FILTER_OPTIONS.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+          {crmSettings().leadSources.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
         {/* Expected OB date range — always visible in toolbar */}
         <div className="flex items-center gap-1 shrink-0">
@@ -1323,7 +1314,7 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
                   }`}>
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className={`w-2 h-2 rounded-full shrink-0 ${STAGE_ACCENT[stage]}`} />
-                      <p className="text-xs font-semibold text-gray-800 flex-1 truncate">{STAGE_LABELS[stage]}</p>
+                      <p className="text-xs font-semibold text-gray-800 flex-1 truncate">{stageLabel(stage)}</p>
                       <span className="text-xs font-bold text-gray-600 bg-white rounded-full w-5 h-5 flex items-center justify-center">
                         {cards.length}
                       </span>
@@ -1366,7 +1357,7 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
       {stageCapture && (
         <StageCaptureModal
           leadName={stageCapture.lead.name}
-          targetStageLabel={STAGE_LABELS[stageCapture.targetStage] ?? stageCapture.targetStage}
+          targetStageLabel={stageLabel(stageCapture.targetStage)}
           initialRating={stageCapture.lead.intentRating}
           initialValue={stageCapture.lead.estimatedValue}
           saving={stageCaptureSaving}
@@ -1380,7 +1371,7 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
       {gateBlocked && (
         <GateBlockedModal
           lead={gateBlocked.lead}
-          targetStageLabel={STAGE_LABELS[gateBlocked.targetStage] ?? gateBlocked.targetStage}
+          targetStageLabel={stageLabel(gateBlocked.targetStage)}
           details={gateBlocked.details}
           onClose={() => setGateBlocked(null)}
           onOpenChecklist={(lead) => { setGateBlocked(null); setChecklistLead(lead); }}

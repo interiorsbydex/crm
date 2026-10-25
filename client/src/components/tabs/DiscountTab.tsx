@@ -3,6 +3,7 @@ import { Check, X, Tag, AlertTriangle, Info, Paperclip } from 'lucide-react';
 import { api, uploadFile } from '../../lib/api';
 import toast from 'react-hot-toast';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import { crmSettings, useCrmSettings } from '../../lib/crmSettings';
 
 interface DiscountRequest {
   id: string;
@@ -33,9 +34,8 @@ const STATUS_COLORS: Record<string, string> = {
   REJECTED: 'bg-red-100 text-red-700',
 };
 
-// ── Approval threshold helper ─────────────────────────────────────────────────
-const WOODWORK_THRESHOLD = 500_000; // ₹5 lakh
-
+// ── Approval threshold helper (limits from Admin → CRM Settings; the server ──
+// applies the same limits when the request is raised) ──────────────────────
 interface ApprovalInfo {
   label: string;
   detail: string;
@@ -44,42 +44,45 @@ interface ApprovalInfo {
   approverRole: 'SELF' | 'BL' | 'BRANCH_HEAD';
 }
 
-function getApprovalInfo(pct: number, woodworkValue: number): ApprovalInfo {
-  const postDiscountWoodwork = woodworkValue * (1 - pct / 100);
-  const woodworkBelowThreshold = postDiscountWoodwork < WOODWORK_THRESHOLD;
+const fmtLakh = (v: number) => (v >= 100_000 ? `₹${+(v / 100_000).toFixed(2)}L` : `₹${v.toLocaleString('en-IN')}`);
 
-  if (woodworkBelowThreshold || pct > 20) {
+function getApprovalInfo(pct: number, woodworkValue: number): ApprovalInfo {
+  const { selfApproveUpToPct: self, blApproveUpToPct: bl, branchHeadUpToPct: bh, woodworkSpecialCaseBelow } = crmSettings().discount;
+  const postDiscountWoodwork = woodworkValue * (1 - pct / 100);
+  const woodworkBelowThreshold = postDiscountWoodwork < woodworkSpecialCaseBelow;
+
+  if (woodworkBelowThreshold || pct > bh) {
     return {
       label: 'Special Case — Branch Head',
       detail: woodworkBelowThreshold
-        ? `Post-discount woodwork (₹${Math.round(postDiscountWoodwork).toLocaleString('en-IN')}) falls below ₹5L threshold → Branch Head required`
-        : 'Discount above 20% → Special case requiring Branch Head approval',
+        ? `Post-discount woodwork (₹${Math.round(postDiscountWoodwork).toLocaleString('en-IN')}) falls below ${fmtLakh(woodworkSpecialCaseBelow)} threshold → Branch Head required`
+        : `Discount above ${bh}% → Special case requiring Branch Head approval`,
       color: 'red',
       isSpecialCase: true,
       approverRole: 'BRANCH_HEAD',
     };
   }
-  if (pct > 15) {
+  if (pct > bl) {
     return {
       label: 'Branch Head approval required',
-      detail: '16–20% discount → goes directly to Branch Head (no BL step)',
+      detail: `Above ${bl}% and up to ${bh}% → goes directly to Branch Head (no BL step)`,
       color: 'orange',
       isSpecialCase: false,
       approverRole: 'BRANCH_HEAD',
     };
   }
-  if (pct > 10) {
+  if (pct > self) {
     return {
       label: 'BL approval required',
-      detail: '11–15% discount → your Business Lead will review',
+      detail: `Above ${self}% and up to ${bl}% → your Business Lead will review`,
       color: 'amber',
       isSpecialCase: false,
       approverRole: 'BL',
     };
   }
   return {
-    label: 'Self-approved (≤ 10%)',
-    detail: 'Discounts up to 10% are auto-approved — no review needed',
+    label: `Self-approved (≤ ${self}%)`,
+    detail: `Discounts up to ${self}% are auto-approved — no review needed`,
     color: 'green',
     isSpecialCase: false,
     approverRole: 'SELF',
@@ -106,6 +109,7 @@ const formatINR = (n: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 
 export default function DiscountTab({ leadId, isLocked }: Props) {
+  const limits = useCrmSettings().discount;
   const [requests, setRequests] = useState<DiscountRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -174,7 +178,7 @@ export default function DiscountTab({ leadId, isLocked }: Props) {
 
       const info = getApprovalInfo(pctNum, Number(form.woodworkValue));
       if (info.approverRole === 'SELF') {
-        toast.success('Discount auto-approved (≤ 10%) ✓');
+        toast.success(`Discount auto-approved (≤ ${crmSettings().discount.selfApproveUpToPct}%) ✓`);
       } else {
         toast.success(`Request submitted — sent to ${info.approverRole === 'BL' ? 'your BL' : 'Branch Head'} for approval`);
       }
@@ -326,19 +330,19 @@ export default function DiscountTab({ leadId, isLocked }: Props) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs text-stone-600">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-              <span><span className="font-semibold">0–10%</span> — Auto-approved (no review)</span>
+              <span><span className="font-semibold">0–{limits.selfApproveUpToPct}%</span> — Auto-approved (no review)</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-              <span><span className="font-semibold">11–15%</span> — BL approval required</span>
+              <span><span className="font-semibold">Up to {limits.blApproveUpToPct}%</span> — BL approval required</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
-              <span><span className="font-semibold">16–20%</span> — Branch Head required</span>
+              <span><span className="font-semibold">Up to {limits.branchHeadUpToPct}%</span> — Branch Head required</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-              <span><span className="font-semibold">&gt;20% or woodwork &lt;₹5L</span> — Special case, Branch Head</span>
+              <span><span className="font-semibold">&gt;{limits.branchHeadUpToPct}% or woodwork &lt;{fmtLakh(limits.woodworkSpecialCaseBelow)}</span> — Special case, Branch Head</span>
             </div>
           </div>
         </div>
@@ -592,7 +596,7 @@ export default function DiscountTab({ leadId, isLocked }: Props) {
                   <span className="font-medium">{req.reviewedBy.name}</span>
                   {req.status === 'REJECTED' && req.reviewerComment && <span className="ml-1">— {req.reviewerComment}</span>}
                   {req.status === 'APPROVED' && <span className="ml-1">
-                    {req.reviewerComment === 'Auto-approved: discount ≤ 10%' ? 'auto-approved this request' : 'approved this request'}
+                    {req.reviewerComment?.startsWith('Auto-approved: discount ≤') ? 'auto-approved this request' : 'approved this request'}
                   </span>}
                 </div>
               )}

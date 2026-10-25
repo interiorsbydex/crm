@@ -18,7 +18,8 @@ import { computeSlaInfoForLeads, computeSlaInfoForLead, getEffectiveStageSla } f
 import { putLeadOnHold, markLeadInactive, reactivateLead } from '../lib/leadStatusActions.js';
 import { buildLeadRoleWhere, userCanAccessLead } from '../lib/leadScope.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
-import { hasAllMqlMandatoryFields } from '../lib/leadMandatoryFields.js';
+import { hasAllMqlMandatoryFields, getLeadMqlMandatoryFields } from '../lib/leadMandatoryFields.js';
+import { getCrmSettings, stageName } from '../lib/crmSettings.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { saveDraft } from '../lib/emailService.js';
 import {
@@ -30,10 +31,16 @@ import {
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
-/** Stage names for the "cannot skip" error message. */
-const STAGE_SKIP_LABELS: Record<string, string> = {
-  DQL: 'DQL', PROPOSAL_READY: 'Proposal Ready', PROPOSAL_DISCUSSION: 'PD (Pitch Discussion)',
-};
+/**
+ * Lead-source filter. Sources are stored as codes (META_ADS) by the new-lead
+ * form, webhooks and imports, but older edits saved the display name
+ * ("Meta Ads"), so a filter matches either, ignoring case.
+ */
+async function sourceWhere(source: string) {
+  const option = (await getCrmSettings()).leadSources.find((s) => s.value === source || s.label.toLowerCase() === source.toLowerCase());
+  const names = Array.from(new Set([source, ...(option ? [option.value, option.label] : [])]));
+  return { OR: names.map((n) => ({ source: { equals: n, mode: 'insensitive' as const } })) };
+}
 
 export const leadsRouter = Router();
 
@@ -126,7 +133,7 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
     const selectedStatuses = status?.split(',').map((s) => s.trim()).filter(Boolean) ?? [];
     if (selectedStatuses.length === 1) where.status = selectedStatuses[0];
     if (selectedStatuses.length > 1) where.status = { in: selectedStatuses };
-    if (source) where.source = source;
+    if (source) where.AND = [...(Array.isArray(where.AND) ? where.AND : []), await sourceWhere(source)];
     if (designerId) {
       // A team member may own the lead as Designer or as CRE (assignedCREId).
       where.AND = [
@@ -425,11 +432,14 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
       isTestLead,
     } = req.body as Record<string, string | undefined> & { isTestLead?: boolean };
 
-    // Every field is mandatory to create a lead except email and estimatedValue
-    // (client budget) — this must mirror the client-side required-field rules
-    // in Layout.tsx's New Lead modal, not just be enforced in the UI.
-    if (!name?.trim() || !phone?.trim() || !projectType?.trim() || !scope?.trim() || !location?.trim() || !possessionTimeline?.trim() || !source?.trim()) {
-      res.status(400).json({ error: 'name, phone, projectType, scope, location, possessionTimeline and source are required' });
+    // Name, phone and source are always required; which project details are
+    // too is set in Admin → CRM Settings ("Details needed for a new lead") and
+    // mirrored by Layout.tsx's New Lead modal, not just enforced in the UI.
+    const detailValues: Record<string, string | undefined> = { projectType, scope, location, possessionTimeline, email, estimatedValue };
+    const missingDetails = (await getLeadMqlMandatoryFields()).filter((f) => !String(detailValues[f] ?? '').trim());
+    if (!name?.trim() || !phone?.trim() || !source?.trim() || missingDetails.length) {
+      const missing = [!name?.trim() && 'name', !phone?.trim() && 'phone', !source?.trim() && 'source', ...missingDetails].filter(Boolean);
+      res.status(400).json({ error: `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} required` });
       return;
     }
     if (!isValidPhoneStrict(phone)) {
@@ -616,7 +626,7 @@ leadsRouter.post(
 
       // This capture form can create either a qualified MQL lead or an
       // incomplete EL lead; only the qualified one should go to a BL.
-      const initialStage = hasAllMqlMandatoryFields({ projectType, scope, location, possessionTimeline })
+      const initialStage = (await hasAllMqlMandatoryFields({ projectType, scope, location, possessionTimeline, email }))
         ? 'MQL'
         : 'EFFECTIVE_LEAD';
 
@@ -811,7 +821,7 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
 
     if (stage) where.stage = stage;
     if (status) where.status = status;
-    if (source) where.source = source;
+    if (source) where.AND = [...(Array.isArray(where.AND) ? where.AND : []), await sourceWhere(source)];
     if (designerId) {
       // A team member may own the lead as Designer or as CRE (assignedCREId).
       where.AND = [
@@ -1195,10 +1205,13 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       // skippable (by default DQL, Proposal Ready and PD) may be jumped over —
       // every other forward move must go one funnel step at a time, even if
       // the accumulated gate requirements happen to be met.
-      const stageRules = await getEffectiveStageRules();
+      // A stage switched off in CRM Settings can always be jumped over.
+      const crmSettings = await getCrmSettings();
+      const savedRules = await getEffectiveStageRules();
+      const stageRules = { ...savedRules, skippableStages: Array.from(new Set([...savedRules.skippableStages, ...crmSettings.hiddenStages])) };
       if (!isBackwardFunnelMove && !isStageJumpAllowed(prevStage, stage, stageRules)) {
         res.status(400).json({
-          error: `Cannot move directly from ${prevStage} to ${stage} — ${describeAllowedSkips(stageRules, (s) => STAGE_SKIP_LABELS[s] ?? s)}.`,
+          error: `Cannot move directly from ${stageName(crmSettings, prevStage)} to ${stageName(crmSettings, stage)} — ${describeAllowedSkips(stageRules, (s) => stageName(crmSettings, s))}.`,
         });
         return;
       }

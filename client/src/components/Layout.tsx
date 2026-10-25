@@ -13,7 +13,7 @@ import { getStoredUser, logout } from '../lib/auth';
 import { validateEmail, validatePhoneStrict } from '../lib/validation';
 import PhoneInput from './PhoneInput';
 import LeadLocationSelector from './LeadLocationSelector';
-import { SOURCE_OPTIONS } from '../lib/leadSources';
+import { loadCrmSettings, useCrmSettings } from '../lib/crmSettings';
 import { DateInput } from './ui/DateTimeInputs';
 import { todayISTDateString } from '../lib/dateFormat';
 
@@ -103,6 +103,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const user = getStoredUser();
+  // Pages read their dropdown lists and stage names from CRM Settings, so
+  // wait for them (or for the load to fail, falling back to built-in values).
+  const [settingsReady, setSettingsReady] = useState(false);
+  useEffect(() => {
+    loadCrmSettings().catch(() => {}).finally(() => setSettingsReady(true));
+  }, []);
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState('');
@@ -123,8 +129,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', source: '', sourceOther: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '', isTestLead: false });
   const [newLeadErrors, setNewLeadErrors] = useState<Record<string, string>>({});
   const [newLeadPossessionMode, setNewLeadPossessionMode] = useState<'custom' | 'received'>('custom');
-  // Everything is mandatory to create a lead except Estimated/Client Budget and Email.
-  const NEW_LEAD_REQUIRED = ['name', 'phone', 'projectType', 'scope', 'location', 'possessionTimeline', 'source'];
+  // Name, phone and source are always mandatory; which project details are
+  // too comes from Admin → CRM Settings (the server enforces the same list).
+  const crm = useCrmSettings();
+  const NEW_LEAD_REQUIRED = ['name', 'phone', 'source', ...crm.leadCreateRequired];
+  const isRequired = (key: string) => NEW_LEAD_REQUIRED.includes(key);
 
   // This is the one canonical "New Lead" flow in the app — other pages (e.g. the
   // Leads list) just dispatch this event instead of keeping their own form/state.
@@ -233,8 +242,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newLead.name || !newLead.phone || !newLead.projectType || !newLead.scope || !newLead.location || !newLead.possessionTimeline || !newLead.source) {
-      toast.error('All fields except email and client budget are required'); return;
+    const missing = NEW_LEAD_REQUIRED.filter((k) => !String((newLead as Record<string, unknown>)[k] ?? '').trim());
+    if (missing.length) {
+      setNewLeadErrors((prev) => ({ ...prev, ...Object.fromEntries(missing.map((k) => [k, 'This field is required'])) }));
+      toast.error('Please fill in the required fields'); return;
     }
     if (newLead.source === 'OTHER' && !newLead.sourceOther.trim()) {
       setNewLeadErrors((prev) => ({ ...prev, sourceOther: 'Enter a lead source' }));
@@ -490,7 +501,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto">
-          {children}
+          {settingsReady ? children : null}
         </main>
       </div>
 
@@ -507,10 +518,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               {[
                 { key: 'name', label: 'Full Name', required: true, placeholder: 'Priya Sharma', span: 2 },
                 { key: 'phone', label: 'Phone', required: true, placeholder: '+91 98765 43210' },
-                { key: 'email', label: 'Email', required: false, placeholder: 'priya@example.com' },
-                { key: 'projectType', label: 'Project Type', required: true, placeholder: '2BHK / Villa' },
-                { key: 'scope', label: 'Scope of Work', required: true, placeholder: 'FHD / Modulars / Kitchen' },
-                { key: 'location', label: 'Location', required: true, placeholder: 'Whitefield, Bangalore' },
+                { key: 'email', label: 'Email', required: isRequired('email'), placeholder: 'priya@example.com' },
+                { key: 'projectType', label: 'Project Type', required: isRequired('projectType'), placeholder: '2BHK / Villa' },
+                { key: 'scope', label: 'Scope of Work', required: isRequired('scope'), placeholder: 'FHD / Modulars / Kitchen' },
+                { key: 'location', label: 'Location', required: isRequired('location'), placeholder: 'Whitefield, Bangalore' },
               ].map((f) => (
                 <div key={f.key} className={(f as any).span === 2 ? 'col-span-2' : ''}>
                   <label className="block text-xs font-semibold text-stone-600 mb-1.5">
@@ -529,7 +540,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       value={newLead.location}
                       onChange={(location) => setNewLead({ ...newLead, location })}
                       onBlur={() => validateNewLeadField('location', newLead.location)}
-                      required
+                      required={isRequired('location')}
                       hasError={!!newLeadErrors.location}
                     />
                   ) : (
@@ -551,7 +562,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               ))}
               <div>
                 <label className="block text-xs font-semibold text-stone-600 mb-1.5">
-                  Possession<span className="text-brand-500 ml-0.5">*</span>
+                  Possession{isRequired('possessionTimeline') && <span className="text-brand-500 ml-0.5">*</span>}
                 </label>
                 <select
                   value={newLeadPossessionMode === 'received' ? 'Possession Received' : 'Custom date'}
@@ -578,7 +589,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     setNewLead({ ...newLead, possessionTimeline: v });
                     validateNewLeadField('possessionTimeline', v);
                   }}
-                  required
+                  required={isRequired('possessionTimeline')}
                   className={`w-full rounded-xl px-3 py-2.5 text-sm mt-2 bg-[#FDFAF7] focus:outline-none focus:ring-2 transition-all ${newLeadErrors.possessionTimeline ? 'border-red-500' : 'border-[#EDE8E3]'}`}
                 />}
                 {newLeadErrors.possessionTimeline && (
@@ -586,7 +597,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 )}
               </div>
               <div>
-                <label className="block text-xs font-semibold text-stone-600 mb-1.5">Client Budget (₹)</label>
+                <label className="block text-xs font-semibold text-stone-600 mb-1.5">Client Budget (₹){isRequired('estimatedValue') && <span className="text-brand-500 ml-0.5">*</span>}</label>
                 <input
                   type="number"
                   value={newLead.estimatedValue}
@@ -623,7 +634,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   style={{ border: newLeadErrors.source ? '1px solid #EF4444' : '1px solid #EDE8E3', background: '#FDFAF7' }}
                 >
                   <option value="">Select source</option>
-                  {SOURCE_OPTIONS.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+                  {crm.leadSources.filter((s) => s.active).map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
                 {newLeadErrors.source && (
                   <p className="text-[11px] text-red-500 mt-1">{newLeadErrors.source}</p>

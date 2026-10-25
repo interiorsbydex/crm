@@ -27,6 +27,7 @@ import OBOBMChecklistPanel from '../components/OBOBMChecklistPanel';
 import StageCaptureModal from '../components/StageCaptureModal';
 import EmailPreviewModal from '../components/EmailPreviewModal';
 import { getStoredUser } from '../lib/auth';
+import { stageLabel, sourceValue, useCrmSettings, sourceLabel } from '../lib/crmSettings';
 
 // 'activity' = combined Calls + Meetings + Tasks feed (new)
 // 'audit'    = system audit log + ChatTab (renamed from 'activity')
@@ -121,28 +122,8 @@ const STAGE_COLORS: Record<string, string> = {
   ON_HOLD: 'bg-stone-100 text-stone-600',
 };
 
-const REACTIVATION_REASONS = ['Client re-engaged', 'Budget approved', 'Timeline resumed', 'Inactivated by Mistake', 'Other'];
-const INACTIVE_REASONS = [
-  'No Response', 'Budget Constraint', 'Quality Constraint', 'Timeline Constraint',
-  "Client Won't Move Out During Execution", 'UPVC Material Required', 'SS Material Required',
-  'Stone Material Required', 'Aluminium Material Required', 'No Scope for Interiors',
-  'Onboarded with Other Interior', 'Onboarded with Other Vendor', 'Window Shopping',
-  'Service Out of Location', 'Project Value Below 5L', 'Repeated Lead', 'Invalid Number',
-  'Has Not Bought Property Yet', 'Others',
-];
-// Distinct from INACTIVE_REASONS above — this is the On Hold form's own reason list.
-const ON_HOLD_REASONS = ['Client Requested', 'Budget Issue', 'Site Not Ready'];
+// On-hold, inactive and reactivation reasons come from Admin → CRM Settings.
 
-const STAGE_LABELS: Record<string, string> = {
-  EFFECTIVE_LEAD: 'Effective Lead', MQL: 'MQL', DQL: 'DQL',
-  PROPOSAL_READY: 'Proposal Ready', PROPOSAL_PRESENTED: 'Proposal Presented',
-  PROPOSAL_DISCUSSION: 'PD (Pitch Discussion)',
-  ONBOARDING: 'Onboarding', ONBOARDING_MEETING: 'Onboarding Meeting',
-  DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',
-  // Legacy stage values — no longer assignable, kept only so historical
-  // rows/activity-log entries still render a label.
-  INACTIVE: 'Inactive', ON_HOLD: 'On Hold',
-};
 
 // Task #88: ON_HOLD/INACTIVE are status values now, not stages — removed
 // from the assignable stage list. Status is changed via the dedicated
@@ -274,10 +255,6 @@ function isIsoDateString(v: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(v);
 }
 
-const SOURCE_OPTIONS = [
-  'Meta Ads', 'Google Ads', 'Referral', 'Walk-in', 'Manual',
-  'Website', 'Instagram', 'WhatsApp', 'LinkedIn', 'Affiliate Marketing', 'Other',
-];
 
 /** Gate requirements to show in the stage roadmap ℹ popover (mirrors stageRequirements.ts) */
 /** Funnel stages shown in the horizontal roadmap. EFFECTIVE_LEAD/HANDED_OVER are
@@ -289,7 +266,7 @@ const FUNNEL_STAGES = [
 ];
 
 // Abbreviated stage codes used ONLY in the stage roadmap nav pill row.
-// Full label 'PD (Pitch Discussion)' is in STAGE_LABELS above — do not
+// Full label 'PD (Pitch Discussion)' comes from stageLabel() — do not
 // change the abbreviations here; they are intentionally short for the pill UI.
 const FUNNEL_ABBREV: Record<string, string> = {
   EFFECTIVE_LEAD: 'EL', MQL: 'MQL', DQL: 'DQL',
@@ -310,6 +287,7 @@ function fmtDateTime(iso?: string) {
 }
 
 export default function LeadDetail() {
+  const crm = useCrmSettings();
   const lenient = useLenientLaunch();
   const { leadId } = useParams<{ leadId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -628,8 +606,10 @@ export default function LeadDetail() {
       scope: lead.scope ?? '',
       location: lead.location ?? '',
       builder: lead.builder ?? '',
-      source: lead.source && !SOURCE_OPTIONS.includes(lead.source) ? 'Other' : (lead.source ?? ''),
-      sourceOther: lead.source && !SOURCE_OPTIONS.includes(lead.source) ? lead.source : '',
+      // Sources are stored as codes (META_ADS); older edits saved the name
+      // ("Meta Ads") — both map to the listed option. Anything else is "Other".
+      source: lead.source ? (sourceValue(lead.source) || 'OTHER') : '',
+      sourceOther: lead.source && !sourceValue(lead.source) ? lead.source : '',
       estimatedValue: lead.estimatedValue != null ? String(lead.estimatedValue) : '',
       expectedMoveIn: lead.expectedMoveIn ? istDateOnly(lead.expectedMoveIn) : '',
       expectedObDate: lead.expectedObDate ? istDateOnly(lead.expectedObDate) : '',
@@ -669,7 +649,7 @@ export default function LeadDetail() {
         if (err) errors[key] = err;
       }
     }
-    if ((changedKeys.includes('source') || changedKeys.includes('sourceOther')) && editDetails.source === 'Other' && !editDetails.sourceOther.trim()) {
+    if ((changedKeys.includes('source') || changedKeys.includes('sourceOther')) && editDetails.source === 'OTHER' && !editDetails.sourceOther.trim()) {
       errors.sourceOther = 'Enter a lead source';
     }
     if (Object.keys(errors).length > 0) {
@@ -695,7 +675,7 @@ export default function LeadDetail() {
         scope: editDetails.scope.trim() || null,
         location: editDetails.location.trim() || null,
         builder: editDetails.builder.trim() || null,
-        source: editDetails.source === 'Other'
+        source: editDetails.source === 'OTHER'
           ? editDetails.sourceOther.trim() || null
           : editDetails.source.trim() || null,
         estimatedValue: editDetails.estimatedValue.trim() || null,
@@ -747,19 +727,8 @@ export default function LeadDetail() {
   const handleStageChange = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStage || newStage === lead?.stage) { setStageModal(false); return; }
-    // Validate skip: only DQL, PR, and PD may be jumped over
-    const SKIPPABLE_STAGES = new Set(['DQL', 'PROPOSAL_READY', 'PROPOSAL_DISCUSSION']);
-    const fromIdx = lead ? FUNNEL_STAGES.indexOf(lead.stage) : -1;
-    const toIdx = FUNNEL_STAGES.indexOf(newStage);
-    // Client-approved shortcut: MQL → Onboarding directly.
-    const isMqlToObShortcut = lead?.stage === 'MQL' && newStage === 'ONBOARDING';
-    if (fromIdx !== -1 && toIdx > fromIdx + 1 && !isMqlToObShortcut) {
-      const nonSkippable = FUNNEL_STAGES.slice(fromIdx + 1, toIdx).filter((s) => !SKIPPABLE_STAGES.has(s));
-      if (nonSkippable.length > 0) {
-        toast.error(`Cannot skip ${nonSkippable.map((s) => FUNNEL_ABBREV[s] ?? s).join(', ')} — only DQL, PR, and PD can be bypassed (or MQL → OB directly)`);
-        return;
-      }
-    }
+    // Which stages may be skipped is decided by the server (Admin → Stage Rules);
+    // a refused jump comes back with an explanation in the next step.
     setStageModal(false);
     setStageCaptureError(null);
     setStageCapture({ targetStage: newStage });
@@ -793,7 +762,7 @@ export default function LeadDetail() {
           ...(value !== null && { estimatedValue: value }),
         },
       );
-      toast.success(`Stage → ${STAGE_LABELS[stageCapture.targetStage] ?? stageCapture.targetStage}${result.blAutoAssignment === 'assigned' ? ' — BL assigned automatically' : ''}`);
+      toast.success(`Stage → ${stageLabel(stageCapture.targetStage)}${result.blAutoAssignment === 'assigned' ? ' — BL assigned automatically' : ''}`);
       if (result.gateWarnings?.length) {
         toast(`Moved with missing items: ${result.gateWarnings.join('; ')}`, { duration: 9000, icon: '⚠️' });
       }
@@ -1149,11 +1118,11 @@ export default function LeadDetail() {
                     sitting there so the dropdown reflects its real stage. */}
                 {LEGACY_STAGES.includes(lead?.stage ?? '') && (
                   <option key={lead!.stage} value={lead!.stage} disabled>
-                    {STAGE_LABELS[lead!.stage] ?? lead!.stage} (legacy — current)
+                    {stageLabel(lead!.stage)} (legacy — current)
                   </option>
                 )}
-                {(currentUser?.role === 'CRE' ? ['MQL'] : SELECTABLE_STAGES).map((s) => (
-                  <option key={s} value={s}>{STAGE_LABELS[s] ?? s}</option>
+                {(currentUser?.role === 'CRE' ? ['MQL'] : SELECTABLE_STAGES.filter((s) => !crm.hiddenStages.includes(s) || s === lead?.stage)).map((s) => (
+                  <option key={s} value={s}>{stageLabel(s)}</option>
                 ))}
               </select>
               <div className="flex gap-3">
@@ -1175,7 +1144,7 @@ export default function LeadDetail() {
       {stageCapture && lead && (
         <StageCaptureModal
           leadName={lead.name}
-          targetStageLabel={STAGE_LABELS[stageCapture.targetStage] ?? stageCapture.targetStage}
+          targetStageLabel={stageLabel(stageCapture.targetStage)}
           initialRating={lead.intentRating}
           initialValue={lead.estimatedValue}
           saving={changingStage}
@@ -1193,7 +1162,7 @@ export default function LeadDetail() {
               {statusModal === 'ON_HOLD' ? 'Place On Hold' : 'Mark Inactive'}
             </h3>
             <p className="text-xs text-stone-400 mb-4">
-              The lead stays at <strong>{STAGE_LABELS[lead?.stage ?? ''] ?? lead?.stage}</strong> — only its status changes.
+              The lead stays at <strong>{stageLabel(lead?.stage ?? '')}</strong> — only its status changes.
             </p>
             <form onSubmit={handleSetStatus} className="space-y-3">
               {statusModal === 'INACTIVE' && (
@@ -1206,7 +1175,7 @@ export default function LeadDetail() {
                       className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                       style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
                       <option value="">Select a reason…</option>
-                      {INACTIVE_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                      {crm.inactiveReasons.map((r) => <option key={r} value={r}>{r}</option>)}
                     </select>
                   </div>
                   {inactiveReasonChoice === 'Others' && (
@@ -1273,7 +1242,7 @@ export default function LeadDetail() {
                       className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                       style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
                       <option value="">Select a reason…</option>
-                      {ON_HOLD_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                      {crm.onHoldReasons.map((r) => <option key={r} value={r}>{r}</option>)}
                     </select>
                   </div>
                   <div>
@@ -1441,9 +1410,9 @@ export default function LeadDetail() {
                       style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
                     >
                       <option value="">Select source…</option>
-                      {SOURCE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                      {crm.leadSources.filter((s) => s.active || s.value === editDetails.source).map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                     </select>
-                    {editDetails.source === 'Other' && (
+                    {editDetails.source === 'OTHER' && (
                       <>
                         <input
                           type="text"
@@ -1580,7 +1549,7 @@ export default function LeadDetail() {
           <div className="bg-white rounded-3xl shadow-warm-lg w-full max-w-sm p-6">
             <h3 className="font-bold text-stone-900 mb-1 tracking-tight">Reactivate Lead</h3>
             <p className="text-xs text-stone-400 mb-4">
-              Status returns to Active — the lead stays at <strong>{STAGE_LABELS[lead.stage] ?? lead.stage}</strong>, its stage never moved.
+              Status returns to Active — the lead stays at <strong>{stageLabel(lead.stage)}</strong>, its stage never moved.
             </p>
             <form onSubmit={handleReactivate} className="space-y-4">
               <div>
@@ -1592,7 +1561,7 @@ export default function LeadDetail() {
                   className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                   style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
                   <option value="">Select a reason…</option>
-                  {REACTIVATION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                  {crm.reactivationReasons.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               {reactivateReason === 'Other' && (
@@ -1685,13 +1654,7 @@ export default function LeadDetail() {
                 className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                 style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
                 <option value="">Select category…</option>
-                <option value="Delayed internal Response">Delayed internal Response</option>
-                <option value="Budget Concern">Budget Concern</option>
-                <option value="Requirement / Scope Unclear">Requirement / Scope Unclear</option>
-                <option value="Timeline / TAT Deviation">Timeline / TAT Deviation</option>
-                <option value="Process Deviation">Process Deviation</option>
-                <option value="Communication Deviation">Communication Deviation</option>
-                <option value="Escalation / Cancellation Risk">Escalation / Cancellation Risk</option>
+                {crm.flagCategories.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div className="mb-4">
@@ -1785,7 +1748,7 @@ export default function LeadDetail() {
                   className={`text-xs px-2.5 py-0.5 rounded-full font-semibold transition-opacity ${STAGE_COLORS[lead.stage] ?? 'bg-stone-100 text-stone-600'} ${!canChangeStage ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'}`}
                   title={stageChangeTitle}
                 >
-                  <span className="flex items-center gap-1">{STAGE_LABELS[lead.stage] ?? lead.stage} {canChangeStage && <ChevronDown size={10} strokeWidth={2.5} />}</span>
+                  <span className="flex items-center gap-1">{stageLabel(lead.stage)} {canChangeStage && <ChevronDown size={10} strokeWidth={2.5} />}</span>
                 </button>
                 {/* Task #88: status badge, decoupled from stage */}
                 {lead.status !== 'ACTIVE' && (
@@ -2261,7 +2224,7 @@ export default function LeadDetail() {
                               >
                                 <td className="py-2 px-3">
                                   <span className={`font-semibold ${isCurrent ? 'text-brand-600' : isFuture ? 'text-stone-400' : 'text-stone-700'}`}>
-                                    {STAGE_LABELS[stage] ?? stage}
+                                    {stageLabel(stage)}
                                   </span>
                                   {isCurrent && (
                                     <span className="ml-1 text-[8px] font-bold text-brand-400 uppercase tracking-wide">current</span>
@@ -2373,7 +2336,7 @@ export default function LeadDetail() {
                       ? formatISTDate(lead.expectedObDate, { year: 'numeric' })
                       : undefined} />
                     <FactRow label="Possession" value={formatPossession(lead.possessionTimeline)} />
-                    <FactRow label="Source" value={lead.source?.replace(/_/g, ' ')} />
+                    <FactRow label="Source" value={lead.source ? sourceLabel(lead.source) : undefined} />
                   </div>
 
                   {/* Offers */}
@@ -2730,7 +2693,7 @@ export default function LeadDetail() {
           <SidebarCard title="Source & Campaign">
             {lead ? (
               <>
-                <InfoRow label="Source" value={lead.source?.replace(/_/g, ' ')} />
+                <InfoRow label="Source" value={lead.source ? sourceLabel(lead.source) : undefined} />
                 <InfoRow label="Ad/Campaign" value={lead.adName} />
                 <InfoRow label="UTM Campaign" value={lead.utmCampaign} />
                 <InfoRow label="UTM AdSet" value={lead.utmAdSet} />

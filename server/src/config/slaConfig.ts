@@ -137,6 +137,8 @@ export function computeDesignPipelineTimeline(
   obm: Partial<Record<NonNullable<DesignPhaseDef['dateField']>, Date | null>> | null | undefined,
   fallbackKickoff: Date,
   now: Date = new Date(),
+  /** Admin → CRM Settings design days; defaults to the constants above. */
+  budget: { phaseDays: Record<string, number>; overallDays: number } = { phaseDays: DESIGN_PHASE_DEFAULT_DAYS, overallDays: DESIGN_OVERALL_SLA_DAYS },
 ): DesignPipelineTimeline {
   const dates = DESIGN_PHASES.map((phase) =>
     phase.dateField ? obm?.[phase.dateField] ?? null : null,
@@ -170,7 +172,7 @@ export function computeDesignPipelineTimeline(
     const elapsedDays = daysBetween(startDate, endpoint);
     const allocatedDays = nextDate
       ? daysBetween(startDate, nextDate)
-      : DESIGN_PHASE_DEFAULT_DAYS[phase.key];
+      : budget.phaseDays[phase.key];
 
     let slaStatus: SlaStatus = 'ok';
     if (elapsedDays > allocatedDays) slaStatus = 'breach';
@@ -190,18 +192,18 @@ export function computeDesignPipelineTimeline(
   const kickoff = effectiveKickoff ?? fallbackKickoff;
   const hasStarted = !!effectiveKickoff;
   const overallElapsedDays = hasStarted ? daysBetween(kickoff, now) : null;
-  const overallRemainingDays = overallElapsedDays != null ? DESIGN_OVERALL_SLA_DAYS - overallElapsedDays : null;
+  const overallRemainingDays = overallElapsedDays != null ? budget.overallDays - overallElapsedDays : null;
   let overallStatus: SlaStatus = 'ok';
   if (overallElapsedDays != null) {
-    if (overallElapsedDays >= DESIGN_OVERALL_SLA_DAYS) overallStatus = 'breach';
-    else if (overallElapsedDays >= Math.ceil(DESIGN_OVERALL_SLA_DAYS * 0.7)) overallStatus = 'warning';
+    if (overallElapsedDays >= budget.overallDays) overallStatus = 'breach';
+    else if (overallElapsedDays >= Math.ceil(budget.overallDays * 0.7)) overallStatus = 'warning';
   }
 
   return {
     kickoffDate: effectiveKickoff ? effectiveKickoff.toISOString() : null,
     overallElapsedDays,
     overallRemainingDays,
-    overallSlaDays: DESIGN_OVERALL_SLA_DAYS,
+    overallSlaDays: budget.overallDays,
     overallStatus,
     phases,
   };

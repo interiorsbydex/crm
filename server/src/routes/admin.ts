@@ -27,6 +27,10 @@ import { defaultStageRules, FUNNEL_EDGES, SKIPPABLE_CANDIDATES, WARNABLE_TARGETS
 import {
   DOCUMENT_TYPES_CONFIG_KEY, documentTypeOverridesSchema, loadDocumentTypeOverrides, resolveDocumentTypes,
 } from '../lib/documentTypes.js';
+import {
+  CrmSettingsError, DEFAULT_CRM_SETTINGS, LEAD_DETAIL_OPTIONS, HIDEABLE_STAGES, NAMEABLE_STAGES, DESIGN_PHASE_KEYS,
+  loadCrmSettingsState, saveCrmSettings, resetCrmSettings, crmSettingsHistory,
+} from '../lib/crmSettings.js';
 
 export const adminRouter = Router();
 
@@ -982,6 +986,52 @@ adminRouter.delete('/stage-rules', async (req, res) => {
     res.json(await loadStageRulesState());
   } catch (err: any) {
     sendStageRulesError(res, err);
+  }
+});
+
+// ── CRM settings (Admin → CRM Settings) ───────────────────────────────────────
+// Lists and simple numbers the client controls (lib/crmSettings.ts).
+function sendCrmSettingsError(res: any, err: any) {
+  if (err instanceof CrmSettingsError) res.status(err.status).json({ error: err.message, problems: err.problems });
+  else res.status(500).json({ error: err.message });
+}
+
+adminRouter.get('/crm-settings', async (_req, res) => {
+  try {
+    res.json({
+      ...(await loadCrmSettingsState()),
+      defaults: DEFAULT_CRM_SETTINGS,
+      catalog: { leadDetails: LEAD_DETAIL_OPTIONS, hideableStages: HIDEABLE_STAGES, nameableStages: NAMEABLE_STAGES, designPhases: DESIGN_PHASE_KEYS },
+    });
+  } catch (err: any) {
+    sendCrmSettingsError(res, err);
+  }
+});
+
+adminRouter.put('/crm-settings', async (req, res) => {
+  try {
+    const { settings, revision, note } = req.body as { settings?: unknown; revision?: unknown; note?: string };
+    const saved = await saveCrmSettings(settings, revision, req.user!.id, typeof note === 'string' ? note : undefined);
+    res.json({ revision: saved.revision, updatedAt: saved.updatedAt, settings: saved.settings });
+  } catch (err: any) {
+    sendCrmSettingsError(res, err);
+  }
+});
+
+adminRouter.get('/crm-settings/history', async (_req, res) => {
+  try {
+    res.json({ history: await crmSettingsHistory() });
+  } catch (err: any) {
+    sendCrmSettingsError(res, err);
+  }
+});
+
+adminRouter.delete('/crm-settings', async (req, res) => {
+  try {
+    await resetCrmSettings(req.user!.id);
+    res.json(await loadCrmSettingsState());
+  } catch (err: any) {
+    sendCrmSettingsError(res, err);
   }
 });
 

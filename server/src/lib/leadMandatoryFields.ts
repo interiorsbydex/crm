@@ -1,18 +1,19 @@
-/**
- * Canonical mandatory project-detail fields a lead must have before it can be
- * promoted out of EFFECTIVE_LEAD into MQL (the funnel's real starting point).
- *
- * This is the same list the primary `POST /api/leads` form has always
- * required (name/phone/source have their own dedicated checks per route, so
- * they're intentionally not part of this list). Every lead-creation path that
- * decides whether a new lead is complete enough for MQL must import this
- * list rather than inventing its own copy — see stageRequirements.ts, which
- * documents EL→MQL as "enforced at lead creation, no runtime gate needed
- * here" and assumes this exact list is what performs that enforcement.
- */
-export const LEAD_MQL_MANDATORY_FIELDS = ['projectType', 'scope', 'location', 'possessionTimeline'] as const;
+import { getCrmSettings } from './crmSettings.js';
 
-export type LeadMqlMandatoryField = (typeof LEAD_MQL_MANDATORY_FIELDS)[number];
+/**
+ * The project details a lead must have before it counts as MQL (the funnel's
+ * real starting point) — Admin → CRM Settings → "Details needed for a new
+ * lead". Defaults to projectType, scope, location and possessionTimeline.
+ *
+ * The primary `POST /api/leads` form requires exactly these (plus name, phone
+ * and source, which have their own checks per route), and every other
+ * lead-creation path (webhooks, manual capture) uses the same list to decide
+ * between MQL and Effective Lead — see stageRequirements.ts, which documents
+ * EL→MQL as "enforced at lead creation, no runtime gate needed here".
+ */
+export async function getLeadMqlMandatoryFields(): Promise<string[]> {
+  return (await getCrmSettings()).leadCreateRequired;
+}
 
 function hasValue(v: unknown): boolean {
   if (v === null || v === undefined) return false;
@@ -21,15 +22,11 @@ function hasValue(v: unknown): boolean {
 }
 
 /** True when every MQL-mandatory field is present on the candidate lead data. */
-export function hasAllMqlMandatoryFields(
-  data: Partial<Record<LeadMqlMandatoryField, unknown>>,
-): boolean {
-  return LEAD_MQL_MANDATORY_FIELDS.every((f) => hasValue(data[f]));
+export async function hasAllMqlMandatoryFields(data: Record<string, unknown>): Promise<boolean> {
+  return (await getLeadMqlMandatoryFields()).every((f) => hasValue(data[f]));
 }
 
 /** Which MQL-mandatory fields are missing — useful for logging/diagnostics. */
-export function missingMqlMandatoryFields(
-  data: Partial<Record<LeadMqlMandatoryField, unknown>>,
-): LeadMqlMandatoryField[] {
-  return LEAD_MQL_MANDATORY_FIELDS.filter((f) => !hasValue(data[f]));
+export async function missingMqlMandatoryFields(data: Record<string, unknown>): Promise<string[]> {
+  return (await getLeadMqlMandatoryFields()).filter((f) => !hasValue(data[f]));
 }

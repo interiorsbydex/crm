@@ -5,8 +5,8 @@ import { Users, AlertTriangle, Search, SlidersHorizontal, X } from 'lucide-react
 import { api } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
 import StatusBadge, { STATUS_LABELS, STATUS_COLORS } from '../components/StatusBadge';
-import { SOURCE_OPTIONS } from '../lib/leadSources';
 import { DateInput } from '../components/ui/DateTimeInputs';
+import { stageLabel, crmSettings, sourceLabel } from '../lib/crmSettings';
 
 /** Clickable star input for exact-match intent filter (e.g. "2 stars" shows only 2-star leads).
  * Mirrors the StarFilter in Pipeline.tsx so the two filter panels look identical. */
@@ -79,18 +79,10 @@ const STAGE_COLORS: Record<string, string> = {
   ON_HOLD: 'bg-stone-100 text-stone-600',
 };
 
-// Kept in lockstep with Pipeline.tsx's STAGE_LABELS — the abbreviations that
+// Stage names come from stageLabel() (Admin → CRM Settings) — the abbreviations that
 // used to live here (PP/PD/EL) disagreed with the Sales Pipeline's full-name
 // labels for the exact same enum values, which was confusing when comparing
 // the two views of the same leads.
-const STAGE_LABELS: Record<string, string> = {
-  EFFECTIVE_LEAD: 'Effective Lead', MQL: 'MQL', DQL: 'DQL',
-  PROPOSAL_READY: 'Proposal Ready', PROPOSAL_PRESENTED: 'Proposal Presented',
-  PROPOSAL_DISCUSSION: 'PD (Pitch Discussion)',
-  ONBOARDING: 'Onboarding', ONBOARDING_MEETING: 'Onboarding Meeting',
-  DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',
-  INACTIVE: 'Inactive', ON_HOLD: 'On Hold',
-};
 
 // Task #88: ON_HOLD/INACTIVE are status values, not stages — dropped from
 // the stage filter options (the separate Status filter covers them).
@@ -474,7 +466,7 @@ export default function LeadList() {
             className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
             style={{ border: '1px solid #EDE8E3', background: filters.stage ? '#FDF4EF' : '#FDFAF7' }}>
             <option value="">All stages</option>
-            {STAGE_OPTIONS.map((s) => <option key={s} value={s}>{STAGE_LABELS[s] ?? s}</option>)}
+            {STAGE_OPTIONS.map((s) => <option key={s} value={s}>{stageLabel(s)}</option>)}
           </select>
           {/* Status */}
           <select value={filters.status} onChange={(e) => setFilter('status', e.target.value)}
@@ -490,7 +482,7 @@ export default function LeadList() {
             className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
             style={{ border: '1px solid #EDE8E3', background: filters.source ? '#FDF4EF' : '#FDFAF7' }}>
             <option value="">All sources</option>
-            {SOURCE_OPTIONS.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+            {crmSettings().leadSources.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
           {/* Lead allocation — matches either the assigned Designer or BL */}
           <select
@@ -700,7 +692,7 @@ export default function LeadList() {
                           </td>
                           <td className="py-3 px-4">
                             <span className={`text-xs px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${STAGE_COLORS[lead.stage] ?? 'bg-stone-100 text-stone-600'}`}>
-                              {STAGE_LABELS[lead.stage] ?? lead.stage}
+                              {stageLabel(lead.stage)}
                             </span>
                           </td>
                           <td className="py-3 px-4">
@@ -718,7 +710,7 @@ export default function LeadList() {
                           {userRole !== 'DESIGNER' && (
                             <td className="py-3 px-4">{avatar(lead.assignedDesigner?.name) ?? <span className="text-stone-300 text-xs">—</span>}</td>
                           )}
-                          <td className="py-3 px-4 text-stone-500 text-xs whitespace-nowrap">{lead.source?.replace(/_/g, ' ') ?? '—'}</td>
+                          <td className="py-3 px-4 text-stone-500 text-xs whitespace-nowrap">{lead.source ? sourceLabel(lead.source) : '—'}</td>
                           {userRole === 'DESIGNER' ? (
                             <>
                               <td title={tatTitle(lead.daysLeadToDQL, TAT_STANDARD_DAYS.leadToDql)} className={`py-3 px-4 text-xs text-center tabular-nums font-semibold ${tatColor(lead.daysLeadToDQL, TAT_STANDARD_DAYS.leadToDql)}`}>{lead.daysLeadToDQL != null ? `${lead.daysLeadToDQL}d` : '—'}</td>

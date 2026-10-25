@@ -1,14 +1,8 @@
-const STAGE_LABELS: Record<string, string> = {
-  EFFECTIVE_LEAD: 'Effective Lead', MQL: 'MQL', DQL: 'DQL',
-  PROPOSAL_READY: 'Proposal Ready', PROPOSAL_PRESENTED: 'Proposal Presented',
-  PROPOSAL_DISCUSSION: 'PD (Pitch Discussion)',
-  ONBOARDING: 'Onboarding', ONBOARDING_MEETING: 'Onboarding Meeting',
-  DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',
-  INACTIVE: 'Inactive', ON_HOLD: 'On Hold',
-};
+import { stageLabel as settingsStageLabel } from './crmSettings';
 
+/** Stage names follow Admin → CRM Settings. */
 function stageLabel(s?: string) {
-  return s ? (STAGE_LABELS[s] ?? s.replace(/_/g, ' ')) : '—';
+  return s ? settingsStageLabel(s) : '—';
 }
 
 function fmtWhen(iso?: string) {
