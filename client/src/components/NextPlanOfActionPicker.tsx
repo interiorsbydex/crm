@@ -1,6 +1,7 @@
 import type { NextPlanItem } from '../lib/api';
 import { istDatetimeLocalValue } from '../lib/dateFormat';
 import { DateInput, TimeInput, DateTimeInput } from './ui/DateTimeInputs';
+import { meetingModeOptions } from '../lib/meetingSettings';
 
 /**
  * Shared "next plan of action" multi-select (Task #86) — used by both the
@@ -15,13 +16,6 @@ const MEETING_TYPES = [
   { value: 'PD', label: 'PD' },
   { value: 'ONBOARDING', label: 'OB' },
   { value: 'OBM', label: 'OBM' },
-];
-const MEETING_MODES = [
-  { value: 'EC_VISIT', label: 'EC Visit' },
-  { value: 'SITE_VISIT', label: 'Site Visit' },
-  { value: 'VIRTUAL', label: 'Virtual' },
-  { value: 'PUBLIC_PLACE', label: 'Public Place' },
-  { value: 'CLIENT_PLACE', label: "Client's Place" },
 ];
 function emptyItem(kind: NextPlanItem['kind']): NextPlanItem {
   return { kind, sendExternalMail: false };
@@ -135,7 +129,7 @@ export default function NextPlanOfActionPicker({ items, onChange }: Props) {
                 className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
               >
                 <option value="">Mode…</option>
-                {MEETING_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                {meetingModeOptions().map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
               <DateTimeInput
                 required

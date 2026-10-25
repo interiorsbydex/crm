@@ -13,6 +13,7 @@ import { logGateBypass, isStrictStage } from '../lib/lenientMode.js';
 import { selectBLForLead, assignLeadToDesigner, incrementAssigned, routeQualifiedLead } from '../services/assignmentService.js';
 import { checkStageRequirements, isStageJumpAllowed, FUNNEL_ORDER, getEffectiveStageRules, describeAllowedSkips } from '../config/stageRequirements.js';
 import { computeSystemRating } from '../services/intentScoring.js';
+import { getModeRatings } from '../lib/meetingSettings.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { isValidEmail, isValidPhone, isValidPhoneStrict } from '../lib/leadValidation.js';
 import { computeSlaInfoForLeads, computeSlaInfoForLead, getEffectiveStageSla } from '../lib/stageSla.js';
@@ -1622,7 +1623,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
             },
           });
           if (leadWithRels) {
-            const systemRating = computeSystemRating(leadWithRels);
+            const systemRating = computeSystemRating(leadWithRels, await getModeRatings());
             // lead.intentRatingSource comes from the prisma.lead.update result
             // above, which returns all scalar fields, so it is current.
             const isManualOverride = lead.intentRatingSource === 'manual';
@@ -2155,7 +2156,7 @@ leadsRouter.patch('/:id/intent-rating', verifyToken, async (req, res) => {
     }
 
     const oldRating = lead.intentRating;
-    const systemRating = computeSystemRating(lead);
+    const systemRating = computeSystemRating(lead, await getModeRatings());
 
     // Reason required when manually overriding the system-computed rating
     if (rating !== systemRating && !reason?.trim()) {

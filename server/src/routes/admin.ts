@@ -34,6 +34,7 @@ import { dashboardLayoutsConfig } from '../lib/dashboardLayouts.js';
 import { permissionsConfig, PERMISSIONS } from '../lib/permissions.js';
 import { checklistsConfig, CHECKLIST_NAMES, BUILT_IN_ITEMS } from '../lib/checklists.js';
 import { leadRoutingConfig } from '../lib/leadRouting.js';
+import { meetingSettingsConfig } from '../lib/meetingSettings.js';
 import { reportDefinitionsConfig, WON_STAGE_CHOICES, NPS_SURVEYS, NPS_SURVEY_LABELS, NPS_TRIGGER_STAGES } from '../lib/reportDefinitions.js';
 import { getDocumentTypes } from '../lib/documentTypes.js';
 import {
@@ -1083,6 +1084,10 @@ mountVersionedConfig(adminRouter, '/checklists', checklistsConfig, async () => (
 // ── Lead routing & access (Admin → Lead Routing & Access) ─────────────────────
 // Who receives new and qualified leads, and which leads each role can open (lib/leadRouting.ts).
 mountVersionedConfig(adminRouter, '/lead-routing', leadRoutingConfig);
+
+// ── Meetings (Admin → Meetings) ───────────────────────────────────────────────
+// Meeting type names, availability, intent stars and mandatory details (lib/meetingSettings.ts).
+mountVersionedConfig(adminRouter, '/meetings', meetingSettingsConfig);
 
 // ── Reports & NPS (Admin → Reports & NPS) ─────────────────────────────────────
 // Which stages count as onboarded in Reports, and which stage starts each NPS survey (lib/reportDefinitions.ts).

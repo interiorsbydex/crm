@@ -17,14 +17,16 @@ export const MODE_TO_RATING: Record<string, number> = {
   SITE_VISIT: 4,
   VIRTUAL: 3,
   PUBLIC_PLACE: 2,
+  CLIENT_PLACE: 2,
 };
 
 /**
  * Return the auto intent rating for a given meeting mode.
  * Falls back to 2 for any unrecognised mode.
  */
-export function computeAutoRatingFromMode(mode: string): number {
-  return MODE_TO_RATING[mode] ?? 2;
+export function computeAutoRatingFromMode(mode: string, ratings: Record<string, number> = MODE_TO_RATING): number {
+  // `ratings`: stars per meeting type from Admin → Meetings (lib/meetingSettings.ts).
+  return ratings[mode] ?? 2;
 }
 
 /**
@@ -37,11 +39,12 @@ export function computeSystemRating(
     calls?: { id: string }[];
     meetings?: { mode?: string | null; status: string }[];
   },
+  ratings: Record<string, number> = MODE_TO_RATING,
 ): number {
   if (!lead.meetings || lead.meetings.length === 0) return 1;
   // meetings is expected newest-first (orderBy createdAt desc from DB).
   // Find the first entry with a mode — that is the most recent rated meeting.
   const latest = lead.meetings.find((m) => m.mode);
   if (!latest?.mode) return 1;
-  return computeAutoRatingFromMode(latest.mode);
+  return computeAutoRatingFromMode(latest.mode, ratings);
 }

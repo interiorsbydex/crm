@@ -6,6 +6,7 @@ import NextPlanOfActionPicker from '../NextPlanOfActionPicker';
 import EmailPreviewModal from '../EmailPreviewModal';
 import { formatISTDate, formatISTDateTime, istDatetimeLocalValue, istInputToISO } from '../../lib/dateFormat';
 import { DateInput, TimeInput, DateTimeInput } from '../ui/DateTimeInputs';
+import { meetingModeOptions } from '../../lib/meetingSettings';
 
 const ATTACHMENT_TYPES = ['Lifestyle Capture', 'Proposal', 'Pitch Presentation'] as const;
 
@@ -26,13 +27,6 @@ const CALL_STAGE_TYPES = [
   { value: 'ONBOARDING', label: 'OB' },
   { value: 'OBM', label: 'OBM' },
   { value: 'OTHER', label: 'Other' },
-];
-const MEETING_MODES = [
-  { value: 'EC_VISIT', label: 'EC Visit' },
-  { value: 'SITE_VISIT', label: 'Site Visit' },
-  { value: 'VIRTUAL', label: 'Virtual' },
-  { value: 'PUBLIC_PLACE', label: 'Public Place' },
-  { value: 'CLIENT_PLACE', label: "Client's Place" },
 ];
 function getApiBase() {
   return (import.meta as any).env?.VITE_API_BASE ?? '/api';
@@ -945,7 +939,7 @@ export default function CallLogTab({ leadId, isLocked, onCallLogged }: Props) {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                 >
                   <option value="">Mode…</option>
-                  {MEETING_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  {meetingModeOptions().map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
                 <DateTimeInput
                   value={form.meetingScheduledAt}

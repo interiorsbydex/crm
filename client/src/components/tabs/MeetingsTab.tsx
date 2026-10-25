@@ -6,6 +6,7 @@ import NextPlanOfActionPicker from '../NextPlanOfActionPicker';
 import EmailPreviewModal from '../EmailPreviewModal';
 import { formatISTDateTime, istDatetimeLocalValue, istInputToISO } from '../../lib/dateFormat';
 import { DateTimeInput } from '../ui/DateTimeInputs';
+import { meetingModeOptions, meetingModeLabel, meetingRules } from '../../lib/meetingSettings';
 
 const MOM_ATTACHMENT_TYPES = ['Floor Plan', 'Proposal', 'Lifestyle Sheet', 'Other'] as const;
 
@@ -13,13 +14,6 @@ function getApiBase() {
   return (import.meta as any).env?.VITE_API_BASE ?? '/api';
 }
 
-const MODES = [
-  { value: 'EC_VISIT', label: 'EC Visit' },
-  { value: 'SITE_VISIT', label: 'Site Visit' },
-  { value: 'VIRTUAL', label: 'Virtual' },
-  { value: 'PUBLIC_PLACE', label: 'Public Place' },
-  { value: 'CLIENT_PLACE', label: "Client's Place" },
-];
 const LOCATION_OPTIONS = ['Office', "Client's Site", 'Public Place', "Client's Place", 'Virtual'];
 /** Earliest allowed datetime-local value: tomorrow at 00:00 IST (blocks same-day-or-earlier). */
 function minRescheduleDateTime() {
@@ -389,7 +383,7 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               >
                 <option value="">Select mode…</option>
-                {MODES.map((m) => (
+                {meetingModeOptions().map((m) => (
                   <option key={m.value} value={m.value}>{m.label}</option>
                 ))}
               </select>
@@ -498,13 +492,13 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
               {statusModal.status === 'COMPLETED' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Minutes of Meeting (MOM) <span className="text-red-500">*</span>
+                    Minutes of Meeting (MOM) {meetingRules().requireMom ? <span className="text-red-500">*</span> : <span className="text-gray-400 text-xs">(optional)</span>}
                   </label>
                   <textarea
                     rows={4}
                     value={statusForm.mom}
                     onChange={(e) => setStatusForm({ ...statusForm, mom: e.target.value })}
-                    required
+                    required={meetingRules().requireMom}
                     placeholder="Summary of what was discussed, decisions made, next steps…"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                   />
@@ -578,13 +572,13 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Reason for Rescheduling <span className="text-red-500">*</span>
+                      Reason for Rescheduling {meetingRules().requireRescheduleReason ? <span className="text-red-500">*</span> : <span className="text-gray-400 text-xs">(optional)</span>}
                     </label>
                     <input
                       type="text"
                       value={statusForm.rescheduledReason}
                       onChange={(e) => setStatusForm({ ...statusForm, rescheduledReason: e.target.value })}
-                      required
+                      required={meetingRules().requireRescheduleReason}
                       placeholder="e.g. Client unavailable, site not ready…"
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                     />
@@ -612,7 +606,7 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                       >
                         <option value="">Select mode…</option>
-                        {MODES.map((mode) => (
+                        {meetingModeOptions().map((mode) => (
                           <option key={mode.value} value={mode.value}>{mode.label}</option>
                         ))}
                       </select>
@@ -636,13 +630,13 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Reason for no-show <span className="text-red-500">*</span>
+                      Reason for no-show {meetingRules().requireNoShowReason ? <span className="text-red-500">*</span> : <span className="text-gray-400 text-xs">(optional)</span>}
                     </label>
                     <textarea
                       rows={2}
                       value={statusForm.noShowReason}
                       onChange={(e) => setStatusForm({ ...statusForm, noShowReason: e.target.value })}
-                      required
+                      required={meetingRules().requireNoShowReason}
                       placeholder="e.g. Client forgot, unavailable at last minute…"
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                     />
@@ -672,7 +666,7 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
                           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                         >
                           <option value="">Select mode…</option>
-                          {MODES.map((mode) => (
+                          {meetingModeOptions().map((mode) => (
                             <option key={mode.value} value={mode.value}>{mode.label}</option>
                           ))}
                         </select>
@@ -743,7 +737,7 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
                     })}
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {MODES.find(m => m.value === meeting.mode)?.label ?? meeting.mode}
+                    {meetingModeLabel(meeting.mode)}
                   </p>
                 </div>
 
@@ -799,7 +793,7 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
               {meeting.status === 'NO_SHOW' && meeting.replanScheduledAt && (
                 <p className="text-xs text-blue-700 mt-2 bg-blue-50 rounded-lg px-3 py-1.5">
                   Next tentative replan: {formatISTDateTime(meeting.replanScheduledAt)}
-                  {meeting.replanMode ? ` · ${MODES.find((m) => m.value === meeting.replanMode)?.label ?? meeting.replanMode}` : ''}
+                  {meeting.replanMode ? ` · ${meetingModeLabel(meeting.replanMode)}` : ''}
                   {meeting.replanLocation ? ` · ${meeting.replanLocation}` : ''}
                 </p>
               )}

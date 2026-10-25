@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { CalendarDays } from 'lucide-react';
 import { api } from '../lib/api';
 import toast from 'react-hot-toast';
+import { meetingModeLabel, meetingRules } from '../lib/meetingSettings';
 
 interface Lead {
   id: string; leadId: string; name: string; phone?: string;
@@ -28,10 +29,6 @@ const STATUS_LABELS: Record<string, string> = {
   NO_SHOW: 'No-show', RESCHEDULED: 'Rescheduled',
 };
 
-const MODE_LABELS: Record<string, string> = {
-  EC_VISIT: 'EC Visit', SITE_VISIT: 'Site Visit',
-  VIRTUAL: 'Virtual', PUBLIC_PLACE: 'Public Place',
-};
 
 const TYPE_AGENDAS: Record<string, string> = {
   DQL: 'Initial design consultation',
@@ -107,7 +104,7 @@ export default function Meetings() {
 
   const handleComplete = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!mom.trim()) { toast.error('MOM is required'); return; }
+    if (meetingRules().requireMom && !mom.trim()) { toast.error('MOM is required'); return; }
     if (!outcome.trim()) { toast.error('Outcome is required'); return; }
     if (!completeModal) return;
     setSubmitting(true);
@@ -122,7 +119,7 @@ export default function Meetings() {
 
   const handleNoShow = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!noShowReason.trim()) { toast.error('Reason is required'); return; }
+    if (meetingRules().requireNoShowReason && !noShowReason.trim()) { toast.error('Reason is required'); return; }
     if (!noShowModal) return;
     setSubmitting(true);
     try {
@@ -149,7 +146,7 @@ export default function Meetings() {
                 <label className="block text-sm font-semibold text-stone-700 mb-1.5">
                   Minutes of Meeting (MOM) <span className="text-brand-500">*</span>
                 </label>
-                <textarea rows={4} value={mom} onChange={e => setMom(e.target.value)} required
+                <textarea rows={4} value={mom} onChange={e => setMom(e.target.value)} required={meetingRules().requireMom}
                   placeholder="Summarise what was discussed, decisions made, client feedback..."
                   className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 resize-none transition-all"
                   style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
@@ -188,7 +185,7 @@ export default function Meetings() {
                 <label className="block text-sm font-semibold text-stone-700 mb-1.5">
                   Reason <span className="text-brand-500">*</span>
                 </label>
-                <textarea rows={3} value={noShowReason} onChange={e => setNoShowReason(e.target.value)} required
+                <textarea rows={3} value={noShowReason} onChange={e => setNoShowReason(e.target.value)} required={meetingRules().requireNoShowReason}
                   placeholder="e.g. Client did not pick up calls, WhatsApp unread..."
                   className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 resize-none transition-all"
                   style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
@@ -268,7 +265,7 @@ export default function Meetings() {
                     {/* Row 2: type + mode chips */}
                     <div className="flex gap-1.5 flex-wrap">
                       <span className="text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full font-semibold">{typeLabel}</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium text-stone-600" style={{ background: '#F5F0EB' }}>{MODE_LABELS[m.mode] ?? m.mode}</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium text-stone-600" style={{ background: '#F5F0EB' }}>{meetingModeLabel(m.mode)}</span>
                     </div>
 
                     {/* Row 3: date + time */}

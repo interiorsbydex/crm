@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { getMeetingSettings } from '../lib/meetingSettings.js';
 import { verifyToken } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import {
@@ -24,6 +25,15 @@ configRouter.get('/crm-settings', verifyToken, async (_req, res) => {
   try {
     const settings = await getCrmSettings();
     res.json({ settings, cycles: describeCycles(settings.cycleSchedule ?? DEFAULT_CYCLE_SCHEDULE) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/config/meetings — meeting type names, stars and mandatory fields (Admin → Meetings) ──
+configRouter.get('/meetings', verifyToken, async (_req, res) => {
+  try {
+    res.json({ settings: await getMeetingSettings() });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

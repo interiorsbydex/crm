@@ -12,7 +12,7 @@ import { notifyManagers } from '../lib/notifications.js';
 import { sendSms } from '../services/smsService.js';
 import { recalculateMilestones } from '../lib/milestones.js';
 import { queues } from '../jobs/index.js';
-import { computeAutoRatingFromMode } from '../services/intentScoring.js';
+import { getMeetingSettings } from '../lib/meetingSettings.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { assertNextPlanMeetingSchedulable, createNextPlanRecords, runNextPlanMeetingSideEffects, sendNextPlanMails, validateNextPlanItems, type NextPlanItem } from '../lib/nextPlanOfAction.js';
 import { assertAttachmentTypesMatch, validateAttachmentPairing } from '../lib/attachmentValidation.js';
@@ -87,8 +87,9 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
     res.status(400).json({ error: `type must be one of: ${CREATABLE_MEETING_TYPES.join(', ')}` });
     return;
   }
-  if (!VALID_MEETING_MODES.includes(mode as typeof VALID_MEETING_MODES[number])) {
-    res.status(400).json({ error: `mode must be one of: ${VALID_MEETING_MODES.join(', ')}` });
+  const meetingSettings = await getMeetingSettings();
+  if (!VALID_MEETING_MODES.includes(mode as typeof VALID_MEETING_MODES[number]) || !meetingSettings.modes[mode as typeof VALID_MEETING_MODES[number]].active) {
+    res.status(400).json({ error: `Pick one of the meeting types in use: ${VALID_MEETING_MODES.filter((m) => meetingSettings.modes[m].active).map((m) => meetingSettings.modes[m].label).join(', ')}` });
     return;
   }
   let normalizedLocation: string | undefined;
@@ -309,8 +310,11 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
   let normalizedReplanMode: string | undefined;
   let normalizedReplanLocation: string | undefined;
 
+  // Which details are mandatory: Admin → Meetings.
+  const meetingRules = await getMeetingSettings();
+  const modeInUse = (m: string | undefined) => !!m && VALID_MEETING_MODES.includes(m as typeof VALID_MEETING_MODES[number]) && meetingRules.modes[m as typeof VALID_MEETING_MODES[number]].active;
   if (status === 'COMPLETED') {
-    if (!mom?.trim()) {
+    if (meetingRules.requireMom && !mom?.trim()) {
       res.status(400).json({ error: 'mom (Minutes of Meeting) is required when marking COMPLETED' });
       return;
     }
@@ -336,7 +340,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
       return;
     }
   }
-  if (status === 'RESCHEDULED' && !rescheduledReason?.trim()) {
+  if (status === 'RESCHEDULED' && meetingRules.requireRescheduleReason && !rescheduledReason?.trim()) {
     res.status(400).json({ error: 'rescheduledReason is required when marking RESCHEDULED' });
     return;
   }
@@ -349,7 +353,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
       res.status(400).json({ error: 'The new meeting date and time must be in the future' });
       return;
     }
-    if (!rescheduleMode || !VALID_MEETING_MODES.includes(rescheduleMode as typeof VALID_MEETING_MODES[number])) {
+    if (!modeInUse(rescheduleMode)) {
       res.status(400).json({ error: `rescheduleMode must be one of: ${VALID_MEETING_MODES.join(', ')}` });
       return;
     }
@@ -366,7 +370,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     }
   }
   if (status === 'NO_SHOW') {
-    if (!noShowReason?.trim()) {
+    if (meetingRules.requireNoShowReason && !noShowReason?.trim()) {
       res.status(400).json({ error: 'noShowReason is required when marking NO_SHOW' });
       return;
     }
@@ -374,7 +378,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
       res.status(400).json({ error: 'replanScheduledAt (next tentative date & time) is required when marking NO_SHOW' });
       return;
     }
-    if (!replanMode || !VALID_MEETING_MODES.includes(replanMode as typeof VALID_MEETING_MODES[number])) {
+    if (!modeInUse(replanMode)) {
       res.status(400).json({ error: `replanMode must be one of: ${VALID_MEETING_MODES.join(', ')}` });
       return;
     }
@@ -497,10 +501,11 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
       updateData.momAttachmentTypes = momAttachmentTypes?.length ? momAttachmentTypes : undefined;
       updateData.momAttachments = momAttachments?.length ? momAttachments : undefined;
       updateData.nextPlanOfActionItems = nextPlanOfAction?.length ? nextPlanOfAction : undefined;
-      updateData.momSent = true;
+      // No MOM written (allowed when Admin → Meetings makes it optional) means no MOM mail either.
+      updateData.momSent = !!mom?.trim();
     }
     if (status === 'NO_SHOW') {
-      updateData.noShowReason = noShowReason!.trim();
+      updateData.noShowReason = noShowReason?.trim() || null;
       updateData.replanScheduledAt = new Date(replanScheduledAt!);
       updateData.replanMode = normalizedReplanMode!;
       updateData.replanLocation = normalizedReplanLocation!;
@@ -569,7 +574,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
   if (lead.email) {
     let emailPayload;
 
-    if (status === 'COMPLETED') {
+    if (status === 'COMPLETED' && mom?.trim()) {
       // Download the actual file bytes so they ride along as real email
       // attachments (not just a link) — per the client's ask that "the email
       // should also have the attachment attached".
@@ -614,7 +619,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     } else if (status === 'RESCHEDULED') {
       const rendered = await renderMailTemplate('RESCHEDULED', {
         clientName: lead.name,
-        reason: rescheduledReason!,
+        reason: rescheduledReason?.trim() || '—',
       });
       emailPayload = { to: '', subject: rendered.subject, html: rendered.html };
     } else if (status === 'NO_SHOW') {
@@ -636,7 +641,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
   // SMS: status-triggered messages (each can be switched off in Admin → Automations)
   const smsEvent = eventForDraftType(`MEETING_${status}`);
   if (lead.phone && ['MOM', 'RESCHEDULED', 'NO_SHOW'].includes(smsEvent) && await isAutomationOn(smsEvent, 'sms')) {
-    if (status === 'COMPLETED') {
+    if (status === 'COMPLETED' && mom?.trim()) {
       sendSms(
         lead.phone,
         `Hi ${lead.name}, your meeting summary (MOM) has been emailed to you. - Interiors by DeX`,
@@ -697,7 +702,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
           leadId: lead.leadId,
           leadName: lead.name,
           meetingType: meeting.type,
-          noShowReason: noShowReason!,
+          noShowReason: noShowReason?.trim() || '—',
         });
         emailPayload.to = recipient.email!;
         if (await isAutomationOn('TEAM_NO_SHOW_NO_PLAN', 'email')) queues.emails.add('no-show-no-plan', { emailPayload, leadId: lead.id }).catch(() => {});

@@ -27,6 +27,7 @@ import EmailPreviewModal from '../EmailPreviewModal';
 import CallLogTab from './CallLogTab';
 import MeetingsTab from './MeetingsTab';
 import FollowUpTab from './FollowUpTab';
+import { meetingModeOptions, meetingModeLabel, meetingRules } from '../../lib/meetingSettings';
 
 // ── Constants (mirrors the originals in each tab component) ──────────────────
 
@@ -53,13 +54,6 @@ const MEETING_STATUS_COLORS: Record<string, string> = {
   NO_SHOW: 'bg-red-100 text-red-700',
 };
 
-const MODES: Record<string, string> = {
-  EC_VISIT: 'EC Visit',
-  SITE_VISIT: 'Site Visit',
-  VIRTUAL: 'Virtual',
-  PUBLIC_PLACE: 'Public Place',
-  CLIENT_PLACE: "Client's Place",
-};
 
 const LOCATION_OPTIONS: Record<string, string> = {
   EC_VISIT: 'EC Visit',
@@ -235,7 +229,7 @@ function MeetingCard({
             </span>
           </div>
           <p className="text-xs text-gray-500">{scheduledStr}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{MODES[meeting.mode] ?? meeting.mode}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{meetingModeLabel(meeting.mode)}</p>
         </div>
         {meeting.status === 'SCHEDULED' && !isLocked && (
           <div className="flex gap-2 shrink-0">
@@ -273,7 +267,7 @@ function MeetingCard({
       {meeting.status === 'NO_SHOW' && meeting.replanScheduledAt && (
         <p className="text-xs text-blue-700 mt-2 bg-blue-50 rounded-lg px-3 py-1.5">
           Next tentative replan: {formatISTDateTime(meeting.replanScheduledAt)}
-          {meeting.replanMode ? ` · ${MODES[meeting.replanMode] ?? meeting.replanMode}` : ''}
+          {meeting.replanMode ? ` · ${meetingModeLabel(meeting.replanMode)}` : ''}
           {meeting.replanLocation ? ` · ${meeting.replanLocation}` : ''}
         </p>
       )}
@@ -928,7 +922,7 @@ export default function ActivityFeedTab({
                       value={statusForm.mom}
                       onChange={(e) => setStatusForm({ ...statusForm, mom: e.target.value })}
                       rows={3}
-                      required
+                      required={meetingRules().requireMom}
                       placeholder="Key discussion points…"
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                     />
@@ -972,13 +966,13 @@ export default function ActivityFeedTab({
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Reason for Rescheduling <span className="text-red-500">*</span>
+                      Reason for Rescheduling {meetingRules().requireRescheduleReason ? <span className="text-red-500">*</span> : <span className="text-gray-400 text-xs">(optional)</span>}
                     </label>
                     <input
                       type="text"
                       value={statusForm.rescheduledReason}
                       onChange={(e) => setStatusForm({ ...statusForm, rescheduledReason: e.target.value })}
-                      required
+                      required={meetingRules().requireRescheduleReason}
                       placeholder="Why is this being rescheduled?"
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                     />
@@ -1005,7 +999,7 @@ export default function ActivityFeedTab({
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                       >
                         <option value="">Select mode…</option>
-                        {Object.entries(MODES).map(([value, label]) => (
+                        {meetingModeOptions().map(({ value, label }) => (
                           <option key={value} value={value}>{label}</option>
                         ))}
                       </select>
@@ -1030,13 +1024,13 @@ export default function ActivityFeedTab({
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Reason for no-show <span className="text-red-500">*</span>
+                      Reason for no-show {meetingRules().requireNoShowReason ? <span className="text-red-500">*</span> : <span className="text-gray-400 text-xs">(optional)</span>}
                     </label>
                     <textarea
                       rows={2}
                       value={statusForm.noShowReason}
                       onChange={(e) => setStatusForm({ ...statusForm, noShowReason: e.target.value })}
-                      required
+                      required={meetingRules().requireNoShowReason}
                       placeholder="e.g. Client forgot, unavailable at last minute…"
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                     />
@@ -1066,7 +1060,7 @@ export default function ActivityFeedTab({
                           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                         >
                           <option value="">Select mode…</option>
-                          {Object.entries(MODES).map(([value, label]) => (
+                          {meetingModeOptions().map(({ value, label }) => (
                             <option key={value} value={value}>{label}</option>
                           ))}
                         </select>

@@ -17,6 +17,7 @@ import { supabaseAdmin } from './supabase.js';
 import type { EmailAttachment } from './email.js';
 import { recalculateMilestones } from './milestones.js';
 import { computeAutoRatingFromMode } from '../services/intentScoring.js';
+import { getModeRatings } from './meetingSettings.js';
 import { sendSms } from '../services/smsService.js';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { isAutomationOn } from './automations.js';
@@ -227,7 +228,7 @@ export async function runMeetingScheduledSideEffects(params: MeetingScheduledSid
   {
     const currentLead = await prisma.lead.findUnique({ where: { id: leadId }, select: { intentRatingSource: true, intentRating: true } });
     if (!currentLead?.intentRatingSource || currentLead.intentRatingSource === 'auto') {
-      const autoRating = computeAutoRatingFromMode(mode);
+      const autoRating = computeAutoRatingFromMode(mode, await getModeRatings());
       await prisma.$transaction([
         prisma.lead.update({ where: { id: leadId }, data: { intentRating: autoRating, intentRatingSource: 'auto' } }),
         prisma.intentRatingLog.create({
