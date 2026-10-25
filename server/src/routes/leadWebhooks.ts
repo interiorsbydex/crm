@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { logActivity } from '../lib/activityLog.js';
 
 import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
-import { selectCREForLead, incrementAssigned } from '../services/assignmentService.js';
+import { routeAdLead, incrementAssigned } from '../services/assignmentService.js';
 import { hasAllMqlMandatoryFields } from '../lib/leadMandatoryFields.js';
 
 export const leadWebhooksRouter = Router();
@@ -64,10 +64,9 @@ async function createLeadFromWebhook(data: {
   const existing = await prisma.lead.findFirst({ where: { phone: data.phone } });
   if (existing) return existing.id;
 
-  // Ad-sourced leads are routed to a CRE for qualification first, in
-  // round-robin order across active CREs — never left unassigned or handed
-  // straight to a Business Lead.
-  const cre = await selectCREForLead();
+  // Ad-sourced leads go to the next CRE in turn for qualification, or wait
+  // unassigned if Admin → Lead Routing & Access says so.
+  const cre = await routeAdLead();
 
   const leadId = await generateLeadId();
   // Webhook-sourced leads never carry projectType/scope/location/
@@ -205,9 +204,8 @@ leadWebhooksRouter.post('/google', async (req, res) => {
 
       const existing = await prisma.lead.findFirst({ where: { phone } });
       if (!existing) {
-        // Round-robin across active CREs (fewest currently assigned leads first)
-        // so ad leads are always qualified by a CRE before reaching a BL.
-        const cre = await selectCREForLead();
+        // Next CRE in turn, or unassigned (Admin → Lead Routing & Access).
+        const cre = await routeAdLead();
 
         const leadId = await generateLeadId();
         // Same EL-vs-MQL mandatory-field check as createLeadFromWebhook above

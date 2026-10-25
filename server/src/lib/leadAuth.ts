@@ -1,5 +1,6 @@
 import { prisma } from './prisma.js';
 import { isLenientLaunch } from './lenientMode.js';
+import { leadVisibility } from './leadScope.js';
 
 /**
  * Returns true if the acting user may assign a follow-up task to
@@ -46,6 +47,23 @@ export async function isAuthorizedForLead(
   user: { id: string; role: string },
 ): Promise<boolean> {
   if (['ADMIN', 'BRANCH_HEAD'].includes(user.role)) return true;
+
+  // Wider access chosen in Admin → Lead Routing & Access.
+  if (['DESIGNER', 'CRE', 'BL'].includes(user.role)) {
+    const vis = await leadVisibility();
+    const level = vis[user.role as 'DESIGNER' | 'CRE' | 'BL'];
+    if (level === 'all') return true;
+    if (user.role === 'DESIGNER' && level === 'team') {
+      const me = await prisma.user.findUnique({ where: { id: user.id }, select: { blId: true } });
+      if (me?.blId) {
+        if (lead.assignedBLId === me.blId) return true;
+        if (lead.assignedDesignerId) {
+          const mate = await prisma.user.findFirst({ where: { id: lead.assignedDesignerId, blId: me.blId }, select: { id: true } });
+          if (mate) return true;
+        }
+      }
+    }
+  }
 
   if (user.role === 'DESIGNER' || user.role === 'CRE') {
     if (lead.assignedDesignerId === user.id) return true;

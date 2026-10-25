@@ -1,3 +1,4 @@
+import { getLeadRouting, type QualifiedLeadRouting } from '../lib/leadRouting.js';
 /**
  * Assignment Service — smart or round-robin lead-to-designer assignment.
  *
@@ -105,4 +106,26 @@ export async function incrementAssigned(userId: string): Promise<void> {
     where: { id: userId },
     data: { totalLeadsAssigned: { increment: 1 } },
   }).catch((e) => console.warn('[assignment] increment failed:', e.message));
+}
+
+/**
+ * Where a lead from ads / agency / import goes first (Admin → Lead Routing & Access):
+ * the next CRE in turn, or nobody (it waits to be allocated).
+ */
+export async function routeAdLead(): Promise<{ id: string; name: string } | null> {
+  return (await getLeadRouting()).adLeads === 'CRE' ? selectCREForLead() : null;
+}
+
+/**
+ * Who gets a lead once it is qualified (Admin → Lead Routing & Access): the next
+ * BL in turn, optionally plus the next designer in that BL's team, or nobody.
+ * `mode` lets callers tell "nobody, by choice" apart from "no BL available".
+ */
+export async function routeQualifiedLead(estimatedValue: number | null): Promise<{ mode: QualifiedLeadRouting; blId: string | null; designerId: string | null }> {
+  const mode = (await getLeadRouting()).qualifiedLeads;
+  if (mode === 'MANUAL') return { mode, blId: null, designerId: null };
+  const bl = await selectBLForLead();
+  if (!bl) return { mode, blId: null, designerId: null };
+  const designerId = mode === 'BL_THEN_DESIGNER' ? await assignLeadToDesigner(estimatedValue, bl.id) : null;
+  return { mode, blId: bl.id, designerId };
 }

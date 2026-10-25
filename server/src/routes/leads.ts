@@ -10,7 +10,7 @@ import { createAndSendNps, getNpsSendState } from '../lib/npsHelper.js';
 import { npsSurveyForStage } from '../lib/reportDefinitions.js';
 import { designerAssignmentDates, designerAssignmentAgeDays } from '../lib/designerAssignmentAge.js';
 import { logGateBypass, isStrictStage } from '../lib/lenientMode.js';
-import { selectBLForLead, assignLeadToDesigner, incrementAssigned } from '../services/assignmentService.js';
+import { selectBLForLead, assignLeadToDesigner, incrementAssigned, routeQualifiedLead } from '../services/assignmentService.js';
 import { checkStageRequirements, isStageJumpAllowed, FUNNEL_ORDER, getEffectiveStageRules, describeAllowedSkips } from '../config/stageRequirements.js';
 import { computeSystemRating } from '../services/intentScoring.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
@@ -487,8 +487,10 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
     // CRE-created leads start qualified at MQL, so allocate their BL from the
     // same active round-robin pool used on EL → MQL (not the CRE's own team).
     // Preserve explicit/team-based assignment behavior for other roles.
+    // Who gets a CRE-created (already qualified) lead: Admin → Lead Routing & Access.
+    const creRoute = user.role === 'CRE' ? await routeQualifiedLead(estimatedValue ? parseFloat(estimatedValue) : null) : null;
     let resolvedBLId = user.role === 'CRE'
-      ? (await selectBLForLead())?.id
+      ? creRoute?.blId ?? undefined
       : assignedBLId || (user.role === 'BL' ? user.id : (user.role === 'DESIGNER' ? user.blId ?? undefined : undefined));
     if (!resolvedBLId && user.role === 'DESIGNER') {
       const bl = await selectBLForLead();
@@ -516,7 +518,7 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
         isTestLead: isTestLead === true,
         // Auto-assign to creator based on role
         assignedDesignerId: assignedDesignerId || (
-          user.role === 'CRE' ? (resolvedBLId ? undefined : user.id) :
+          user.role === 'CRE' ? (creRoute?.designerId ?? (resolvedBLId ? undefined : user.id)) :
           user.role === 'DESIGNER' ? user.id : undefined
         ),
         ...(user.role === 'CRE' && { assignedCREId: user.id }),
@@ -536,6 +538,11 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
       });
       await createNotification(resolvedBLId, 'BL_ASSIGNED', `You have been assigned as BL for lead ${leadId} — ${lead.name}`, lead.id);
       await logActivity(user.id, 'BL_ASSIGNED', lead.id, { blId: resolvedBLId });
+      if (creRoute?.designerId) {
+        await incrementAssigned(creRoute.designerId);
+        await createNotification(creRoute.designerId, 'DESIGNER_ASSIGNED', `You have been assigned as designer for lead ${leadId} — ${lead.name}`, lead.id);
+        await logActivity(user.id, 'DESIGNER_ASSIGNED', lead.id, { designerId: creRoute.designerId, auto: true });
+      }
     }
 
     res.status(201).json({ lead });
@@ -639,8 +646,10 @@ leadsRouter.post(
 
       if (user.role === 'CRE') {
         if (initialStage === 'MQL') {
-          const bl = await selectBLForLead();
-          if (bl) assignedBLId = bl.id;
+          // Admin → Lead Routing & Access decides who gets a qualified lead.
+          const route = await routeQualifiedLead(null);
+          if (route.blId) assignedBLId = route.blId;
+          if (route.designerId) assignedDesignerId = route.designerId;
         }
         // While unassigned, the CRE still occupies the legacy designer slot;
         // once assigned to a BL, that slot is free for a real designer.
@@ -717,6 +726,11 @@ leadsRouter.post(
         });
         await createNotification(assignedBLId, 'BL_ASSIGNED', `You have been assigned as BL for lead ${leadId} — ${lead.name}`, lead.id);
         await logActivity(user.id, 'BL_ASSIGNED', lead.id, { blId: assignedBLId });
+        if (assignedDesignerId && assignedDesignerId !== user.id) {
+          await incrementAssigned(assignedDesignerId);
+          await createNotification(assignedDesignerId, 'DESIGNER_ASSIGNED', `You have been assigned as designer for lead ${leadId} — ${lead.name}`, lead.id);
+          await logActivity(user.id, 'DESIGNER_ASSIGNED', lead.id, { designerId: assignedDesignerId, auto: true });
+        }
       }
 
       res.status(201).json({ lead });
@@ -1522,7 +1536,11 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         && (user.role === 'CRE' || !!lead.assignedCREId || lead.assignedDesigner?.role === 'CRE');
       // Non-CRE EL → MQL transitions keep their prior assignment behavior.
       if ((creQualification || qualifiedPastMql || (stage === 'MQL' && prevStage !== 'EFFECTIVE_LEAD')) && !lead.assignedBLId) {
-        const bl = await selectBLForLead();
+        // Admin → Lead Routing & Access: next BL in turn (optionally plus a
+        // designer from that BL's team), or nobody when set to manual.
+        const route = await routeQualifiedLead(lead.estimatedValue != null ? Number(lead.estimatedValue) : null);
+        const bl = route.blId ? { id: route.blId } : null;
+        const routedDesignerId = stage === 'MQL' && lead.assignedDesigner?.role === 'CRE' ? route.designerId : null;
         if (bl) {
           await prisma.lead.update({
             where: { id },
@@ -1530,7 +1548,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
               assignedBLId: bl.id,
               // The CRE is the qualifier, not the lead's post-MQL designer.
               ...(stage === 'MQL' && lead.assignedDesigner?.role === 'CRE' && {
-                assignedDesignerId: null,
+                assignedDesignerId: routedDesignerId,
                 assignedCREId: lead.assignedCREId ?? lead.assignedDesigner.id,
                 firstOpenedAt: null,
               }),
@@ -1548,6 +1566,12 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
             id,
           );
           await logActivity(user.id, 'BL_ASSIGNED', id, { blId: bl.id });
+          if (routedDesignerId) {
+            await incrementAssigned(routedDesignerId);
+            await createNotification(routedDesignerId, 'DESIGNER_ASSIGNED',
+              `You have been assigned as designer for lead ${existing.leadId} — ${existing.name}`, id);
+            await logActivity(user.id, 'DESIGNER_ASSIGNED', id, { designerId: routedDesignerId, auto: true });
+          }
 
           // Past MQL, preserve the existing recovery path that selects a
           // designer for a lead still carrying the CRE placeholder. At MQL
@@ -1575,7 +1599,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
               handoffFromCRE: lead.assignedDesigner.id,
             });
           }
-        } else {
+        } else if (route.mode !== 'MANUAL') {
           blAutoAssignment = 'no_eligible_bl';
         }
       }

@@ -43,7 +43,8 @@ vi.mock('../lib/prisma.js', () => {
   } } };
 });
 vi.mock('../services/assignmentService.js', () => ({
-  selectCREForLead: async () => {
+  // Ad/import leads go to the next CRE in turn (Admin → Lead Routing & Access default).
+  routeAdLead: async () => {
     state.selections++;
     return [...state.staff].filter((s) => s.role === 'CRE' && s.isActive)
       .sort((a, b) => a.totalLeadsAssigned - b.totalLeadsAssigned)[0] ?? null;

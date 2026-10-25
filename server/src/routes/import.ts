@@ -4,7 +4,7 @@ import ExcelJS from 'exceljs';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
-import { selectCREForLead } from '../services/assignmentService.js';
+import { routeAdLead } from '../services/assignmentService.js';
 import { resolveImportOwnership } from '../lib/importOwnership.js';
 
 import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
@@ -360,7 +360,7 @@ importRouter.post('/', verifyToken, requirePermission('LEAD_IMPORT'), upload.sin
       const ownership = resolveImportOwnership(providedOwners, staff, stage, status);
       // A dry-run must not make an assignment or promise the same candidate for
       // every row. Current round-robin availability is checked on confirmation.
-      const cre = !dryRun && ownership.allocationEligible ? await selectCREForLead() : null;
+      const cre = !dryRun && ownership.allocationEligible ? await routeAdLead() : null;
       const assignedDesignerId = ownership.assignedDesignerId ?? cre?.id;
       const assignedCREId = ownership.assignedCREId ?? cre?.id;
       const assignmentOutcome = cre ? 'AUTO_ALLOCATED'
