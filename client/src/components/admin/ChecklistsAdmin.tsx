@@ -8,7 +8,7 @@ import { api } from '../../lib/api';
 type Kind = 'pdOb' | 'obObm' | 'dip';
 type ItemKind = 'tick' | 'date' | 'text' | 'document';
 interface CustomItem { key: string; label: string; kind: ItemKind; docType?: string; required: boolean; active: boolean }
-interface Settings { optional: string[]; custom: CustomItem[] }
+interface Settings { optional: string[]; custom: CustomItem[]; labels?: Record<string, string> }
 type Value = Record<Kind, Settings>;
 interface BuiltInItem { key: string; label: string; lockedReason?: string }
 interface DocType { key: string; label: string }
@@ -121,6 +121,7 @@ export default function ChecklistsAdmin() {
         <h2 className="font-semibold text-gray-900">Checklists</h2>
         <p className="mt-1 text-xs text-gray-500">
           Choose which items must be done before each checklist can be sent or completed, and add your own items.
+          You can also rename any item; the new name shows on the checklist and in "still needed" messages.
           Optional items still show on the checklist, marked "(optional)". A few items can't be made optional; the reason is shown next to them.
           Changes apply straight away.
         </p>
@@ -145,11 +146,11 @@ export default function ChecklistsAdmin() {
         <ul className="mt-2 divide-y divide-gray-50">
           {builtIn.map((b) => (
             <li key={b.key} className="flex flex-wrap items-center gap-3 py-2 text-sm">
-              <label className="flex items-center gap-2">
-                <input type="checkbox" aria-label={`Required: ${b.label}`} checked={!!b.lockedReason || !s.optional.includes(b.key)}
-                  disabled={!!b.lockedReason} onChange={(e) => setRequired(b.key, e.target.checked)} />
-                <span className="text-gray-800">{b.label}</span>
-              </label>
+              <input type="checkbox" aria-label={`Required: ${b.label}`} checked={!!b.lockedReason || !s.optional.includes(b.key)}
+                disabled={!!b.lockedReason} onChange={(e) => setRequired(b.key, e.target.checked)} />
+              <input aria-label={`Name for ${b.label}`} value={s.labels?.[b.key] ?? b.label} maxLength={120}
+                onChange={(e) => update({ ...s, labels: { ...(s.labels ?? {}), [b.key]: e.target.value } })}
+                className="flex-1 min-w-[220px] rounded border border-gray-200 px-2 py-1 text-sm text-gray-800" />
               <span className="text-[11px] text-gray-400">
                 {b.lockedReason ? `Always required — ${b.lockedReason}` : s.optional.includes(b.key) ? 'Optional' : 'Required'}
               </span>

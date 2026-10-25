@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, Target, Megaphone, Route, FileText, SlidersHorizontal, Zap, LayoutDashboard, ShieldCheck, ListChecks, BarChart3, Shuffle, CalendarClock, Bell, Calculator, type LucideIcon } from 'lucide-react';
+import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, Target, Megaphone, Route, FileText, SlidersHorizontal, Zap, LayoutDashboard, ShieldCheck, ListChecks, BarChart3, Shuffle, CalendarClock, Bell, Calculator, Type, type LucideIcon } from 'lucide-react';
 import { api, uploadFile } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
 import { DateInput } from '../components/ui/DateTimeInputs';
@@ -19,7 +19,9 @@ import LeadRoutingAdmin from '../components/admin/LeadRoutingAdmin';
 import MeetingsAdmin from '../components/admin/MeetingsAdmin';
 import AlertsAdmin from '../components/admin/AlertsAdmin';
 import FormulasAdmin from '../components/admin/FormulasAdmin';
+import WordingAdmin from '../components/admin/WordingAdmin';
 import { cycleDescription } from '../lib/crmSettings';
+import { wording } from '../lib/wording';
 
 interface User {
   id: string; name: string; email: string; role: string;
@@ -54,7 +56,7 @@ const ROLE_COLORS: Record<string, string> = {
   BRANCH_HEAD: 'bg-green-100 text-green-700',
 };
 
-type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers' | 'import' | 'targets' | 'credits' | 'content' | 'stageRules' | 'docTypes' | 'crmSettings' | 'automations' | 'dashboards' | 'permissions' | 'checklists' | 'reportsNps' | 'leadRouting' | 'meetings' | 'alerts' | 'formulas';
+type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers' | 'import' | 'targets' | 'credits' | 'content' | 'stageRules' | 'docTypes' | 'crmSettings' | 'automations' | 'dashboards' | 'permissions' | 'checklists' | 'reportsNps' | 'leadRouting' | 'meetings' | 'alerts' | 'formulas' | 'wording';
 
 interface ImportPreviewRow {
   row: number; status: 'WILL_IMPORT' | 'DUPLICATE' | 'INVALID';
@@ -474,6 +476,7 @@ export default function Admin() {
     { id: 'meetings', label: 'Meetings', Icon: CalendarClock },
     { id: 'alerts', label: 'In-app Alerts', Icon: Bell },
     { id: 'formulas', label: 'Formulas', Icon: Calculator },
+    { id: 'wording', label: 'Wording', Icon: Type },
   ];
 
   const hasLeads = (deactivatePreview?.activeLeads ?? 0) > 0;
@@ -632,7 +635,7 @@ export default function Admin() {
                     className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                     title="Display title only — does not change permissions">
                     <option value="">Designation: Designer (default)</option>
-                    <option value="DESIGN_TEAM_LEAD">Designation: Design Team Lead</option>
+                    <option value="DESIGN_TEAM_LEAD">Designation: {wording('title.DESIGN_TEAM_LEAD', 'Design Team Lead')}</option>
                   </select>
                 )}
               </div>
@@ -662,7 +665,7 @@ export default function Admin() {
                           <td className="py-3 px-4 text-gray-500 text-xs">{u.email}</td>
                           <td className="py-3 px-4">
                             <span className={`text-xs px-2 py-1 rounded-full font-medium ${ROLE_COLORS[u.role] ?? 'bg-gray-100 text-gray-600'}`}>
-                              {u.designation ? DESIGNATION_LABELS[u.designation] ?? u.designation : u.role}
+                              {u.designation ? wording(`title.${u.designation}`, DESIGNATION_LABELS[u.designation] ?? u.designation) : u.role}
                             </span>
                           </td>
                           <td className="py-3 px-4 text-gray-500 text-xs">{u.bl?.name ?? '—'}</td>
@@ -1229,6 +1232,7 @@ export default function Admin() {
         {tab === 'meetings' && <MeetingsAdmin />}
         {tab === 'alerts' && <AlertsAdmin />}
         {tab === 'formulas' && <FormulasAdmin />}
+        {tab === 'wording' && <WordingAdmin />}
       </div>
     </div>
   );

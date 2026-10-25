@@ -17,6 +17,8 @@ export interface CrmSettings {
   discount: { selfApproveUpToPct: number; blApproveUpToPct: number; branchHeadUpToPct: number; woodworkSpecialCaseBelow: number; requireApprovalComment: boolean };
   calls: { rnrEscalationAfter: number; rnrInactivationMonths: number; requireFollowUp: boolean };
   notifyClientByDefault: boolean;
+  defaultPhoneCountry: string;
+  pipelineCardFields: string[];
   reminderMinutesBefore: number;
   weeklyDigestDay: number;
   designPhaseDays: Record<string, number>;
@@ -43,6 +45,8 @@ const FALLBACK: CrmSettings = {
   discount: { selfApproveUpToPct: 10, blApproveUpToPct: 15, branchHeadUpToPct: 20, woodworkSpecialCaseBelow: 500_000, requireApprovalComment: false },
   calls: { rnrEscalationAfter: 5, rnrInactivationMonths: 3, requireFollowUp: false },
   notifyClientByDefault: true,
+  defaultPhoneCountry: 'IN',
+  pipelineCardFields: ['scope', 'value', 'location', 'owner', 'source', 'age'],
   reminderMinutesBefore: 60,
   weeklyDigestDay: 2,
   designPhaseDays: {},

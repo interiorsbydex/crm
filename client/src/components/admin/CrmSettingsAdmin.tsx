@@ -310,6 +310,26 @@ export default function CrmSettingsAdmin() {
         </label>
       </div>
 
+      <div className={CARD} data-testid="section-display">
+        <h3 className={H3}>Display</h3>
+        <label className="block text-xs text-gray-600">
+          <span className="font-medium text-gray-800">Country preselected for new phone numbers</span>
+          <input value={draft.defaultPhoneCountry} maxLength={2} onChange={(e) => set('defaultPhoneCountry', e.target.value.toUpperCase())}
+            className={`${INPUT} mt-1 block w-20`} aria-label="Default phone country" />
+          <span className="text-[11px] text-gray-400">Two-letter code, e.g. IN, AE, US</span>
+        </label>
+        <p className="mt-4 text-xs font-medium text-gray-800">Shown on Sales Pipeline cards</p>
+        <div className="mt-1 flex flex-wrap gap-4">
+          {([['scope', 'Project type & scope'], ['value', 'Value'], ['location', 'Location'], ['owner', 'Designer / BL'], ['source', 'Source'], ['age', 'Age'], ['intent', 'Intent stars'], ['phone', 'Phone']] as const).map(([key, label]) => (
+            <label key={key} className="flex items-center gap-1.5 text-sm text-gray-700">
+              <input type="checkbox" checked={draft.pipelineCardFields.includes(key)}
+                onChange={(e) => set('pipelineCardFields', e.target.checked ? [...draft.pipelineCardFields, key] : draft.pipelineCardFields.filter((f) => f !== key))} />
+              {label}
+            </label>
+          ))}
+        </div>
+      </div>
+
       <div className={CARD} data-testid="section-timing">
         <h3 className={H3}>Reminders and digests</h3>
         <div className="flex flex-wrap items-end gap-6">

@@ -13,6 +13,7 @@ import { PERMISSIONS, hasPermission } from '../lib/permissions.js';
 import { getCrmSettings, describeCycles } from '../lib/crmSettings.js';
 import { DEFAULT_CYCLE_SCHEDULE } from '../lib/targetCycle.js';
 import { getFormulas } from '../lib/formulaSettings.js';
+import { wordingConfig } from '../lib/wording.js';
 
 export const configRouter = Router();
 
@@ -26,6 +27,15 @@ configRouter.get('/crm-settings', verifyToken, async (_req, res) => {
   try {
     const settings = await getCrmSettings();
     res.json({ settings, cycles: describeCycles(settings.cycleSchedule ?? DEFAULT_CYCLE_SCHEDULE) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/config/wording — relabelled screen text (Admin → Wording). Public: the sign-in page uses it. ──
+configRouter.get('/wording', async (_req, res) => {
+  try {
+    res.json({ wording: await wordingConfig.get() });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

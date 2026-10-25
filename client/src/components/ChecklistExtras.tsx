@@ -15,10 +15,17 @@ export interface ChecklistItemStatus {
   met: boolean;
   required: boolean;
   locked: boolean;
+  renamed?: boolean;
   custom?: { kind: 'tick' | 'date' | 'text' | 'document'; docType?: string; value: unknown };
 }
 /** `missing`: required items not done. `blocking`: what the send step will refuse on (lenient mode waives most). */
 export interface ChecklistStatus { items: ChecklistItemStatus[]; missing: string[]; blocking?: string[]; lenient?: boolean }
+
+/** The admin's name for a built-in item (Admin → Checklists), else the panel's own wording. */
+export function itemLabel(status: ChecklistStatus | null, key: string, fallback: string): string {
+  const item = status?.items.find((i) => i.key === key);
+  return item?.renamed ? item.label : fallback;
+}
 
 /** `basePath` is the checklist's API path, e.g. `/leads/<id>/pd-ob-checklist`. `refreshKey` re-fetches when it changes. */
 export function useChecklistStatus(basePath: string, refreshKey: unknown) {

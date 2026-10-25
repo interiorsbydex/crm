@@ -3,7 +3,7 @@ import { Check, Mail, AlertCircle, Send } from 'lucide-react';
 import { api } from '../lib/api';
 import toast from 'react-hot-toast';
 import EmailPreviewModal from './EmailPreviewModal';
-import { CustomChecklistItems, useChecklistStatus } from './ChecklistExtras';
+import { CustomChecklistItems, itemLabel, useChecklistStatus } from './ChecklistExtras';
 import { DateInput } from './ui/DateTimeInputs';
 
 interface OBOBMChecklist {
@@ -374,7 +374,7 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
           {TIMELINE_FIELDS.map((f) => (
             <div key={f.key}>
               <label className="flex items-center gap-1.5 text-[11px] text-gray-500 mb-0.5">
-                {f.label} {optionalTag(f.key)}
+                {itemLabel(status, f.key, f.label)} {optionalTag(f.key)}
                 <FieldStatus saving={savingKeys.has(f.key)} saved={savedKeys.has(f.key)} />
               </label>
               <DateInput
@@ -405,7 +405,7 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
                     onChange={(e) => toggleDoc(`${item.key}Done`, e.target.checked)}
                     className="w-4 h-4 accent-brand-500 shrink-0"
                   />
-                  <span className={`text-xs ${done ? 'text-green-700' : 'text-gray-700'} truncate`}>{item.label} {optionalTag(item.key)}</span>
+                  <span className={`text-xs ${done ? 'text-green-700' : 'text-gray-700'} truncate`}>{itemLabel(status, item.key, item.label)} {optionalTag(item.key)}</span>
                   <FieldStatus saving={savingKeys.has(`${item.key}Done`)} saved={savedKeys.has(`${item.key}Done`)} />
                 </label>
                 <label className="flex items-center gap-1.5 text-[11px] text-gray-400 shrink-0 cursor-pointer">
@@ -451,7 +451,7 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
             onChange={(e) => toggleDoc('clientConfirmed', e.target.checked)}
             className="w-3.5 h-3.5 accent-gray-500"
           />
-          Client confirmed {optionalTag('clientConfirmed')}
+          {itemLabel(status, 'clientConfirmed', 'Client confirmed')} {optionalTag('clientConfirmed')}
           <FieldStatus saving={savingKeys.has('clientConfirmed')} saved={savedKeys.has('clientConfirmed')} />
         </label>
       </div>

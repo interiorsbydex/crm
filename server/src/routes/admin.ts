@@ -43,6 +43,7 @@ import {
   CrmSettingsError, DEFAULT_CRM_SETTINGS, LEAD_DETAIL_OPTIONS, HIDEABLE_STAGES, NAMEABLE_STAGES, DESIGN_PHASE_KEYS,
   loadCrmSettingsState, saveCrmSettings, resetCrmSettings, crmSettingsHistory, getCrmSettings, previewCycleStartDay,
 } from '../lib/crmSettings.js';
+import { wordingConfig, WORDING_KEYS } from '../lib/wording.js';
 
 export const adminRouter = Router();
 
@@ -1094,6 +1095,9 @@ mountVersionedConfig(adminRouter, '/meetings', meetingSettingsConfig);
 // ── In-app alerts (Admin → In-app Alerts) ────────────────────────────────────
 // Which roles see each type of in-app alert (lib/notifications.ts).
 mountVersionedConfig(adminRouter, '/alerts', alertSettingsConfig, async () => ({ catalog: { types: NOTIFICATION_TYPES, roles: ALERT_ROLES } }));
+
+// ── Wording (Admin → Wording) ─────────────────────────────────────────────────
+mountVersionedConfig(adminRouter, '/wording', wordingConfig, async () => ({ catalog: { labels: WORDING_KEYS } }));
 
 // ── Formulas (Admin → Formulas) ───────────────────────────────────────────────
 // Medal levels, score weights, intent tiers and contact-health days (lib/formulaSettings.ts).

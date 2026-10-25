@@ -120,6 +120,10 @@ export const crmSettingsSchema = z.object({
     /** A follow-up task (date and time) must be set when logging a call. */
     requireFollowUp: z.boolean(),
   }).strict(),
+  /** Country preselected for new phone numbers (two-letter code, e.g. IN). */
+  defaultPhoneCountry: z.string().regex(/^[A-Z]{2}$/, 'use a two-letter country code such as IN'),
+  /** Details shown on lead cards in the Sales Pipeline board. */
+  pipelineCardFields: z.array(z.enum(['scope', 'value', 'location', 'owner', 'source', 'age', 'intent', 'phone'])),
   /** Whether "notify the client" boxes on call, meeting and follow-up forms start ticked. */
   notifyClientByDefault: z.boolean(),
   reminderMinutesBefore: z.number().int().min(15, "must be at least 15 minutes (the reminder check runs every 15 minutes)").max(24 * 60),
@@ -167,6 +171,8 @@ export const DEFAULT_CRM_SETTINGS: CrmSettings = {
   // Follow-up after a call: required unless the lenient launch switch is on (today's behaviour).
   calls: { rnrEscalationAfter: 5, rnrInactivationMonths: 3, requireFollowUp: !isLenientLaunch() },
   notifyClientByDefault: true,
+  defaultPhoneCountry: 'IN',
+  pipelineCardFields: ['scope', 'value', 'location', 'owner', 'source', 'age'],
   reminderMinutesBefore: 60,
   weeklyDigestDay: 2,
   designPhaseDays: {
@@ -243,7 +249,7 @@ export class CrmSettingsError extends Error {
 const SECTION_NAMES: Record<string, string> = {
   cities: 'Cities', leadSources: 'Lead sources', onHoldReasons: 'On-hold reasons', inactiveReasons: 'Inactive reasons',
   reactivationReasons: 'Reactivation reasons', flagCategories: 'Flag categories', leadCreateRequired: 'New lead details',
-  discount: 'Discount limits', calls: 'Calls', notifyClientByDefault: 'Notify client by default', reminderMinutesBefore: 'Reminder timing', weeklyDigestDay: 'Weekly digest day',
+  discount: 'Discount limits', calls: 'Calls', notifyClientByDefault: 'Notify client by default', defaultPhoneCountry: 'Default phone country', pipelineCardFields: 'Pipeline cards', reminderMinutesBefore: 'Reminder timing', weeklyDigestDay: 'Weekly digest day',
   designPhaseDays: 'Design phase days', designOverallDays: 'Overall design days', stageLabels: 'Stage names', hiddenStages: 'Switched-off stages',
   cycleStartDay: 'Cycle start day',
 };

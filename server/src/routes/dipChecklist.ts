@@ -133,8 +133,9 @@ dipChecklistRouter.patch('/', verifyToken, requirePermission('DIP_CHECKLIST_EDIT
     // without a payment screenshot, even in lenient mode.
     // Which items are needed follows Admin → Checklists (lib/checklists.ts); the
     // payment screenshot can never be made optional.
-    const { missing } = await evaluateChecklist('dip', id, merged);
-    const paymentProofMissing = missing.length === 1 && missing[0].startsWith('Payment screenshot') && !current.completedAt;
+    const { items, missing } = await evaluateChecklist('dip', id, merged);
+    // Matched by key, not name: Admin → Checklists can rename items.
+    const paymentProofMissing = missing.length === 1 && items.some((i) => i.key === 'paymentScreenshot' && !i.met) && !current.completedAt;
     const allComplete = missing.length === 0;
 
     if (allComplete && !current.completedAt) {

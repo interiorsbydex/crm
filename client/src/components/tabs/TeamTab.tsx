@@ -4,6 +4,7 @@ import { UserPlus, Check, X, Star, AlertTriangle } from 'lucide-react';
 import { api } from '../../lib/api';
 import { getStoredUser } from '../../lib/auth';
 import { usePermissions } from '../../lib/permissions';
+import { useWording } from '../../lib/wording';
 
 interface TeamMemberUser { id: string; name: string; role: string; isActive: boolean }
 interface TeamMember {
@@ -42,6 +43,7 @@ export default function TeamTab({
   leadDisplayId: string;
   isLocked?: boolean;
 }) {
+  const t = useWording();
   const user = getStoredUser();
 
   // effectiveProjectId starts null for pre-DIP leads; gets set after lazy-create
@@ -288,7 +290,7 @@ export default function TeamTab({
             </div>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-1">Design Team Lead (DTL)</p>
+            <p className="text-xs text-gray-500 mb-1">{t('title.DESIGN_TEAM_LEAD', 'Design Team Lead')} (DTL)</p>
             <div className="flex gap-1">
               <select value={dtlValue} onChange={(e) => setDtlValue(e.target.value)}
                 className="flex-1 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-400">
@@ -301,7 +303,7 @@ export default function TeamTab({
                 className="bg-brand-500 text-white px-2 py-1 rounded text-xs disabled:opacity-50">Save</button>
             </div>
             {adminUsers.filter((u) => u.designation === 'DESIGN_TEAM_LEAD' && u.isActive).length === 0 && (
-              <p className="text-[10px] text-amber-600 mt-1">No user has the Design Team Lead designation yet — set it in Admin → Team Members first.</p>
+              <p className="text-[10px] text-amber-600 mt-1">No user has the {t('title.DESIGN_TEAM_LEAD', 'Design Team Lead')} designation yet — set it in Admin → Team Members first.</p>
             )}
           </div>
         </div>

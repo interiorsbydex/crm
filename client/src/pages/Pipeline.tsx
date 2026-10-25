@@ -241,8 +241,10 @@ function LeadCard({
   onDragEnd: () => void;
   onOpenChecklist: (lead: Lead) => void;
 }) {
-  const val = fmt(lead.estimatedValue);
-  const scope = [lead.projectType, lead.scope].filter(Boolean).join(' · ');
+  // Which details a card shows: Admin → CRM Settings → Display.
+  const show = (f: string) => crmSettings().pipelineCardFields.includes(f);
+  const val = show('value') ? fmt(lead.estimatedValue) : '';
+  const scope = show('scope') ? [lead.projectType, lead.scope].filter(Boolean).join(' · ') : '';
   const checklistEntry = CHECKLIST_ENTRY_STAGES[lead.stage];
 
   return (
@@ -293,7 +295,11 @@ function LeadCard({
         <span className="text-[10px] font-semibold text-stone-400 px-1.5 py-0.5 rounded-full shrink-0" style={{ background: '#F5F0EB' }}>
           {stageLabel(lead.stage)}
         </span>
-        {lead.location && <span className="text-xs text-stone-400 truncate flex-1">{lead.location}</span>}
+        {show('location') && lead.location && <span className="text-xs text-stone-400 truncate flex-1">{lead.location}</span>}
+      </div>
+      <div className="flex items-center gap-2 mb-1 empty:hidden">
+        {show('intent') && !!lead.intentRating && <span className="text-[11px] text-amber-500">{'★'.repeat(lead.intentRating)}</span>}
+        {show('phone') && lead.phone && <span className="text-[11px] text-stone-500">{lead.phone}</span>}
       </div>
 
       <div className="flex flex-wrap gap-1 mb-2.5">
@@ -322,7 +328,7 @@ function LeadCard({
       </div>
 
       <div className="flex items-center gap-1.5 pt-1.5" style={{ borderTop: '1px solid #F5F0EB' }}>
-        {lead.assignedDesigner ? (
+        {!show('owner') ? <span className="flex-1" /> : lead.assignedDesigner ? (
           <div className="flex items-center gap-1 flex-1 min-w-0">
             <div className="w-5 h-5 rounded-full bg-brand-100 flex items-center justify-center shrink-0">
               <span className="text-[9px] font-bold text-brand-700">{lead.assignedDesigner.name[0]?.toUpperCase()}</span>
@@ -339,10 +345,10 @@ function LeadCard({
         ) : (
           <span className="text-[10px] text-stone-300 flex-1">Unassigned</span>
         )}
-        {lead.source && (
+        {show('source') && lead.source && (
           <span className="text-[10px] text-stone-400 shrink-0 hidden sm:block">{sourceLabel(lead.source)}</span>
         )}
-        <span className="text-[10px] text-stone-400 shrink-0">{relTime(lead.createdAt)} ago</span>
+        {show('age') && <span className="text-[10px] text-stone-400 shrink-0">{relTime(lead.createdAt)} ago</span>}
       </div>
     </div>
   );

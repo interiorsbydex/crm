@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import fyxLogo from '../assets/fyx-logo.svg';
+import { useWording } from '../lib/wording';
 
 interface InviteInfo {
   email: string;
@@ -10,6 +11,7 @@ interface InviteInfo {
 }
 
 export default function AcceptInvite() {
+  const t = useWording();
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
 
@@ -89,7 +91,7 @@ export default function AcceptInvite() {
           <div className="w-14 h-14 rounded-full bg-brand-500 flex items-center justify-center mx-auto mb-3">
             <img src={fyxLogo} alt="FYX" className="w-10" />
           </div>
-          <h1 className="text-xl font-bold text-gray-900">FYX — For Your Xperience</h1>
+          <h1 className="text-xl font-bold text-gray-900">{t('app.fullName', 'FYX — For Your Xperience')}</h1>
           <p className="text-sm text-gray-400">CRM Platform</p>
         </div>
 

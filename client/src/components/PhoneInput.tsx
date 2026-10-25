@@ -12,6 +12,7 @@
 
 import { useMemo, useState } from 'react';
 import { getCountries, getCountryCallingCode, parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js';
+import { crmSettings } from '../lib/crmSettings';
 
 const PREFERRED_COUNTRIES: CountryCode[] = ['IN', 'US', 'GB', 'AE', 'SG', 'AU', 'CA'];
 
@@ -56,8 +57,10 @@ function splitValue(value: string): { iso: CountryCode; national: string } {
       // fall through to legacy handling below
     }
   }
-  // Legacy value with no recognizable country prefix — default to India,
-  // keep the raw digits untouched so it round-trips unless the user edits it.
+  // Empty: the country chosen in Admin → CRM Settings. Legacy value with no
+  // recognizable country prefix: India, keeping the raw digits untouched so it
+  // round-trips unless the user edits it.
+  if (!v.trim()) return { iso: (crmSettings().defaultPhoneCountry || 'IN') as CountryCode, national: '' };
   return { iso: 'IN', national: v.replace(/\D/g, '') };
 }
 

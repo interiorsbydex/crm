@@ -4,8 +4,10 @@ import toast from 'react-hot-toast';
 import { Eye, EyeOff } from 'lucide-react';
 import fyxLogo from '../assets/fyx-logo.svg';
 import { scheduleProactiveRefresh } from '../lib/api';
+import { useWording } from '../lib/wording';
 
 export default function Login() {
+  const t = useWording();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -50,8 +52,8 @@ export default function Login() {
           <div className="w-16 h-16 rounded-2xl bg-brand-500 flex items-center justify-center mx-auto mb-5 shadow-warm">
             <img src={fyxLogo} alt="FYX" className="w-11" />
           </div>
-          <h1 className="text-2xl font-bold text-stone-900 tracking-tight">FYX — For Your Xperience</h1>
-          <p className="text-stone-400 text-sm mt-1.5">Sign in to FYX</p>
+          <h1 className="text-2xl font-bold text-stone-900 tracking-tight">{t('app.fullName', 'FYX — For Your Xperience')}</h1>
+          <p className="text-stone-400 text-sm mt-1.5">Sign in to {t('app.name', 'FYX')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

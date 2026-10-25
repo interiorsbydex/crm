@@ -20,6 +20,7 @@ import { DateInput } from './ui/DateTimeInputs';
 import { todayISTDateString } from '../lib/dateFormat';
 import { loadMeetingSettings } from '../lib/meetingSettings';
 import { loadFormulas } from '../lib/formulas';
+import { loadWording, wording } from '../lib/wording';
 
 interface SearchLead {
   id: string;
@@ -111,7 +112,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // wait for them (or for the load to fail, falling back to built-in values).
   const [settingsReady, setSettingsReady] = useState(false);
   useEffect(() => {
-    Promise.allSettled([loadCrmSettings(), loadDashboardLayouts(), loadMyPermissions(), loadMeetingSettings(), loadFormulas()]).finally(() => setSettingsReady(true));
+    Promise.allSettled([loadWording(), loadCrmSettings(), loadDashboardLayouts(), loadMyPermissions(), loadMeetingSettings(), loadFormulas()]).finally(() => setSettingsReady(true));
   }, []);
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -315,7 +316,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <span className="text-white text-sm font-bold">D</span>
             </div>
             <div>
-              <p className="text-sm font-bold text-stone-900 leading-tight">FYX</p>
+              <p className="text-sm font-bold text-stone-900 leading-tight">{wording('app.name', 'FYX')}</p>
               <p className="text-[10px] text-stone-400 font-medium tracking-widest uppercase">CRM</p>
             </div>
           </Link>

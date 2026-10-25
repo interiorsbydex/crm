@@ -93,6 +93,14 @@ describe.skipIf(!safeDb)('checklists', () => {
     await expect(mergeCustomValues('pdOb', {}, { unknown: true })).rejects.toThrow(/can fill in/);
   });
 
+  it('renamed built-in items keep working by key', async () => {
+    await saveConfig({ dip: { optional: [], custom: [], labels: { paymentScreenshot: 'Booking amount proof', cxApprovalReceived: 'Client OK by email' } } });
+    const { items, missing } = await evaluateChecklist('dip', LEAD, { internalMailThreadCompleted: true });
+    expect(items.find((i) => i.key === 'paymentScreenshot')).toMatchObject({ label: 'Booking amount proof', renamed: true, required: true });
+    expect(missing).toEqual(['Client OK by email', 'Booking amount proof']);
+    expect((await problemsOf({ dip: { optional: [], custom: [], labels: { nope: 'x' } } }))[0]).toMatch(/unknown item/);
+  });
+
   it('defaults cover all three checklists', () => {
     expect(Object.keys(defaultChecklists())).toEqual(['pdOb', 'obObm', 'dip']);
   });

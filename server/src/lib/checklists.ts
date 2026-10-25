@@ -84,7 +84,8 @@ export const BUILT_IN_ITEMS: Record<ChecklistKind, BuiltInItem[]> = {
 
 export type CustomKind = 'tick' | 'date' | 'text' | 'document';
 export interface CustomItem { key: string; label: string; kind: CustomKind; docType?: string; required: boolean; active: boolean }
-export interface ChecklistSettings { optional: string[]; custom: CustomItem[] }
+/** `labels`: new names for built-in items (Admin → Checklists). */
+export interface ChecklistSettings { optional: string[]; custom: CustomItem[]; labels?: Record<string, string> }
 export type ChecklistsConfig = Record<ChecklistKind, ChecklistSettings>;
 
 export function defaultChecklists(): ChecklistsConfig {
@@ -99,7 +100,11 @@ const customSchema = z.object({
   required: z.boolean(),
   active: z.boolean(),
 }).strict();
-const settingsSchema = z.object({ optional: z.array(z.string()), custom: z.array(customSchema).max(40) }).strict();
+const settingsSchema = z.object({
+  optional: z.array(z.string()),
+  custom: z.array(customSchema).max(40),
+  labels: z.record(z.string(), z.string().trim().min(1, 'an item name cannot be empty').max(120, 'item names are limited to 120 characters')).optional(),
+}).strict();
 
 async function validateChecklists(raw: unknown): Promise<ChecklistsConfig> {
   const parsed = z.object(Object.fromEntries(CHECKLIST_KINDS.map((k) => [k, settingsSchema.optional()]))).strict().safeParse(raw);
@@ -122,7 +127,13 @@ async function validateChecklists(raw: unknown): Promise<ChecklistsConfig> {
       keys.add(c.key);
       if (c.kind === 'document' && (!c.docType || !docKeys.has(c.docType))) problems.push(`${CHECKLIST_NAMES[kind]}: "${c.label}" needs a document type that's in use`);
     }
-    out[kind] = { optional: s.optional.filter((k) => builtIn.has(k) && !builtIn.get(k)!.lockedReason), custom: s.custom };
+    const labels: Record<string, string> = {};
+    for (const [key, label] of Object.entries(s.labels ?? {})) {
+      const item = builtIn.get(key);
+      if (!item) problems.push(`${CHECKLIST_NAMES[kind]}: unknown item "${key}"`);
+      else if (label !== item.label) labels[key] = label;
+    }
+    out[kind] = { optional: s.optional.filter((k) => builtIn.has(k) && !builtIn.get(k)!.lockedReason), custom: s.custom, labels };
   }
   if (problems.length) throw new ConfigError(400, 'The checklists could not be saved', problems);
   return out;
@@ -143,6 +154,8 @@ export interface ChecklistItemStatus {
   met: boolean;
   required: boolean;
   locked: boolean;
+  /** True when the admin renamed this built-in item. */
+  renamed?: boolean;
   custom?: { kind: CustomKind; docType?: string; value: unknown };
 }
 
@@ -207,7 +220,8 @@ export async function evaluateChecklist(kind: ChecklistKind, leadId: string, row
   const met = await builtInMet(kind, leadId, row);
   const values = (row.customValues ?? {}) as Record<string, unknown>;
   const items: ChecklistItemStatus[] = BUILT_IN_ITEMS[kind].map((i) => ({
-    key: i.key, label: i.label, met: !!met[i.key], locked: !!i.lockedReason,
+    key: i.key, label: settings.labels?.[i.key] ?? i.label, met: !!met[i.key], locked: !!i.lockedReason,
+    ...(settings.labels?.[i.key] && { renamed: true }),
     required: !!i.lockedReason || !settings.optional.includes(i.key),
   }));
   for (const c of settings.custom.filter((x) => x.active)) {

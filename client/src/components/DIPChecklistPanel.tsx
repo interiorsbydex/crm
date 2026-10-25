@@ -3,7 +3,8 @@ import { Check, Mail } from 'lucide-react';
 import { api } from '../lib/api';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../lib/permissions';
-import { CustomChecklistItems, useChecklistStatus } from './ChecklistExtras';
+import { CustomChecklistItems, itemLabel, useChecklistStatus } from './ChecklistExtras';
+import { wording } from '../lib/wording';
 
 interface DIPChecklist {
   id: string;
@@ -130,7 +131,7 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete, isLocked:
   const isRequired = (key: string) => !!status?.items.find((i) => i.key === key)?.required;
   const isComplete = !!checklist.completedAt;
   const progress = required.length ? (completedCount / required.length) * 100 : 0;
-  const onlyPaymentMissing = status?.missing.length === 1 && status.missing[0].startsWith('Payment screenshot');
+  const onlyPaymentMissing = status?.missing.length === 1 && !!status.items.find((i) => i.key === 'paymentScreenshot' && !i.met);
 
   return (
     <div className={`border rounded-xl p-5 ${isComplete ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
@@ -180,7 +181,7 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete, isLocked:
                 className="w-4 h-4 accent-brand-500"
               />
               <span className={`text-sm ${checked ? 'text-green-700 line-through' : 'text-gray-700'}`}>
-                {item.label}{optional ? ' (optional)' : ''}
+                {itemLabel(status, item.key, item.label)}{optional ? ' (optional)' : ''}
               </span>
             </label>
           );
@@ -215,7 +216,7 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete, isLocked:
       {stage !== 'DESIGN_IN_PROGRESS' && stage !== 'HANDED_OVER' && (
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">
-            Internal Mail Thread URL (optional)
+            {wording('dip.threadUrl', 'Internal Mail Thread URL')} (optional)
           </label>
           <div className="flex gap-2">
             <input

@@ -3,10 +3,11 @@ import { Check, Mail, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api';
 import toast from 'react-hot-toast';
 import EmailPreviewModal from './EmailPreviewModal';
-import { CustomChecklistItems, useChecklistStatus } from './ChecklistExtras';
+import { CustomChecklistItems, itemLabel, useChecklistStatus } from './ChecklistExtras';
 import { DateTimeInput } from './ui/DateTimeInputs';
 import { istDatetimeLocalValue, istInputToISO } from '../lib/dateFormat';
 import { crmSettings } from '../lib/crmSettings';
+import { wording } from '../lib/wording';
 
 interface PDOBChecklist {
   id: string;
@@ -225,25 +226,25 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
 
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div className={`text-xs px-3 py-2 rounded-lg ${hasPaymentScreenshot ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-          {hasPaymentScreenshot ? '✓' : '⚠'} Payment screenshot {hasPaymentScreenshot ? 'uploaded' : '— upload in Files tab'}{optionalTag('paymentScreenshot')}
+          {hasPaymentScreenshot ? '✓' : '⚠'} {itemLabel(status, 'paymentScreenshot', 'Payment screenshot')} {hasPaymentScreenshot ? 'uploaded' : '— upload in Files tab'}{optionalTag('paymentScreenshot')}
         </div>
         <div className={`text-xs px-3 py-2 rounded-lg ${hasObQuote ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-          {hasObQuote ? '✓' : '⚠'} OB Quote {hasObQuote ? 'uploaded' : '— upload in Files tab'}{optionalTag('obQuote')}
+          {hasObQuote ? '✓' : '⚠'} {itemLabel(status, 'obQuote', 'OB Quote')} {hasObQuote ? 'uploaded' : '— upload in Files tab'}{optionalTag('obQuote')}
         </div>
         <div className={`text-xs px-3 py-2 rounded-lg ${hasWelcomeMailScreenshot ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-          {hasWelcomeMailScreenshot ? '✓' : '⚠'} Approval screenshot {hasWelcomeMailScreenshot ? 'uploaded' : '— upload in Files tab'}{optionalTag('welcomeMailScreenshot')}
+          {hasWelcomeMailScreenshot ? '✓' : '⚠'} {itemLabel(status, 'welcomeMailScreenshot', 'Approval screenshot')} {hasWelcomeMailScreenshot ? 'uploaded' : '— upload in Files tab'}{optionalTag('welcomeMailScreenshot')}
         </div>
         <div className={`text-xs px-3 py-2 rounded-lg ${hasFinalPitchPresentationFile ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-          {hasFinalPitchPresentationFile ? '✓' : '⚠'} Pitch Presentation file {hasFinalPitchPresentationFile ? 'uploaded' : '— upload in Files tab'}{optionalTag('finalPitchPresentation')}
+          {hasFinalPitchPresentationFile ? '✓' : '⚠'} {itemLabel(status, 'finalPitchPresentation', 'Pitch Presentation file')} {hasFinalPitchPresentationFile ? 'uploaded' : '— upload in Files tab'}{optionalTag('finalPitchPresentation')}
         </div>
         <div className={`text-xs px-3 py-2 rounded-lg ${hasGeneratedQuotationFile ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-          {hasGeneratedQuotationFile ? '✓' : '⚠'} Generated Quotation file {hasGeneratedQuotationFile ? 'uploaded' : '— upload in Files tab'}{optionalTag('generatedQuotation')}
+          {hasGeneratedQuotationFile ? '✓' : '⚠'} {itemLabel(status, 'generatedQuotation', 'Generated Quotation file')} {hasGeneratedQuotationFile ? 'uploaded' : '— upload in Files tab'}{optionalTag('generatedQuotation')}
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Payment value (₹){optionalTag('paymentValue')}</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">{itemLabel(status, 'paymentValue', 'Payment value (₹)')}{optionalTag('paymentValue')}</label>
           <input
             type="number"
             disabled={!isEditable || saving}
@@ -253,7 +254,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Target value — total after discount, excluding GST (₹)</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">{wording('onboarding.targetValue', 'Target value — total after discount, excluding GST (₹)')}</label>
           <input
             type="number"
             min="0"
@@ -263,7 +264,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
             onChange={(e) => setForm((f) => ({ ...f, targetValue: e.target.value }))}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:bg-gray-50"
           />
-          <p className="mt-1 text-xs text-gray-500">Updates the recorded amount used by booking reports and credits. Include furniture in this total; record the furniture breakup separately below.</p>
+          <p className="mt-1 text-xs text-gray-500">{wording('onboarding.targetValueHelp', 'Updates the recorded amount used by booking reports and credits. Include furniture in this total; record the furniture breakup separately below.')}</p>
           {canEditTarget && !isEditable && (
             <button type="button" onClick={saveTarget} disabled={saving}
               className="mt-2 rounded bg-brand-500 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
@@ -272,7 +273,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           )}
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Project value excluding furniture (₹){optionalTag('projectValue')}</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">{itemLabel(status, 'projectValue', 'Project value excluding furniture (₹)')}{optionalTag('projectValue')}</label>
           <input
             type="number"
             disabled={!isEditable || saving}
@@ -282,7 +283,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Furniture value (₹){optionalTag('furnitureValue')}</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">{itemLabel(status, 'furnitureValue', 'Furniture value (₹)')}{optionalTag('furnitureValue')}</label>
           <input
             type="number"
             disabled={!isEditable || saving}
@@ -292,7 +293,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">OB meeting date &amp; time{optionalTag('obMeetingScheduledAt')}</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">{itemLabel(status, 'obMeetingScheduledAt', 'OB meeting date & time')}{optionalTag('obMeetingScheduledAt')}</label>
           <DateTimeInput
             disabled={!isEditable || saving}
             value={form.obMeetingScheduledAt}
@@ -300,7 +301,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">OB meeting location{optionalTag('obMeetingLocation')}</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">{itemLabel(status, 'obMeetingLocation', 'OB meeting location')}{optionalTag('obMeetingLocation')}</label>
           <select
             disabled={!isEditable || saving}
             value={showOtherLocation ? OTHER_LOCATION_VALUE : form.obMeetingLocation}
@@ -343,7 +344,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
       </label>
 
       <div className="mb-3">
-        <label className="block text-xs font-medium text-gray-600 mb-1">Notes{optionalTag('notes')}</label>
+        <label className="block text-xs font-medium text-gray-600 mb-1">{itemLabel(status, 'notes', 'Notes')}{optionalTag('notes')}</label>
         <textarea
           disabled={!isEditable || saving}
           value={form.notes}
