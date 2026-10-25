@@ -10,6 +10,7 @@ import DashboardContentAdmin from '../components/admin/DashboardContentAdmin';
 import StageRulesAdmin from '../components/admin/StageRulesAdmin';
 import DocumentTypesAdmin from '../components/admin/DocumentTypesAdmin';
 import CrmSettingsAdmin from '../components/admin/CrmSettingsAdmin';
+import { cycleDescription } from '../lib/crmSettings';
 
 interface User {
   id: string; name: string; email: string; role: string;
@@ -1099,7 +1100,7 @@ export default function Admin() {
               {targetsData && <span className="text-xs text-gray-400">{targetsData.cycle.label}</span>}
             </div>
             <p className="text-xs text-gray-500 mb-4">
-              Targets run on a 16th–15th cycle, not the calendar month. Once a cycle ends, its target is locked
+              Targets run on a {cycleDescription()} cycle (set in CRM Settings), not the calendar month. Once a cycle ends, its target is locked
               and can no longer be edited — set next cycle's targets here instead.
             </p>
 

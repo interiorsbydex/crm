@@ -21,7 +21,12 @@ export interface CrmSettings {
   designOverallDays: number;
   stageLabels: Record<string, string>;
   hiddenStages: string[];
+  cycleStartDay: number;
+  cycleSchedule?: { from: string; startDay: number }[];
 }
+
+/** Cycle facts worked out by the server (the start day in force can differ from a newly chosen one). */
+export interface CycleInfo { startDayInEffect: number; pending: { from: string; startDay: number } | null; upcoming: string[] }
 
 /** Used only until the server copy arrives (or if it can't be loaded). */
 const FALLBACK: CrmSettings = {
@@ -45,8 +50,10 @@ const FALLBACK: CrmSettings = {
     DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',
   },
   hiddenStages: [],
+  cycleStartDay: 16,
 };
 
+let cycles: CycleInfo = { startDayInEffect: 16, pending: null, upcoming: [] };
 let current: CrmSettings = FALLBACK;
 let loaded = false;
 let inflight: Promise<CrmSettings> | null = null;
@@ -55,9 +62,10 @@ const listeners = new Set<(s: CrmSettings) => void>();
 export function loadCrmSettings(force = false): Promise<CrmSettings> {
   if (loaded && !force) return Promise.resolve(current);
   if (!inflight) {
-    inflight = api.get<{ settings: CrmSettings }>('/config/crm-settings')
-      .then(({ settings }) => {
+    inflight = api.get<{ settings: CrmSettings; cycles: CycleInfo }>('/config/crm-settings')
+      .then(({ settings, cycles: c }) => {
         current = settings;
+        if (c) cycles = c;
         loaded = true;
         listeners.forEach((fn) => fn(settings));
         return settings;
@@ -113,4 +121,12 @@ export function sourceLabel(source: string | null | undefined): string {
 export function sourceValue(source: string | null | undefined): string {
   if (!source) return '';
   return current.leadSources.find((s) => s.value === source || s.label.toLowerCase() === source.toLowerCase())?.value ?? '';
+}
+
+const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`;
+
+/** The target/credit cycle in words, e.g. "16th–15th" (or "1st–month end" for calendar months). */
+export function cycleDescription(): string {
+  const d = cycles.startDayInEffect;
+  return d === 1 ? '1st–month end' : `${ordinal(d)}–${ordinal(d - 1)}`;
 }

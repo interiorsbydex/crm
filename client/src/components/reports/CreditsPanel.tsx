@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { api } from '../../lib/api';
 import { getStoredUser } from '../../lib/auth';
 import { Link } from 'react-router-dom';
+import { cycleDescription } from '../../lib/crmSettings';
 
 type Designer = { id: string; name: string };
 type Validation = { leadId: string; name: string; bookingValue: number; rating: number | null; status: string; releasePct: number | null };
@@ -107,7 +108,7 @@ export default function CreditsPanel({ showTitle = true }: { showTitle?: boolean
   const body = (
     <div className="space-y-4" data-testid="credits-panel">
       <div className="flex flex-wrap items-end gap-3">
-        {showTitle && <h3 className="mr-auto text-sm font-semibold text-gray-900">Credits (16th–15th cycle)</h3>}
+        {showTitle && <h3 className="mr-auto text-sm font-semibold text-gray-900">Credits ({cycleDescription()} cycle)</h3>}
         {data && data.designers.length > 1 && (
           <label className="text-xs text-gray-500">Designer
             <select value={designerId || r?.designer.id || data.review?.designerId || ''} onChange={(e) => setDesignerId(e.target.value)}

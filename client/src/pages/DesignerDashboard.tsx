@@ -15,6 +15,7 @@ import {
   TrendingUp, TrendingDown, Minus, Calendar, Star, Bell,
   AlertTriangle, Target, RefreshCw, ChevronRight, FileText, BarChart3, Heart,
 } from 'lucide-react';
+import { cycleDescription } from '../lib/crmSettings';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 const fmt = (n: number) => {
@@ -505,7 +506,7 @@ export default function DesignerDashboard({ designerId, designerName }: { design
                   : <>
                       <span data-testid="dashboard-core-credits">{dd?.incentive.coreCreditsEarned ?? 'Unavailable'}</span> core
                       {' + '}<span data-testid="dashboard-booster-credits">{dd?.incentive.boosterCredits ?? 'Unavailable'}</span> booster
-                      {' · '}{dd?.targetCycle?.label ?? 'Current 16th–15th cycle'}
+                      {' · '}{dd?.targetCycle?.label ?? `Current ${cycleDescription()} cycle`}
                     </>}
               </p>
             </Panel>

@@ -9,6 +9,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '../lib/api';
 import DesignerDashboard from './DesignerDashboard';
 import DashboardContent from '../components/dashboard/DashboardContent';
+import { cycleDescription } from '../lib/crmSettings';
 
 interface Designer { id: string; name: string }
 interface Row {
@@ -112,7 +113,7 @@ export default function BLTeamDashboard({ teamExtras }: { teamExtras?: ReactNode
               <div className="px-5 py-3" style={{ borderBottom: '1px solid #EDE8E3' }}>
                 <h3 className="font-bold text-stone-900">Team by designer</h3>
                 <p className="text-xs text-stone-400 mt-0.5">
-                  Active leads: current. PP done and onboarded: all-time. Booking, targets and designer credits: current 16th–15th cycle.
+                  Active leads: current. PP done and onboarded: all-time. Booking, targets and designer credits: current {cycleDescription()} cycle.
                   Credits below belong to designers, not the BL's personal incentive calculation. Click a designer to open their full dashboard.
                 </p>
               </div>

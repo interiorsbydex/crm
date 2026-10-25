@@ -67,6 +67,7 @@ import { scheduleUpcomingDueReminder } from './jobs/upcomingDueReminder.js';
 import { scheduleCREDigestJobs, runDailyCreDigest, runMonthlyCreMetrics } from './jobs/creDigest.js';
 import './jobs/emailWorker.js';
 import './jobs/performanceRecalc.js';
+import { startCycleScheduleRefresh } from './lib/crmSettings.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -233,6 +234,8 @@ process.on('unhandledRejection', (reason) => {
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, async () => {
+  // Cycle maths (targets, credits) follow the start day in CRM Settings.
+  startCycleScheduleRefresh();
   console.log(`CRM Server running on port ${PORT}`);
   console.log(`BASE_URL: ${BASE_URL}`);
 

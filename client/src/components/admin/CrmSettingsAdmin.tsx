@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { api } from '../../lib/api';
-import { loadCrmSettings, type CrmSettings } from '../../lib/crmSettings';
+import { loadCrmSettings, type CrmSettings, type CycleInfo } from '../../lib/crmSettings';
 
 // Admin → CRM Settings: dropdown lists, stage names and simple numbers
 // (server: lib/crmSettings.ts). Lists are edited one item per line.
@@ -13,6 +13,7 @@ interface LoadResp {
   revision: number;
   updatedAt: string | null;
   updatedByName: string | null;
+  cycles: CycleInfo;
   catalog: { leadDetails: { field: string; label: string }[]; hideableStages: string[]; nameableStages: string[]; designPhases: string[] };
 }
 interface HistoryEntry { id: string; action: string; createdAt: string; byName: string; revision: number | null; note: string | null; settings: CrmSettings | null }
@@ -31,6 +32,9 @@ const LIST_SECTIONS: { key: 'onHoldReasons' | 'inactiveReasons' | 'reactivationR
 const toLines = (items: string[]) => items.join('\n');
 const fromLines = (text: string) => text.split('\n').map((l) => l.trim()).filter(Boolean);
 const codeFor = (label: string) => label.toUpperCase().trim().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
+
+/** "2026-11-16" → "16 Nov 2026". */
+const fmtDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
 const INPUT = 'rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm';
 const H3 = 'text-xs font-semibold uppercase tracking-wider text-gray-500';
@@ -62,6 +66,7 @@ export default function CrmSettingsAdmin() {
   const [problems, setProblems] = useState<string[]>([]);
   const [history, setHistory] = useState<HistoryEntry[] | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [cyclePreview, setCyclePreview] = useState<string[] | null>(null);
 
   const adopt = (s: CrmSettings) => {
     setDraft(structuredClone(s));
@@ -77,6 +82,18 @@ export default function CrmSettingsAdmin() {
     setProblems([]);
   };
   useEffect(() => { load().catch((e) => toast.error(e?.message ?? 'Could not load CRM settings')); }, []);
+
+  // Show what a different cycle start day would mean before it's saved.
+  const chosenDay = draft?.cycleStartDay;
+  useEffect(() => {
+    setCyclePreview(null);
+    if (!data || !chosenDay || !Number.isInteger(chosenDay) || chosenDay < 1 || chosenDay > 28) return;
+    const t = setTimeout(() => {
+      api.get<{ upcoming: string[] }>(`/admin/crm-settings/cycle-preview?startDay=${chosenDay}`)
+        .then((r) => setCyclePreview(r.upcoming)).catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [chosenDay, data]);
 
   /** The draft with the list boxes' text applied. */
   const effective = useMemo<CrmSettings | null>(() => {
@@ -285,6 +302,21 @@ export default function CrmSettingsAdmin() {
           </label>
         </div>
         <p className="text-[11px] text-gray-400">The wording of the reminder and digest emails is edited under Settings → Mail templates.</p>
+      </div>
+
+      <div className={CARD} data-testid="section-cycle">
+        <h3 className={H3}>Targets and credits cycle</h3>
+        <p className="text-[11px] text-gray-400">
+          The day of the month each target and credit cycle starts. A change starts when the current cycle ends — cycles already
+          under way never move, so targets and credits already recorded stay as they are.
+        </p>
+        <div className="flex flex-wrap items-end gap-6">
+          <NumField label="Cycle starts on day" suffix="of the month (1–28)" min={1} value={draft.cycleStartDay} onChange={(n) => set('cycleStartDay', n)} />
+        </div>
+        <div className="text-xs text-gray-600 space-y-0.5" data-testid="cycle-info">
+          <p>In force now: cycles start on day {data.cycles.startDayInEffect}.{data.cycles.pending ? ` Already scheduled: day ${data.cycles.pending.startDay} from ${fmtDay(data.cycles.pending.from)}.` : ''}</p>
+          {cyclePreview && <p>Next cycles{draft.cycleStartDay !== data.settings.cycleStartDay ? ' after saving' : ''}: {cyclePreview.join(' → ')}</p>}
+        </div>
       </div>
 
       <div className={CARD} data-testid="section-design">

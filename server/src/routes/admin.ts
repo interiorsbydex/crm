@@ -23,13 +23,14 @@ import {
   StageRulesError, RULE_FIELD_OPTIONS, RULE_MEETING_OPTIONS,
   loadStageRulesState, saveStageRules, resetStageRules, stageRulesHistory, previewStageRulesImpact,
 } from '../lib/stageRules.js';
+import { DEFAULT_CYCLE_SCHEDULE } from '../lib/targetCycle.js';
 import { defaultStageRules, FUNNEL_EDGES, SKIPPABLE_CANDIDATES, WARNABLE_TARGETS, SKIP_FLAG_BY_STAGE } from '../config/stageRequirements.js';
 import {
   DOCUMENT_TYPES_CONFIG_KEY, documentTypeOverridesSchema, loadDocumentTypeOverrides, resolveDocumentTypes,
 } from '../lib/documentTypes.js';
 import {
   CrmSettingsError, DEFAULT_CRM_SETTINGS, LEAD_DETAIL_OPTIONS, HIDEABLE_STAGES, NAMEABLE_STAGES, DESIGN_PHASE_KEYS,
-  loadCrmSettingsState, saveCrmSettings, resetCrmSettings, crmSettingsHistory,
+  loadCrmSettingsState, saveCrmSettings, resetCrmSettings, crmSettingsHistory, getCrmSettings, previewCycleStartDay,
 } from '../lib/crmSettings.js';
 
 export const adminRouter = Router();
@@ -1013,6 +1014,21 @@ adminRouter.put('/crm-settings', async (req, res) => {
     const { settings, revision, note } = req.body as { settings?: unknown; revision?: unknown; note?: string };
     const saved = await saveCrmSettings(settings, revision, req.user!.id, typeof note === 'string' ? note : undefined);
     res.json({ revision: saved.revision, updatedAt: saved.updatedAt, settings: saved.settings });
+  } catch (err: any) {
+    sendCrmSettingsError(res, err);
+  }
+});
+
+// The next cycles if the start day were changed to ?startDay= today (nothing is saved).
+adminRouter.get('/crm-settings/cycle-preview', async (req, res) => {
+  try {
+    const startDay = Number(req.query.startDay);
+    if (!Number.isInteger(startDay) || startDay < 1 || startDay > 28) {
+      res.status(400).json({ error: 'startDay must be a whole number from 1 to 28' });
+      return;
+    }
+    const settings = await getCrmSettings();
+    res.json({ upcoming: previewCycleStartDay(settings.cycleSchedule ?? DEFAULT_CYCLE_SCHEDULE, startDay) });
   } catch (err: any) {
     sendCrmSettingsError(res, err);
   }

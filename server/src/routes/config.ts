@@ -7,7 +7,8 @@ import {
 import { getEffectiveStageSla } from '../lib/stageSla.js';
 import { isLenientLaunch } from '../lib/lenientMode.js';
 import { getDocumentTypes } from '../lib/documentTypes.js';
-import { getCrmSettings } from '../lib/crmSettings.js';
+import { getCrmSettings, describeCycles } from '../lib/crmSettings.js';
+import { DEFAULT_CYCLE_SCHEDULE } from '../lib/targetCycle.js';
 
 export const configRouter = Router();
 
@@ -19,7 +20,8 @@ configRouter.get('/flags', verifyToken, (_req, res) => {
 // ── GET /api/config/crm-settings — lists and labels every screen uses (Admin → CRM Settings) ──
 configRouter.get('/crm-settings', verifyToken, async (_req, res) => {
   try {
-    res.json({ settings: await getCrmSettings() });
+    const settings = await getCrmSettings();
+    res.json({ settings, cycles: describeCycles(settings.cycleSchedule ?? DEFAULT_CYCLE_SCHEDULE) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

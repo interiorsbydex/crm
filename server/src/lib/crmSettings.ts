@@ -12,6 +12,9 @@
 import { z } from 'zod';
 import { prisma } from './prisma.js';
 import { logActivity } from './activityLog.js';
+import {
+  DEFAULT_CYCLE_SCHEDULE, applyCycleStartDay, setCycleSchedule, startDayOn, upcomingCycles, type CycleScheduleEntry,
+} from './targetCycle.js';
 
 export const CRM_SETTINGS_KEY = 'crm_settings_v1';
 export const CRM_SETTINGS_ACTIONS = ['CRM_SETTINGS_UPDATED', 'CRM_SETTINGS_RESET'] as const;
@@ -113,6 +116,10 @@ export const crmSettingsSchema = z.object({
   designOverallDays: z.number().int().min(1).max(730),
   stageLabels: z.record(z.enum(NAMEABLE_STAGES), text(40)),
   hiddenStages: z.array(z.enum(HIDEABLE_STAGES)),
+  /** Day of the month incentive/target cycles start on (1–28). Takes effect when the current cycle ends. */
+  cycleStartDay: z.number().int().min(1, 'must be between 1 and 28').max(28, 'must be between 1 and 28 (every month has those days)'),
+  /** Worked out by the server from cycleStartDay (lib/targetCycle.ts); anything sent in is ignored. */
+  cycleSchedule: z.array(z.object({ from: z.string(), startDay: z.number() })).optional(),
 }).strict();
 
 export type CrmSettings = z.infer<typeof crmSettingsSchema>;
@@ -158,6 +165,8 @@ export const DEFAULT_CRM_SETTINGS: CrmSettings = {
     DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',
   },
   hiddenStages: [],
+  cycleStartDay: 16,
+  cycleSchedule: DEFAULT_CYCLE_SCHEDULE,
 };
 
 interface StoredCrmSettings {
@@ -182,7 +191,32 @@ function merge(saved: Partial<CrmSettings> | undefined): CrmSettings {
 
 export async function getCrmSettings(): Promise<CrmSettings> {
   const row = await prisma.assignmentConfig.findUnique({ where: { key: CRM_SETTINGS_KEY } });
-  return merge((row?.value as StoredCrmSettings | null)?.settings);
+  const settings = merge((row?.value as StoredCrmSettings | null)?.settings);
+  setCycleSchedule(settings.cycleSchedule); // keep the synchronous cycle maths current
+  return settings;
+}
+
+/** Re-read the cycle schedule now and then, so every server instance picks up a change. */
+export function startCycleScheduleRefresh(intervalMs = 60_000) {
+  const refresh = () => { getCrmSettings().catch(() => {}); };
+  refresh();
+  return setInterval(refresh, intervalMs);
+}
+
+/** What the admin screen shows about cycles: the day in force, any pending change, and the next cycles. */
+export function describeCycles(schedule: CycleScheduleEntry[], now = new Date()) {
+  const today = now.toISOString().slice(0, 10);
+  const pending = schedule.find((e) => e.from > today) ?? null;
+  return {
+    startDayInEffect: startDayOn(now, schedule),
+    pending,
+    upcoming: upcomingCycles(schedule, 3, now).map((c) => c.label),
+  };
+}
+
+/** The next cycles if the start day were changed to `startDay` today. */
+export function previewCycleStartDay(schedule: CycleScheduleEntry[], startDay: number, now = new Date()) {
+  return upcomingCycles(applyCycleStartDay(schedule, startDay, now), 3, now).map((c) => c.label);
 }
 
 export class CrmSettingsError extends Error {
@@ -194,6 +228,7 @@ const SECTION_NAMES: Record<string, string> = {
   reactivationReasons: 'Reactivation reasons', flagCategories: 'Flag categories', leadCreateRequired: 'New lead details',
   discount: 'Discount limits', reminderMinutesBefore: 'Reminder timing', weeklyDigestDay: 'Weekly digest day',
   designPhaseDays: 'Design phase days', designOverallDays: 'Overall design days', stageLabels: 'Stage names', hiddenStages: 'Switched-off stages',
+  cycleStartDay: 'Cycle start day',
 };
 
 export function validateCrmSettings(raw: unknown): CrmSettings {
@@ -214,9 +249,11 @@ export async function loadCrmSettingsState() {
   const updatedBy = stored?.updatedById
     ? await prisma.user.findUnique({ where: { id: stored.updatedById }, select: { name: true } })
     : null;
+  const settings = merge(stored?.settings);
   return {
-    settings: merge(stored?.settings),
+    settings,
     isDefault: !stored,
+    cycles: describeCycles(settings.cycleSchedule ?? DEFAULT_CYCLE_SCHEDULE),
     revision: stored?.revision ?? 0,
     updatedAt: stored?.updatedAt ?? null,
     updatedByName: updatedBy?.name ?? null,
@@ -224,10 +261,16 @@ export async function loadCrmSettingsState() {
 }
 
 export async function saveCrmSettings(raw: unknown, expectedRevision: unknown, userId: string, note?: string) {
-  const settings = validateCrmSettings(raw);
-  return prisma.$transaction(async (tx) => {
+  const validated = validateCrmSettings(raw);
+  const saved = await prisma.$transaction(async (tx) => {
     const row = await tx.assignmentConfig.findUnique({ where: { key: CRM_SETTINGS_KEY } });
-    const current = (row?.value as StoredCrmSettings | null)?.revision ?? 0;
+    const stored = row?.value as StoredCrmSettings | null;
+    const current = stored?.revision ?? 0;
+    // Past and current cycles never move: a new start day is scheduled from the day the current cycle ends.
+    const settings: CrmSettings = {
+      ...validated,
+      cycleSchedule: applyCycleStartDay(merge(stored?.settings).cycleSchedule ?? DEFAULT_CYCLE_SCHEDULE, validated.cycleStartDay),
+    };
     if (expectedRevision !== current) {
       throw new CrmSettingsError(409, 'Someone else saved the CRM settings since you opened this page. Reload to see their changes, then make yours again.');
     }
@@ -242,11 +285,33 @@ export async function saveCrmSettings(raw: unknown, expectedRevision: unknown, u
     });
     return value;
   });
+  setCycleSchedule(saved.settings.cycleSchedule);
+  return saved;
 }
 
+/**
+ * Go back to the shipped settings. The cycle start day is the one exception:
+ * cycles already started can't move, so the original day (16th) is scheduled
+ * from the end of the current cycle instead. The previous version stays in
+ * the change history.
+ */
 export async function resetCrmSettings(userId: string) {
-  await prisma.assignmentConfig.deleteMany({ where: { key: CRM_SETTINGS_KEY } });
-  await logActivity(userId, 'CRM_SETTINGS_RESET', undefined, { settings: DEFAULT_CRM_SETTINGS });
+  const row = await prisma.assignmentConfig.findUnique({ where: { key: CRM_SETTINGS_KEY } });
+  const stored = row?.value as StoredCrmSettings | null;
+  const schedule = applyCycleStartDay(merge(stored?.settings).cycleSchedule ?? DEFAULT_CYCLE_SCHEDULE, DEFAULT_CRM_SETTINGS.cycleStartDay);
+  if (JSON.stringify(schedule) === JSON.stringify(DEFAULT_CYCLE_SCHEDULE)) {
+    await prisma.assignmentConfig.deleteMany({ where: { key: CRM_SETTINGS_KEY } });
+  } else {
+    const value: StoredCrmSettings = {
+      settings: { cycleSchedule: schedule }, revision: (stored?.revision ?? 0) + 1,
+      updatedAt: new Date().toISOString(), updatedById: userId,
+    };
+    await prisma.assignmentConfig.upsert({
+      where: { key: CRM_SETTINGS_KEY }, create: { key: CRM_SETTINGS_KEY, value: value as any }, update: { value: value as any },
+    });
+  }
+  setCycleSchedule(schedule);
+  await logActivity(userId, 'CRM_SETTINGS_RESET', undefined, { settings: { ...DEFAULT_CRM_SETTINGS, cycleSchedule: schedule } });
 }
 
 export async function crmSettingsHistory(limit = 30) {

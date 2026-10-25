@@ -11,7 +11,7 @@ import { DateInput } from '../components/ui/DateTimeInputs';
 import DesignerReports from '../components/reports/DesignerReports';
 import BlAdminReports from '../components/reports/BlAdminReports';
 import CreditsPanel from '../components/reports/CreditsPanel';
-import { stageShortLabel } from '../lib/crmSettings';
+import { stageShortLabel, cycleDescription } from '../lib/crmSettings';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type AnyRow = Record<string, unknown>;
@@ -476,7 +476,7 @@ export default function Reports() {
 
               <SectionCard
                 title="Incentive overview"
-                subtitle="Core and booster credits for the selected 16th–15th cycle. Credits only — no ₹ payout shown."
+                subtitle={`Core and booster credits for the selected ${cycleDescription()} cycle. Credits only — no ₹ payout shown.`}
               >
                 <CreditsPanel showTitle={false} />
               </SectionCard>
@@ -858,7 +858,7 @@ export default function Reports() {
           {role === 'BRANCH_HEAD' && <DesignerReports role={role} />}
           {role === 'BRANCH_HEAD' && <BlAdminReports role={role} />}
           {showFull && (
-            <SectionCard title={isBL ? 'BL & Team Credits' : 'Designer credits'} subtitle={isBL ? 'Your BL credit status and your team designers’ earned credits are shown separately.' : 'Core and booster credits per designer for a 16th–15th cycle. Attendance credit is approved here.'}>
+            <SectionCard title={isBL ? 'BL & Team Credits' : 'Designer credits'} subtitle={isBL ? 'Your BL credit status and your team designers’ earned credits are shown separately.' : `Core and booster credits per designer for a ${cycleDescription()} cycle. Attendance credit is approved here.`}>
               <CreditsPanel showTitle={false} />
             </SectionCard>
           )}

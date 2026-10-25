@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Table as ServerReportTable, type TableData } from './BlAdminReports';
-import { stageLabel } from '../../lib/crmSettings';
+import { stageLabel, cycleDescription } from '../../lib/crmSettings';
 
 type DrillLead = { id: string; leadId: string; name: string; [k: string]: unknown };
 type Designer = { id: string; name: string };
@@ -406,7 +406,7 @@ const pct = (v: unknown) => (v == null ? '—' : `${v}%`);
 const trendsHeaders = (): Hdr[] => {
   const dc = (key: string): Col[] => [dateCol('date', 'Date')].concat(key === 'mql' ? [{ key: 'mqlFallback', label: 'From origin date', fmt: (v: boolean) => (v ? 'yes' : 'no') }] : []);
   return [
-    { key: 'label', label: 'Cycle (16th–15th)' },
+    { key: 'label', label: `Cycle (${cycleDescription()})` },
     { key: 'mql', label: 'MQL', drill: { path: (r) => r.drilldown.mql, cols: dc('mql') } },
     { key: 'dql', label: 'DQL', drill: { path: (r) => r.drilldown.dql, cols: dc('dql') } },
     { key: 'dqlPct', label: 'DQL %', fmt: pct },
@@ -424,7 +424,7 @@ const trendsHeaders = (): Hdr[] => {
 function Trends({ data }: { data: Row }) {
   return (
     <div className="space-y-3">
-      <Note>Each row is a target cycle (16th–15th). MQL = leads whose MQL Received Date (first MQL log, else lead origin date — {data.mqlFallbackLeads} leads used the fallback) is in the cycle. DQL / Proposal Presented / Onboarded count those same MQL leads that have since reached that stage or any later one, and each % = that count ÷ MQLs received in the cycle. Onboarded = OB + OBM stages and beyond. Booking Value uses the dashboard booking definition (Design in Progress with the DIP checklist complete) for the cycle, and Booking Value % = that ÷ the cycle's Booking Target. TAT = onboardings whose first DIP log is in the cycle.</Note>
+      <Note>Each row is a target cycle ({cycleDescription()}). MQL = leads whose MQL Received Date (first MQL log, else lead origin date — {data.mqlFallbackLeads} leads used the fallback) is in the cycle. DQL / Proposal Presented / Onboarded count those same MQL leads that have since reached that stage or any later one, and each % = that count ÷ MQLs received in the cycle. Onboarded = OB + OBM stages and beyond. Booking Value uses the dashboard booking definition (Design in Progress with the DIP checklist complete) for the cycle, and Booking Value % = that ÷ the cycle's Booking Target. TAT = onboardings whose first DIP log is in the cycle.</Note>
       <DrillTableCards
         title="Cycle-wise sales trend"
         rows={data.rows}
@@ -765,7 +765,7 @@ export default function DesignerReports({ role }: { role: string }) {
   useEffect(() => { void load(); }, [load]);
 
   const options = tab === 'my-performance' || tab === 'my-commitment' ? CYCLE_OPTIONS : tab === 'my-trends-sales' ? TREND_OPTIONS : RANGE_OPTIONS;
-  const periodLabel = tab === 'my-performance' || tab === 'my-commitment' ? 'Period (16th–15th cycle)' : tab === 'my-trends-sales' ? 'Cycles' : 'Date range';
+  const periodLabel = tab === 'my-performance' || tab === 'my-commitment' ? `Period (${cycleDescription()} cycle)` : tab === 'my-trends-sales' ? 'Cycles' : 'Date range';
 
   return (
     <div className="space-y-3" data-testid="designer-reports">
