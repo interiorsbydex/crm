@@ -486,13 +486,9 @@ discountsRouter.patch('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), asy
         res.status(403).json({ error: `Exceeds your approval authority (max ${ceiling}%). Use /forward to escalate.` });
         return;
       }
-    } else {
-      // BRANCH_HEAD — can only act on BH-routed or forwarded requests
-      if (!isRoutedToBH) {
-        res.status(403).json({ error: 'This request is routed for BL approval, not Branch Head.' });
-        return;
-      }
     }
+    // BRANCH_HEAD can act on any request, including BL-routed ones, so a
+    // Branch Head can cover when the BL is away (client request, feature 12.5).
 
     const updated = await prisma.discountRequest.update({
       where: { id },
