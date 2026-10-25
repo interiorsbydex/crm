@@ -30,6 +30,8 @@ vi.mock('../lib/prisma.js', () => {
       if (state.failAudit && data.action === 'LEAD_IMPORTED') throw new Error('Synthetic audit failure');
       state.logs.push(data); return data;
     } },
+    // Admin settings (e.g. Permissions): nothing saved, so defaults apply.
+    assignmentConfig: { findUnique: async () => null },
     leadCounter: {
       findUnique: async () => ({ lastNum: state.counter }),
       upsert: async ({ update }: any) => { state.counter = update.lastNum; },
