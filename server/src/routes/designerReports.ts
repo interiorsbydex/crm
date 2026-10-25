@@ -2,6 +2,7 @@
 // their own role scoping and never trust designerId/blId query parameters to
 // widen scope. Existing /api/reports handlers are intentionally untouched.
 import { Router } from 'express';
+import { getFormulas } from '../lib/formulaSettings.js';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
 import { getCycleForDate, type TargetCycle } from '../lib/targetCycle.js';
@@ -203,7 +204,8 @@ export async function myPerformance(user: { id: string; role: string }, q: Recor
       const days = (dip.getTime() - mql.date.getTime()) / DAY_MS;
       return { id: l.id, leadId: l.leadId, name: l.name, mqlDate: mql.date, onboardingDate: dip, mqlFallback: mql.fallback, days: round1(days) };
     });
-    const withinSeven = tatRows.filter((r) => r.days <= 7).length;
+    const fastDays = (await getFormulas()).fastOnboardingDays;
+    const withinSeven = tatRows.filter((r) => r.days <= fastDays).length;
 
     const proposalDetail = completedPp.inPeriod({ from: cycle.cycleStart, to: cycle.cycleEnd }).pitches
       .map(({ id, leadId, name }) => ({ id, leadId, name }));
@@ -231,6 +233,7 @@ export async function myPerformance(user: { id: string; role: string }, q: Recor
         leadToOnboardingTatAvgDays: tatRows.length ? round1(tatRows.reduce((a, r) => a + r.days, 0) / tatRows.length) : null,
         onboardingWithin7DaysPct: tatRows.length ? round1((withinSeven / tatRows.length) * 100) : null,
         onboardingWithin7DaysNumerator: withinSeven,
+        fastOnboardingDays: fastDays,
         averageNps: avgNps,
         npsResponsesCounted: nps.length,
       },
@@ -723,7 +726,7 @@ async function myCommitment(user: { id: string; role: string }, q: Record<string
   for (const cy of cycles) {
     const range = { gte: cy.cycleStart, lte: cy.cycleEnd };
     const commitLeads = await prisma.lead.findMany({
-        where: { assignedDesignerId: { in: scope.designerIds }, ...nonTest, intentRating: { gte: 4 }, expectedObDate: range },
+        where: { assignedDesignerId: { in: scope.designerIds }, ...nonTest, intentRating: { gte: (await getFormulas()).intentTiers.highFrom }, expectedObDate: range },
         select: {
           id: true, leadId: true, name: true, intentRating: true, expectedObDate: true, estimatedValue: true, stage: true,
           dipChecklist: { select: { completedAt: true } },
@@ -783,7 +786,8 @@ async function taskCallActivity(user: { id: string; role: string }, q: Record<st
   const scope = await resolveScope(user, q.designerId);
   const range = resolveRange(q);
   const now = new Date();
-  const threeDaysAgo = new Date(now.getTime() - 3 * DAY_MS);
+  const noActivityDays = (await getFormulas()).noActivityDays;
+  const threeDaysAgo = new Date(now.getTime() - noActivityDays * DAY_MS);
   // follow_up_tasks.dueDate is a UTC-midnight calendar marker, so its range is
   // the raw from/to days rather than the IST instants used for timestamps.
   const dueRange: { gte?: Date; lte?: Date } = {};
@@ -951,6 +955,7 @@ async function taskCallActivity(user: { id: string; role: string }, q: Record<st
       notDone: notDone.length,
       overdueActivities: overdue.length,
       noActivityOver3Days: stale.length,
+      noActivityDays,
       activeLeadsWithNoActivityLog: activeNoLog,
       drilldown: {
         leads: leads,
@@ -1002,7 +1007,7 @@ async function taskCallActivity(user: { id: string; role: string }, q: Record<st
       callsMade: 'calls.loggedById = designer, calls.calledAt (else createdAt) in range',
       leads: 'leads.assignedDesignerId = designer, non-test, all periods',
       projects: 'projects.designerId = designer, lead non-test, all periods and phases',
-      noActivity: "ACTIVE leads whose last COMPLETED activity (completed meeting, call made, completed follow-up/task) is more than 3 days ago. Leads never touched are included, measured from the lead's creation date.",
+      noActivity: `ACTIVE leads whose last COMPLETED activity (completed meeting, call made, completed follow-up/task) is more than ${noActivityDays} days ago. Leads never touched are included, measured from the lead's creation date.`,
       activityCompletionPct: "(completed meetings + completed follow-ups/tasks) / (planned meetings + follow-ups/tasks) x 100; RESCHEDULED meeting/task rows excluded",
     },
     rows,

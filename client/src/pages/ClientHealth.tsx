@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Heart } from 'lucide-react';
 import { api } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
+import { formulas } from '../lib/formulas';
 
 type Health = 'HEALTHY' | 'AT_RISK' | 'CRITICAL';
 type ContactStatus = 'RECENT' | 'WARNING' | 'HIGH_RISK' | 'UNKNOWN';
@@ -72,7 +73,7 @@ export default function ClientHealth() {
               </section>
             )}
             <h2 className="text-sm font-bold text-stone-800">Information completeness</h2>
-            <p className="text-xs text-stone-500">Existing completeness bands: 80%+ Healthy, 50–79% At Risk, under 50% Critical. Any missing required detail is still marked Data incomplete.</p>
+            <p className="text-xs text-stone-500">Completeness bands: {formulas().completeness.healthyFrom}%+ Healthy, {formulas().completeness.atRiskFrom}–{formulas().completeness.healthyFrom - 1}% At Risk, under {formulas().completeness.atRiskFrom}% Critical. Any missing required detail is still marked Data incomplete.</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <button
                 onClick={() => setParams({})}

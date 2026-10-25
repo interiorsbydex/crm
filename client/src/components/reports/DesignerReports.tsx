@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Table as ServerReportTable, type TableData } from './BlAdminReports';
 import { stageLabel, cycleDescription } from '../../lib/crmSettings';
+import { formulas } from '../../lib/formulas';
 
 type DrillLead = { id: string; leadId: string; name: string; [k: string]: unknown };
 type Designer = { id: string; name: string };
@@ -168,7 +169,7 @@ function MyPerformance({ data, showBlBookingDefinition = false }: { data: PerfDa
           <div className="grid grid-cols-2 gap-3 rounded-xl bg-blue-50/60 p-3 md:grid-cols-4">
             <Stat label="Proposal Presented" value={String(b.effort.proposalPresentedCount)} sub="Unique leads with a completed PP meeting in this cycle; lead must have reached PP" />
             <Stat label="Lead → Onboarding TAT (avg days)" value={b.effort.leadToOnboardingTatAvgDays == null ? 'N/A' : String(b.effort.leadToOnboardingTatAvgDays)} sub={b.effort.leadToOnboardingTatAvgDays == null ? 'No onboardings with a DIP log in this cycle' : `${b.result.onboardingsUsedInTat} onboardings used`} />
-            <Stat label="Onboarding within 7 days" value={b.effort.onboardingWithin7DaysPct == null ? 'N/A' : `${b.effort.onboardingWithin7DaysPct}%`} sub={b.effort.onboardingWithin7DaysPct == null ? 'No onboardings with a TAT in this cycle (zero denominator)' : `${b.effort.onboardingWithin7DaysNumerator} of ${b.result.onboardingsUsedInTat}`} />
+            <Stat label={`Onboarding within ${formulas().fastOnboardingDays} days`} value={b.effort.onboardingWithin7DaysPct == null ? 'N/A' : `${b.effort.onboardingWithin7DaysPct}%`} sub={b.effort.onboardingWithin7DaysPct == null ? 'No onboardings with a TAT in this cycle (zero denominator)' : `${b.effort.onboardingWithin7DaysNumerator} of ${b.result.onboardingsUsedInTat}`} />
             <Stat label="Average NPS" value={b.effort.averageNps == null ? 'N/A' : String(b.effort.averageNps)} sub={b.effort.averageNps == null ? 'No scored NPS responses in this cycle' : `${b.effort.npsResponsesCounted} scored responses`} />
           </div>
           {!!b.effort.pitchCompletionDatesMissing && (
@@ -445,7 +446,7 @@ function Commitment({ data }: { data: Row }) {
   return (
     <div className="space-y-6">
       <Note>
-        Meetings planned / committed: every original and revised DQL/PP commitment scheduled in the cycle, including archived reschedules. Meetings actual: each meeting completed in the cycle, using its recorded completion date, even if originally scheduled in another cycle. A completion is counted once. Achievement % = Actual ÷ Planned × 100; N/A when nothing was planned. Expected Booking and Expected OB Value still use the 4★/5★ leads whose Expected OB date falls in the cycle, with actuals from those leads onboarded at Design in Progress with the DIP checklist complete.
+        Meetings planned / committed: every original and revised DQL/PP commitment scheduled in the cycle, including archived reschedules. Meetings actual: each meeting completed in the cycle, using its recorded completion date, even if originally scheduled in another cycle. A completion is counted once. Achievement % = Actual ÷ Planned × 100; N/A when nothing was planned. Expected Booking and Expected OB Value still use the {formulas().intentTiers.highFrom}★-and-above leads whose Expected OB date falls in the cycle, with actuals from those leads onboarded at Design in Progress with the DIP checklist complete.
       </Note>
       {data.blocks.map((b: Row) => (
         <div key={b.cycle.label} className="space-y-2">
@@ -495,7 +496,7 @@ const taskCallHeaders = (): Hdr[] => {
         { key: 'pendingActivities', label: 'Pending', drill: d('pendingActivities', taskCols) },
         { key: 'notDone', label: 'Not Done', drill: d('notDone', taskCols) },
         { key: 'overdueActivities', label: 'Overdue', drill: d('overdueActivities', taskCols) },
-        { key: 'noActivityOver3Days', label: 'No Activity > 3 Days', drill: d('noActivityOver3Days', [dateCol('lastActivityAt', 'Last activity')]) },
+        { key: 'noActivityOver3Days', label: `No Activity > ${formulas().noActivityDays} Days`, drill: d('noActivityOver3Days', [dateCol('lastActivityAt', 'Last activity')]) },
   ];
 };
 
@@ -517,7 +518,7 @@ const stageActivityHeaders: Hdr[] = (() => {
     { key: 'activityCompletionPct', label: 'Activity Completion %', fmt: (v) => (v == null ? '—' : `${v}%`) },
     { key: 'pending', label: 'Pending', drill: d('pending', tcols) },
     { key: 'overdue', label: 'Overdue', drill: d('overdue', tcols) },
-    { key: 'noActivity', label: 'No Activity > 3 days', drill: d('noActivity', [dateCol('lastActivityAt', 'Last activity')]) },
+    { key: 'noActivity', label: `No Activity > ${formulas().noActivityDays} days`, drill: d('noActivity', [dateCol('lastActivityAt', 'Last activity')]) },
   ];
 })();
 
@@ -560,7 +561,7 @@ export function csvFor(tab: string, data: Row): Csv {
       const d = data as PerfData;
       return {
         name: tab,
-        head: ['Cycle', 'Proposal Presented', 'Lead → Onboarding TAT (avg days)', 'Onboarding within 7 days', 'Average NPS', 'Onboarding count', 'Booking Value', 'Bookings', 'Leads received', 'Conversion', 'Monthly Target', 'Cumulative Achievement', 'Remaining Target',
+        head: ['Cycle', 'Proposal Presented', 'Lead → Onboarding TAT (avg days)', `Onboarding within ${formulas().fastOnboardingDays} days`, 'Average NPS', 'Onboarding count', 'Booking Value', 'Bookings', 'Leads received', 'Conversion', 'Monthly Target', 'Cumulative Achievement', 'Remaining Target',
           ...(d.blHeld ? ['Current BL-held leads (all dates)', 'Current BL-held leads dated in cycle (lead-origin date)', 'BL-held eligible booking value', 'BL-held booking review'] : [])],
         rows: d.blocks.map((b, index) => [
           b.cycle.label, String(b.effort.proposalPresentedCount),

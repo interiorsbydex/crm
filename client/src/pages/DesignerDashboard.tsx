@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { cycleDescription } from '../lib/crmSettings';
 import { Tile, TileGroup, useDashboardLayout } from '../lib/dashboardLayout';
+import { formulas } from '../lib/formulas';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 const fmt = (n: number) => {
@@ -607,9 +608,9 @@ export default function DesignerDashboard({ designerId, designerName }: { design
 
                   <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {[
-                      { key: 'highIntent', label: 'High Intent', intentMin: 4, intentMax: 5, style: 'bg-green-50 text-green-700 border-green-100' },
-                      { key: 'mediumIntent', label: 'Medium Intent', intentMin: 3, intentMax: 3, style: 'bg-amber-50 text-amber-700 border-amber-100' },
-                      { key: 'lowIntent', label: 'Low Intent', intentMin: 1, intentMax: 2, style: 'bg-red-50 text-red-700 border-red-100' },
+                      { key: 'highIntent', label: 'High Intent', intentMin: formulas().intentTiers.highFrom, intentMax: 5, style: 'bg-green-50 text-green-700 border-green-100' },
+                      { key: 'mediumIntent', label: 'Medium Intent', intentMin: formulas().intentTiers.mediumFrom, intentMax: formulas().intentTiers.highFrom - 1, style: 'bg-amber-50 text-amber-700 border-amber-100' },
+                      { key: 'lowIntent', label: 'Low Intent', intentMin: 1, intentMax: formulas().intentTiers.mediumFrom - 1, style: 'bg-red-50 text-red-700 border-red-100' },
                     ].map((tier) => {
                       const tierData = dd.forecast[tier.key as 'highIntent' | 'mediumIntent' | 'lowIntent'];
                       const query = new URLSearchParams({

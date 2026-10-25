@@ -34,6 +34,7 @@ import { dashboardLayoutsConfig } from '../lib/dashboardLayouts.js';
 import { permissionsConfig, PERMISSIONS } from '../lib/permissions.js';
 import { checklistsConfig, CHECKLIST_NAMES, BUILT_IN_ITEMS } from '../lib/checklists.js';
 import { leadRoutingConfig } from '../lib/leadRouting.js';
+import { formulaSettingsConfig } from '../lib/formulaSettings.js';
 import { meetingSettingsConfig } from '../lib/meetingSettings.js';
 import { alertSettingsConfig, NOTIFICATION_TYPES, ALERT_ROLES } from '../lib/notifications.js';
 import { reportDefinitionsConfig, WON_STAGE_CHOICES, NPS_SURVEYS, NPS_SURVEY_LABELS, NPS_TRIGGER_STAGES } from '../lib/reportDefinitions.js';
@@ -1093,6 +1094,10 @@ mountVersionedConfig(adminRouter, '/meetings', meetingSettingsConfig);
 // ── In-app alerts (Admin → In-app Alerts) ────────────────────────────────────
 // Which roles see each type of in-app alert (lib/notifications.ts).
 mountVersionedConfig(adminRouter, '/alerts', alertSettingsConfig, async () => ({ catalog: { types: NOTIFICATION_TYPES, roles: ALERT_ROLES } }));
+
+// ── Formulas (Admin → Formulas) ───────────────────────────────────────────────
+// Medal levels, score weights, intent tiers and contact-health days (lib/formulaSettings.ts).
+mountVersionedConfig(adminRouter, '/formulas', formulaSettingsConfig);
 
 // ── Reports & NPS (Admin → Reports & NPS) ─────────────────────────────────────
 // Which stages count as onboarded in Reports, and which stage starts each NPS survey (lib/reportDefinitions.ts).

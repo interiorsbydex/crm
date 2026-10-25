@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { getFormulas, medalFor as medalForScore, blend } from '../lib/formulaSettings.js';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
@@ -600,6 +601,8 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     // calendar month used for the rest of this endpoint's date filters —
     // so achieved-vs-target must be computed over the cycle window.
     const targetCycle = getCycleForDate(now);
+    // Medal levels, score weights and intent tiers: Admin → Formulas.
+    const formulas = await getFormulas();
     const bookingCancellations = await loadBookingCancellations({ ...leadWhere, isTestLead: false }, targetCycle);
     const designerTarget = await prisma.designerTarget.findUnique({
       where: { designerId_cycleStart: { designerId: user.id, cycleStart: targetCycle.cycleStart } },
@@ -875,15 +878,15 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       // inside the current 16th–15th target cycle. Booking Forecast uses the
       // high-intent cohort; Pipeline Potential displays all three intent tiers.
       prisma.lead.aggregate({
-        where: { ...leadWhere, status: 'ACTIVE', stage: { in: [...FORECAST_PP_STAGES] }, expectedObDate: { gte: targetCycle.cycleStart, lte: targetCycle.cycleEnd }, estimatedValue: { not: null }, intentRating: { gte: 4, lte: 5 } },
+        where: { ...leadWhere, status: 'ACTIVE', stage: { in: [...FORECAST_PP_STAGES] }, expectedObDate: { gte: targetCycle.cycleStart, lte: targetCycle.cycleEnd }, estimatedValue: { not: null }, intentRating: { gte: formulas.intentTiers.highFrom, lte: 5 } },
         _sum: { estimatedValue: true }, _count: { id: true },
       }),
       prisma.lead.aggregate({
-        where: { ...leadWhere, status: 'ACTIVE', stage: { in: [...FORECAST_PP_STAGES] }, expectedObDate: { gte: targetCycle.cycleStart, lte: targetCycle.cycleEnd }, estimatedValue: { not: null }, intentRating: 3 },
+        where: { ...leadWhere, status: 'ACTIVE', stage: { in: [...FORECAST_PP_STAGES] }, expectedObDate: { gte: targetCycle.cycleStart, lte: targetCycle.cycleEnd }, estimatedValue: { not: null }, intentRating: { gte: formulas.intentTiers.mediumFrom, lt: formulas.intentTiers.highFrom } },
         _sum: { estimatedValue: true }, _count: { id: true },
       }),
       prisma.lead.aggregate({
-        where: { ...leadWhere, status: 'ACTIVE', stage: { in: [...FORECAST_PP_STAGES] }, expectedObDate: { gte: targetCycle.cycleStart, lte: targetCycle.cycleEnd }, estimatedValue: { not: null }, intentRating: { gte: 1, lte: 2 } },
+        where: { ...leadWhere, status: 'ACTIVE', stage: { in: [...FORECAST_PP_STAGES] }, expectedObDate: { gte: targetCycle.cycleStart, lte: targetCycle.cycleEnd }, estimatedValue: { not: null }, intentRating: { gte: 1, lt: formulas.intentTiers.mediumFrom } },
         _sum: { estimatedValue: true }, _count: { id: true },
       }),
     ]);
@@ -1043,8 +1046,8 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       value: Number(aggregate._sum.estimatedValue ?? 0),
     });
 
-    // Sales Performance Score: three equal, capped components. NPS and TAT are
-    // supporting metrics only and never affect this calculation.
+    // Sales Performance Score: three capped components, weighted as set in
+    // Admin → Formulas (equal by default). NPS and TAT are supporting metrics only.
     const bookingCount = bookingAchievedAgg._count.id;
     const conversionActualPct = leadsReceivedInCycle > 0
       ? (bookingCount / leadsReceivedInCycle) * 100
@@ -1064,9 +1067,12 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       averageBookingValue,
       designerTarget?.averageBookingValueTarget == null ? null : Number(designerTarget.averageBookingValueTarget),
     );
-    const scoreComponents = [conversionComponent, targetAchievementComponent, averageBookingValueComponent];
-    const overallScore = scoreComponents.every((score): score is number => score != null)
-      ? +(scoreComponents.reduce((sum, score) => sum + score, 0) / 3).toFixed(1)
+    const pw = formulas.performanceWeights;
+    const weighted = [[conversionComponent, pw.conversion], [targetAchievementComponent, pw.targetAchievement], [averageBookingValueComponent, pw.averageBookingValue]] as const;
+    const counted = weighted.filter(([, w]) => w > 0);
+    const totalWeight = counted.reduce((sum, [, w]) => sum + w, 0);
+    const overallScore = totalWeight > 0 && counted.every(([score]) => score != null)
+      ? +(counted.reduce((sum, [score, w]) => sum + (score as number) * w, 0) / totalWeight).toFixed(1)
       : null;
     const allTatDays = [...tatDaysByStage.entries()]
       .filter(([stage]) => stage !== 'MQL')
@@ -1188,6 +1194,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
   let medal: any = null;
   if (user.role === 'DESIGNER' || user.role === 'BL' || user.role === 'DESIGN_MANAGER') {
     const medalCycle = getCycleForDate(new Date());
+    const formulas = await getFormulas();
     const medalMembers = user.role === 'DESIGNER'
       ? [{ id: user.id, name: user.name }]
       : await prisma.user.findMany({
@@ -1243,8 +1250,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
 
       const percent = (actual: number, target: number | null) =>
         target != null && target > 0 ? +((actual / target) * 100).toFixed(1) : null;
-      const medalFor = (score: number | null) =>
-        score == null ? null : score >= 100 ? 'GOLD' : score >= 90 ? 'SILVER' : score >= 80 ? 'BRONZE' : null;
+      const medalFor = (score: number | null) => medalForScore(score, formulas);
       const memberMetrics = medalMembers.map((member) => {
         const target = targetByMember.get(member.id);
         const actual = dipByMember.get(member.id) ?? { bookingActual: 0, dipActual: 0 };
@@ -1253,7 +1259,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
         const dipTarget = target?.dipTargetCount ?? null;
         const bookingPct = percent(actual.bookingActual, bookingTarget);
         const poPct = percent(poByMember.get(member.id) ?? 0, poTarget);
-        const salesPct = bookingPct != null && poPct != null ? +((bookingPct + poPct) / 2).toFixed(1) : null;
+        const salesPct = bookingPct != null && poPct != null ? blend(bookingPct, poPct, formulas.salesPctBookingWeight) : null;
         const designDipPct = percent(actual.dipActual, dipTarget);
         return { ...member, bookingActual: actual.bookingActual, bookingTarget, poActual: poByMember.get(member.id) ?? 0, poTarget, dipActual: actual.dipActual, dipTarget, salesPct, designDipPct };
       });
@@ -1261,7 +1267,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       if (user.role === 'DESIGNER') {
         const own = memberMetrics[0];
         const score = own.salesPct != null && own.designDipPct != null
-          ? +((own.salesPct + own.designDipPct) / 2).toFixed(1)
+          ? blend(own.salesPct, own.designDipPct, formulas.designerMedalSalesWeight)
           : null;
         medal = { role: 'DESIGNER', cycle: medalCycle, score, medal: medalFor(score), salesPct: own.salesPct, designDipPct: own.designDipPct, bookingActual: own.bookingActual, bookingTarget: own.bookingTarget, poActual: own.poActual, poTarget: own.poTarget, dipActual: own.dipActual, dipTarget: own.dipTarget };
       } else if (user.role === 'BL' && memberMetrics.every((member) => member.salesPct != null)) {

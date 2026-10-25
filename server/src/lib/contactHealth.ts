@@ -1,4 +1,5 @@
 import { prisma } from './prisma.js';
+import { getFormulas } from './formulaSettings.js';
 
 export type ContactStatus = 'RECENT' | 'WARNING' | 'HIGH_RISK' | 'UNKNOWN';
 export type ContactHealth = {
@@ -15,15 +16,19 @@ const DAY = 86_400_000;
 const IST = 5.5 * 60 * 60 * 1000;
 
 /** Never infer a completed-contact date from scheduling, messages or record updates. */
+/** Days without completed contact before amber / red (Admin → Formulas). */
+export type ContactThresholds = { warningDays: number; highRiskDays: number };
+const DEFAULT_THRESHOLDS: ContactThresholds = { warningDays: 3, highRiskDays: 7 };
+
 export function contactHealth(
-  dates: Date[], incompleteEvidence: boolean, now = new Date(),
+  dates: Date[], incompleteEvidence: boolean, now = new Date(), limits: ContactThresholds = DEFAULT_THRESHOLDS,
 ): ContactHealth {
   const valid = dates.filter((date) => Number.isFinite(date.getTime()) && date <= now);
   const uncertain = incompleteEvidence || valid.length !== dates.length;
   const last = valid.length ? new Date(Math.max(...valid.map((date) => date.getTime()))) : null;
   const days = last ? Math.floor((now.getTime() + IST) / DAY) - Math.floor((last.getTime() + IST) / DAY) : null;
   return {
-    status: uncertain || days === null ? 'UNKNOWN' : days >= 7 ? 'HIGH_RISK' : days >= 3 ? 'WARNING' : 'RECENT',
+    status: uncertain || days === null ? 'UNKNOWN' : days >= limits.highRiskDays ? 'HIGH_RISK' : days >= limits.warningDays ? 'WARNING' : 'RECENT',
     lastContactAt: last?.toISOString() ?? null,
     daysSinceContact: days,
     reason: uncertain
@@ -35,7 +40,7 @@ export function contactHealth(
 }
 
 export function contactHealthByLead(
-  leadIds: string[], calls: Call[], meetings: Meeting[], logs: Completion[], now = new Date(),
+  leadIds: string[], calls: Call[], meetings: Meeting[], logs: Completion[], now = new Date(), limits: ContactThresholds = DEFAULT_THRESHOLDS,
 ) {
   const dates = new Map(leadIds.map((id) => [id, [] as Date[]]));
   const incomplete = new Set<string>();
@@ -71,7 +76,7 @@ export function contactHealthByLead(
     const knownDates = dates.get(id)!;
     const latest = Math.max(-Infinity, ...knownDates.filter((date) => Number.isFinite(date.getTime()) && date <= now).map((date) => date.getTime()));
     const pendingOutcome = (ambiguous.get(id) ?? []).some((date) => !date || !Number.isFinite(date.getTime()) || date.getTime() > latest);
-    return [id, contactHealth(knownDates, incomplete.has(id) || pendingOutcome, now)];
+    return [id, contactHealth(knownDates, incomplete.has(id) || pendingOutcome, now, limits)];
   }));
 }
 
@@ -92,5 +97,5 @@ export async function loadContactHealth(leadIds: string[], now = new Date()) {
       select: { leadId: true, createdAt: true, meta: true },
     }),
   ]);
-  return contactHealthByLead(ids, calls, meetings, logs, now);
+  return contactHealthByLead(ids, calls, meetings, logs, now, (await getFormulas()).contactHealth);
 }

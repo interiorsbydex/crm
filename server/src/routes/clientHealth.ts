@@ -4,13 +4,16 @@ import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
 import { detailsScore } from './dataQuality.js';
 import { loadContactHealth } from '../lib/contactHealth.js';
+import { getFormulas } from '../lib/formulaSettings.js';
 
 const DETAIL_FIELDS = {
   email: true, source: true, projectType: true, scope: true, location: true, possessionTimeline: true,
   builder: true, intentRating: true, estimatedValue: true, expectedObDate: true, floorPlanUrl: true, stage: true, status: true,
 } as const;
 // Health = how complete the client's details are. >=80% Healthy, 50-79% At Risk, <50% Critical.
-const bucketOfPct = (pct: number): 'HEALTHY' | 'AT_RISK' | 'CRITICAL' => (pct >= 80 ? 'HEALTHY' : pct >= 50 ? 'AT_RISK' : 'CRITICAL');
+// Bands come from Admin → Formulas (Healthy 80%+, At Risk 50%+ by default).
+const bucketOf = (pct: number, bands: { healthyFrom: number; atRiskFrom: number }): 'HEALTHY' | 'AT_RISK' | 'CRITICAL' =>
+  (pct >= bands.healthyFrom ? 'HEALTHY' : pct >= bands.atRiskFrom ? 'AT_RISK' : 'CRITICAL');
 
 /**
  * Designer "Client Health" drill-down. Returns every active client (no 30-row cap),
@@ -29,6 +32,8 @@ type Bucket = 'HEALTHY' | 'AT_RISK' | 'CRITICAL';
 clientHealthRouter.get('/', verifyToken, async (req, res) => {
   try {
     const user = req.user!;
+    const bands = (await getFormulas()).completeness;
+    const bucketOfPct = (pct: number) => bucketOf(pct, bands);
     if (user.role !== 'DESIGNER') {
       res.status(403).json({ error: 'Client health is available to designers only' });
       return;

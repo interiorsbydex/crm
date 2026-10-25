@@ -19,6 +19,7 @@ import { loadMyPermissions } from '../lib/permissions';
 import { DateInput } from './ui/DateTimeInputs';
 import { todayISTDateString } from '../lib/dateFormat';
 import { loadMeetingSettings } from '../lib/meetingSettings';
+import { loadFormulas } from '../lib/formulas';
 
 interface SearchLead {
   id: string;
@@ -110,7 +111,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // wait for them (or for the load to fail, falling back to built-in values).
   const [settingsReady, setSettingsReady] = useState(false);
   useEffect(() => {
-    Promise.allSettled([loadCrmSettings(), loadDashboardLayouts(), loadMyPermissions(), loadMeetingSettings()]).finally(() => setSettingsReady(true));
+    Promise.allSettled([loadCrmSettings(), loadDashboardLayouts(), loadMyPermissions(), loadMeetingSettings(), loadFormulas()]).finally(() => setSettingsReady(true));
   }, []);
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});

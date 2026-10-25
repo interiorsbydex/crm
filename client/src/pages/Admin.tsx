@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, Target, Megaphone, Route, FileText, SlidersHorizontal, Zap, LayoutDashboard, ShieldCheck, ListChecks, BarChart3, Shuffle, CalendarClock, Bell, type LucideIcon } from 'lucide-react';
+import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, Target, Megaphone, Route, FileText, SlidersHorizontal, Zap, LayoutDashboard, ShieldCheck, ListChecks, BarChart3, Shuffle, CalendarClock, Bell, Calculator, type LucideIcon } from 'lucide-react';
 import { api, uploadFile } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
 import { DateInput } from '../components/ui/DateTimeInputs';
@@ -18,6 +18,7 @@ import ReportsNpsAdmin from '../components/admin/ReportsNpsAdmin';
 import LeadRoutingAdmin from '../components/admin/LeadRoutingAdmin';
 import MeetingsAdmin from '../components/admin/MeetingsAdmin';
 import AlertsAdmin from '../components/admin/AlertsAdmin';
+import FormulasAdmin from '../components/admin/FormulasAdmin';
 import { cycleDescription } from '../lib/crmSettings';
 
 interface User {
@@ -53,7 +54,7 @@ const ROLE_COLORS: Record<string, string> = {
   BRANCH_HEAD: 'bg-green-100 text-green-700',
 };
 
-type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers' | 'import' | 'targets' | 'credits' | 'content' | 'stageRules' | 'docTypes' | 'crmSettings' | 'automations' | 'dashboards' | 'permissions' | 'checklists' | 'reportsNps' | 'leadRouting' | 'meetings' | 'alerts';
+type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers' | 'import' | 'targets' | 'credits' | 'content' | 'stageRules' | 'docTypes' | 'crmSettings' | 'automations' | 'dashboards' | 'permissions' | 'checklists' | 'reportsNps' | 'leadRouting' | 'meetings' | 'alerts' | 'formulas';
 
 interface ImportPreviewRow {
   row: number; status: 'WILL_IMPORT' | 'DUPLICATE' | 'INVALID';
@@ -472,6 +473,7 @@ export default function Admin() {
     { id: 'leadRouting', label: 'Lead Routing & Access', Icon: Shuffle },
     { id: 'meetings', label: 'Meetings', Icon: CalendarClock },
     { id: 'alerts', label: 'In-app Alerts', Icon: Bell },
+    { id: 'formulas', label: 'Formulas', Icon: Calculator },
   ];
 
   const hasLeads = (deactivatePreview?.activeLeads ?? 0) > 0;
@@ -1226,6 +1228,7 @@ export default function Admin() {
         {tab === 'leadRouting' && <LeadRoutingAdmin />}
         {tab === 'meetings' && <MeetingsAdmin />}
         {tab === 'alerts' && <AlertsAdmin />}
+        {tab === 'formulas' && <FormulasAdmin />}
       </div>
     </div>
   );
