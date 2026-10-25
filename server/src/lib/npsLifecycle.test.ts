@@ -24,6 +24,8 @@ vi.mock('./prisma.js', () => ({
     lead: {
       findUnique: async () => ({ name: 'Synthetic QA', email: state.missingEmail ? null : 'synthetic@resend.dev' }),
     },
+    // Admin settings (e.g. Automations): nothing saved, so defaults apply.
+    assignmentConfig: { findUnique: async () => null },
     // Drafts are stored in the EmailDraft table; an in-memory stand-in here.
     emailDraft: {
       findUnique: async ({ where }: any) => drafts.get(where.key) ?? null,

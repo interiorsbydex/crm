@@ -28,6 +28,7 @@ import {
   resolveCommercialContext,
   type CommercialContext,
 } from '../lib/stageTimeline.js';
+import { isAutomationOn } from '../lib/automations.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -1382,7 +1383,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
             movedByName: user.name,
           });
           emailPayload.to = t.email;
-          sendEmail(emailPayload).catch(() => {});
+          if (await isAutomationOn('TEAM_STAGE_BACKWARD', 'email')) sendEmail(emailPayload).catch(() => {});
         }
       }
 
@@ -1459,7 +1460,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       // draft notification for the client (no attachment). The response carries
       // the pendingMail descriptor so LeadDetail's existing review-and-send flow
       // picks it up automatically.
-      if (stage === 'PROPOSAL_READY' && existing.email) {
+      if (stage === 'PROPOSAL_READY' && existing.email && await isAutomationOn('PROPOSAL_READY', 'email')) {
         try {
           const { subject, html } = await renderMailTemplate('PROPOSAL_READY', {
             clientName: existing.name,
@@ -2139,7 +2140,7 @@ leadsRouter.patch('/:id/intent-rating', verifyToken, async (req, res) => {
             reason: reason?.trim(),
           });
           emailPayload.to = t.email;
-          sendEmail(emailPayload).catch(() => {});
+          if (await isAutomationOn('TEAM_INTENT_CHANGED', 'email')) sendEmail(emailPayload).catch(() => {});
         }
       }
     }

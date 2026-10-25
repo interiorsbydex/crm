@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { saveDraft } from '../lib/emailService.js';
 import { istDayBounds } from '../lib/istTime.js';
+import { isAutomationOn } from '../lib/automations.js';
 
 /**
  * Fix C — Client-facing Tuesday weekly digest.
@@ -30,6 +31,7 @@ export async function scheduleClientTuesdayDigest() {
 }
 
 export async function runClientTuesdayDigest(): Promise<{ digests: number }> {
+  if (!(await isAutomationOn('WEEKLY_DIGEST', 'email'))) return { digests: 0 };
   const now = new Date();
   // Window: today (Tuesday) 00:00 IST through end of the following Sunday
   const { start: weekStart } = istDayBounds(now);

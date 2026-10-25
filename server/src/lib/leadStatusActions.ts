@@ -22,6 +22,7 @@ import {
 import { renderMailTemplate } from './mailTemplates.js';
 import { sendWhatsAppMessage, fillTemplate } from './whatsapp.js';
 import { saveDraft } from './emailService.js';
+import { isAutomationOn } from './automations.js';
 
 // A draft descriptor surfaced to the caller (routes/leads.ts) so the UI can
 // open a review-and-send flow via POST /api/email/send-draft instead of the
@@ -84,14 +85,19 @@ export async function putLeadOnHold(opts: {
   const revivalStr = revivalDate.toLocaleDateString('en-IN');
   let pendingMail: PendingMail | null = null;
 
+  const auto = {
+    sms: await isAutomationOn('ON_HOLD', 'sms'),
+    email: await isAutomationOn('ON_HOLD', 'email'),
+    whatsapp: await isAutomationOn('ON_HOLD', 'whatsapp'),
+  };
   if (existing.phone) {
-    sendSms(
+    if (auto.sms) sendSms(
       existing.phone,
       `Hi ${existing.name}, your Interiors by DeX project has been put on hold until ${revivalStr}. We'll be in touch. - Interiors by DeX`,
       leadId,
     ).catch((e) => console.warn('[leadStatus:sms:on_hold]', e.message));
 
-    if (notifyClient && existing.email) {
+    if (notifyClient && existing.email && auto.email) {
       try {
         const clientNotesHtml = externalNotesHtml(externalNotes);
         const rendered = await renderMailTemplate('ON_HOLD', {
@@ -107,7 +113,7 @@ export async function putLeadOnHold(opts: {
       }
     }
 
-    try {
+    if (auto.whatsapp) try {
       const waBody = fillTemplate('on_hold_notification', { clientName: existing.name, revivalDate: revivalStr, reason });
       const twilioSid = await sendWhatsAppMessage(existing.phone, waBody);
       if (twilioSid) {
@@ -120,7 +126,8 @@ export async function putLeadOnHold(opts: {
     }
   }
 
-  // Mandatory internal notification
+  // Mandatory internal notification (in-app always; the email can be switched off in Admin → Automations)
+  const teamEmails = await isAutomationOn('TEAM_STATUS_CHANGE', 'email');
   const internalTargets = await internalRecipientsFor(existing);
   const msg = `Lead ${existing.leadId} (${existing.name}) placed On Hold by ${actorName}. Reopens ${revivalStr}.`;
   for (const t of internalTargets) {
@@ -130,7 +137,7 @@ export async function putLeadOnHold(opts: {
       revivalDate: revivalStr, reason, movedByName: actorName,
     });
     payload.to = t.email;
-    sendEmail(payload).catch(() => {});
+    if (teamEmails) sendEmail(payload).catch(() => {});
   }
 
   return { lead, pendingMail };
@@ -192,7 +199,7 @@ export async function markLeadInactive(opts: {
       update: { reason, formToken, feedbackFormSentAt: new Date(), respondedAt: null, clientResponse: null },
     });
 
-    if (existing.email) {
+    if (existing.email && await isAutomationOn('INACTIVATION_FEEDBACK', 'email')) {
       const reasonHtml = reason ? `<p>We understand that the project may not have moved forward at this time.</p>` : '';
       const clientNotesHtml = externalNotesHtml(externalNotes);
       const rendered = await renderMailTemplate('INACTIVATION_FEEDBACK', {
@@ -205,7 +212,7 @@ export async function markLeadInactive(opts: {
       pendingMail = { draftKey, type: 'INACTIVATION_FEEDBACK', to: existing.email, subject: rendered.subject, html: renderedHtml };
     }
 
-    if (existing.phone) {
+    if (existing.phone && await isAutomationOn('INACTIVATION_FEEDBACK', 'sms')) {
       sendSms(
         existing.phone,
         `Hi ${existing.name}, thank you for your interest in Interiors by DeX. We'd love your feedback: ${feedbackUrl} - Interiors by DeX`,
@@ -214,7 +221,8 @@ export async function markLeadInactive(opts: {
     }
   }
 
-  // Mandatory internal notification
+  // Mandatory internal notification (in-app always; the email can be switched off in Admin → Automations)
+  const teamEmails = await isAutomationOn('TEAM_STATUS_CHANGE', 'email');
   const internalTargets = await internalRecipientsFor(existing);
   const msg = `Lead ${existing.leadId} (${existing.name}) marked Inactive by ${actorName}. Reason: ${reason}`;
   for (const t of internalTargets) {
@@ -223,7 +231,7 @@ export async function markLeadInactive(opts: {
       recipientName: t.name, leadId: existing.leadId, leadName: existing.name, reason, movedByName: actorName,
     });
     payload.to = t.email;
-    sendEmail(payload).catch(() => {});
+    if (teamEmails) sendEmail(payload).catch(() => {});
   }
 
   return { lead, pendingMail };
@@ -269,6 +277,7 @@ export async function reactivateLead(opts: {
     from: fromStatus, reason: reason.trim(), notes: notes?.trim() || undefined, notifiedClient: notifyClient,
   });
 
+  const teamEmails = await isAutomationOn('TEAM_STATUS_CHANGE', 'email');
   const internalTargets = await internalRecipientsFor(lead);
   const msg = `Lead ${lead.leadId} (${lead.name}) reactivated from ${fromStatus} by ${actorName}. Reason: ${reason.trim()}`;
   for (const t of internalTargets) {
@@ -278,11 +287,11 @@ export async function reactivateLead(opts: {
       fromStatus, reason: reason.trim(), notes: notes?.trim(), reactivatedByName: actorName,
     });
     payload.to = t.email;
-    sendEmail(payload).catch(() => {});
+    if (teamEmails) sendEmail(payload).catch(() => {});
   }
 
   let pendingMail: PendingMail | null = null;
-  if (notifyClient && lead.email) {
+  if (notifyClient && lead.email && await isAutomationOn('REACTIVATION', 'email')) {
     const trimmedNotes = notes?.trim();
     const notesHtml = trimmedNotes ? `<p>${trimmedNotes}</p>` : '';
     const rendered = await renderMailTemplate('REACTIVATION', { clientName: lead.name, notesHtml });

@@ -5,6 +5,7 @@ import { createNotification } from '../lib/notifications.js';
 import { sendEmail } from '../lib/email.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { getCrmSettings } from '../lib/crmSettings.js';
+import { isAutomationOn, automationCc } from '../lib/automations.js';
 
 /**
  * Batch 14 item 3 — "1 hour before" (Admin → CRM Settings → reminder timing) in-app reminder for follow-up tasks and
@@ -50,6 +51,9 @@ export async function runUpcomingDueReminder(): Promise<{ taskReminders: number;
   const now = new Date();
   // How far ahead to remind: Admin → CRM Settings (default 60 minutes).
   const reminderMinutes = (await getCrmSettings()).reminderMinutesBefore;
+  // Client reminder emails can be switched off in Admin → Automations (staff in-app reminders always run).
+  const taskReminderOn = await isAutomationOn('TASK_REMINDER', 'email');
+  const meetingReminderOn = await isAutomationOn('MEETING_REMINDER', 'email');
   const windowEnd = new Date(now.getTime() + reminderMinutes * 60 * 1000);
   const inAbout = reminderMinutes % 60 === 0
     ? `${reminderMinutes / 60} hour${reminderMinutes === 60 ? '' : 's'}`
@@ -82,7 +86,7 @@ export async function runUpcomingDueReminder(): Promise<{ taskReminders: number;
       select: { id: true },
     });
 
-    if (!anyStaffAlready && t.lead.email) {
+    if (!anyStaffAlready && t.lead.email && taskReminderOn) {
       const dueStr = t.dueDate.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
       try {
         const { subject, html } = await renderMailTemplate('TASK_REMINDER', {
@@ -91,7 +95,8 @@ export async function runUpcomingDueReminder(): Promise<{ taskReminders: number;
           dueTime: (t.timeFrom ?? t.dueTime) ? `${t.timeFrom ?? t.dueTime}` : 'the scheduled time',
           agendaHtml: t.agenda ? `<p>Agenda: ${t.agenda}</p>` : '',
         });
-        await sendEmail({ to: t.lead.email, subject, html });
+        const cc = (await automationCc('TASK_REMINDER', t.leadId)).filter((e) => e !== t.lead.email);
+        await sendEmail({ to: t.lead.email, cc, subject, html });
         console.log(`[jobs:upcoming-due-reminder] Auto client reminder sent for task ${t.id} → ${t.lead.email}`);
       } catch (e: any) {
         console.warn(`[jobs:upcoming-due-reminder:task-client-email]`, e.message);
@@ -143,7 +148,7 @@ export async function runUpcomingDueReminder(): Promise<{ taskReminders: number;
       select: { id: true },
     });
 
-    if (!anyMeetingNotified && m.lead.email) {
+    if (!anyMeetingNotified && m.lead.email && meetingReminderOn) {
       const scheduledStr = new Date(m.scheduledAt).toLocaleString('en-IN', {
         timeZone: 'Asia/Kolkata',
         weekday: 'short',
@@ -158,7 +163,8 @@ export async function runUpcomingDueReminder(): Promise<{ taskReminders: number;
           meetingType: m.type.replace(/_/g, ' ').toLowerCase(),
           scheduledAt: scheduledStr,
         });
-        await sendEmail({ to: m.lead.email, subject, html });
+        const cc = (await automationCc('MEETING_REMINDER', m.leadId)).filter((e) => e !== m.lead.email);
+        await sendEmail({ to: m.lead.email, cc, subject, html });
         console.log(`[jobs:upcoming-due-reminder] Auto client reminder sent for meeting ${m.id} → ${m.lead.email}`);
       } catch (e: any) {
         console.warn(`[jobs:upcoming-due-reminder:meeting-client-email]`, e.message);

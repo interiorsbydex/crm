@@ -14,6 +14,7 @@ import { Worker, Queue } from 'bullmq';
 import { connection } from './index.js';
 import { prisma } from '../lib/prisma.js';
 import { sendEmail } from '../lib/email.js';
+import { isAutomationOn } from '../lib/automations.js';
 
 // ── Queue ─────────────────────────────────────────────────────────────────────
 
@@ -235,6 +236,7 @@ function monthlyMetricsHtml(opts: {
 // ── Core data functions ────────────────────────────────────────────────────────
 
 export async function runDailyCreDigest(overrideEmail?: string): Promise<number> {
+  if (!overrideEmail && !(await isAutomationOn('CRE_DIGESTS', 'email'))) return 0;
   const cres = await prisma.user.findMany({
     where: { role: 'CRE', isActive: true },
     select: { id: true, name: true, email: true },
@@ -299,6 +301,7 @@ export async function runDailyCreDigest(overrideEmail?: string): Promise<number>
 }
 
 export async function runMonthlyCreMetrics(overrideEmail?: string): Promise<number> {
+  if (!overrideEmail && !(await isAutomationOn('CRE_DIGESTS', 'email'))) return 0;
   const cres = await prisma.user.findMany({
     where: { role: 'CRE', isActive: true },
     select: { id: true, name: true, email: true },

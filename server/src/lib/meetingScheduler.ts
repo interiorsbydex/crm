@@ -19,6 +19,7 @@ import { recalculateMilestones } from './milestones.js';
 import { computeAutoRatingFromMode } from '../services/intentScoring.js';
 import { sendSms } from '../services/smsService.js';
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { isAutomationOn } from './automations.js';
 
 type Tx = Omit<PrismaClient, '$transaction' | '$connect' | '$disconnect' | '$on' | '$use' | '$extends'> | Prisma.TransactionClient;
 
@@ -168,7 +169,7 @@ export async function runMeetingScheduledSideEffects(params: MeetingScheduledSid
   // checkbox on the booking form. No longer auto-queued; the caller's route
   // returns this to the frontend for a mandatory review-and-send.
   let pendingMail: PendingMeetingMail | null = null;
-  if (notifyClient && lead.email) {
+  if (notifyClient && lead.email && await isAutomationOn('MEETING_CONFIRMATION', 'email')) {
     const designer = await prisma.user.findUnique({ where: { id: user.id }, select: { name: true } });
     const meetingDateStr = new Date(scheduledAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
     const emailAttachments: EmailAttachment[] = [];
@@ -237,8 +238,8 @@ export async function runMeetingScheduledSideEffects(params: MeetingScheduledSid
     }
   }
 
-  // SMS: meeting confirmation (auto-trigger)
-  if (lead.phone) {
+  // SMS: meeting confirmation (auto-trigger; can be switched off in Admin → Automations)
+  if (lead.phone && await isAutomationOn('MEETING_CONFIRMATION', 'sms')) {
     const meetingLabel = ppNumber ? `PP${ppNumber}` : type;
     const dateStr = new Date(scheduledAt).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
     sendSms(lead.phone, `Hi ${lead.name}, your ${meetingLabel} meeting is confirmed for ${dateStr}. - Interiors by DeX`, leadId)

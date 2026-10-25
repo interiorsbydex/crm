@@ -700,7 +700,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
           noShowReason: noShowReason!,
         });
         emailPayload.to = recipient.email!;
-        queues.emails.add('no-show-no-plan', { emailPayload, leadId: lead.id }).catch(() => {});
+        if (await isAutomationOn('TEAM_NO_SHOW_NO_PLAN', 'email')) queues.emails.add('no-show-no-plan', { emailPayload, leadId: lead.id }).catch(() => {});
       }
     }
   }

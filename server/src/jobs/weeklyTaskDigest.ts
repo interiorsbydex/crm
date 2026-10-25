@@ -4,6 +4,7 @@ import { connection } from './index.js';
 import { prisma } from '../lib/prisma.js';
 import { sendEmail } from '../lib/email.js';
 import { IST_TZ } from '../lib/istTime.js';
+import { isAutomationOn } from '../lib/automations.js';
 
 /**
  * Tuesday 08:00 IST weekly digest — emails every active user who has at least
@@ -29,6 +30,7 @@ const MEETING_TYPE_LABELS: Record<string, string> = {
 };
 
 export async function runWeeklyTaskDigest(): Promise<{ emailsSent: number }> {
+  if (!(await isAutomationOn('STAFF_WEEKLY_DIGEST', 'email'))) return { emailsSent: 0 };
   console.log('[jobs] Running weekly task digest (tasks + meetings)…');
 
   const now = new Date();

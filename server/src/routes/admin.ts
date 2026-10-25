@@ -28,6 +28,8 @@ import { defaultStageRules, FUNNEL_EDGES, SKIPPABLE_CANDIDATES, WARNABLE_TARGETS
 import {
   DOCUMENT_TYPES_CONFIG_KEY, documentTypeOverridesSchema, loadDocumentTypeOverrides, resolveDocumentTypes,
 } from '../lib/documentTypes.js';
+import { mountVersionedConfig } from '../lib/versionedConfig.js';
+import { automationsConfig, AUTOMATION_EVENTS, CC_ROLES } from '../lib/automations.js';
 import {
   CrmSettingsError, DEFAULT_CRM_SETTINGS, LEAD_DETAIL_OPTIONS, HIDEABLE_STAGES, NAMEABLE_STAGES, DESIGN_PHASE_KEYS,
   loadCrmSettingsState, saveCrmSettings, resetCrmSettings, crmSettingsHistory, getCrmSettings, previewCycleStartDay,
@@ -1050,6 +1052,12 @@ adminRouter.delete('/crm-settings', async (req, res) => {
     sendCrmSettingsError(res, err);
   }
 });
+
+// ── Automations (Admin → Automations) ─────────────────────────────────────────
+// Which automatic messages are sent, on which channels, and who is copied.
+mountVersionedConfig(adminRouter, '/automations', automationsConfig, async () => ({
+  catalog: { events: AUTOMATION_EVENTS, ccRoles: CC_ROLES },
+}));
 
 // ── Document types (Admin → Document Types) ───────────────────────────────────
 adminRouter.get('/document-types', async (_req, res) => {
