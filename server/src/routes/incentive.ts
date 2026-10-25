@@ -8,6 +8,7 @@ import { CancellationReviewRequired } from '../lib/bookingCancellations.js';
 import {
   calculateDesignerCredits, getCycleForDate, loadIncentiveConfig, parseIncentiveConfig, DEFAULT_INCENTIVE_CONFIG,
 } from '../lib/incentiveCredits.js';
+import { requirePermission } from '../lib/permissions.js';
 
 export const incentiveRouter = Router();
 incentiveRouter.use(verifyToken);
@@ -88,7 +89,7 @@ incentiveRouter.put('/config', requireRole('BRANCH_HEAD'), async (req, res) => {
 });
 
 // PUT /api/incentive/attendance — BL (own team) or BRANCH_HEAD record the manual attendance credit.
-incentiveRouter.put('/attendance', requireRole('BRANCH_HEAD', 'BL'), async (req, res) => {
+incentiveRouter.put('/attendance', requirePermission('ATTENDANCE_CREDITS'), async (req, res) => {
   const { designerId, cycle, awarded } = req.body ?? {};
   if (typeof designerId !== 'string' || typeof awarded !== 'boolean') {
     res.status(400).json({ error: 'designerId and awarded (true/false) are required' }); return;

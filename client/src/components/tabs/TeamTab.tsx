@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { UserPlus, Check, X, Star, AlertTriangle } from 'lucide-react';
 import { api } from '../../lib/api';
 import { getStoredUser } from '../../lib/auth';
+import { usePermissions } from '../../lib/permissions';
 
 interface TeamMemberUser { id: string; name: string; role: string; isActive: boolean }
 interface TeamMember {
@@ -61,7 +62,8 @@ export default function TeamTab({
 
   const canInitiate = user && ['DESIGNER', 'BL', 'BRANCH_HEAD'].includes(user.role);
   // Fix 3: BRANCH_HEAD can now approve/reject team-member requests
-  const canApprove = user && ['BL', 'BRANCH_HEAD'].includes(user.role);
+  const { can } = usePermissions();
+  const canApprove = user && ['BL', 'BRANCH_HEAD'].includes(user.role) && can('PROJECT_TEAM_APPROVE');
   const canSetPrimary = user && ['BL', 'BRANCH_HEAD'].includes(user.role);
   const isAdmin = user?.role === 'BRANCH_HEAD';
 
@@ -213,7 +215,7 @@ export default function TeamTab({
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-800">Project Team — {leadDisplayId}</h3>
-        {canInitiate && !isLocked && (
+        {canInitiate && can('PROJECT_TEAM_REQUEST') && !isLocked && (
           <button
             onClick={() => setShowForm((s) => !s)}
             className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"

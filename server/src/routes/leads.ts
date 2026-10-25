@@ -29,6 +29,7 @@ import {
   type CommercialContext,
 } from '../lib/stageTimeline.js';
 import { isAutomationOn } from '../lib/automations.js';
+import { requirePermission } from '../lib/permissions.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -551,7 +552,7 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
 leadsRouter.post(
   '/manual',
   verifyToken,
-  requireRole('CRE', 'BL', 'BRANCH_HEAD'),
+  requirePermission('LEAD_CREATE_MANUAL'),
   async (req, res) => {
     try {
       const user = req.user!;
@@ -1659,7 +1660,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
 });
 
 // ── PATCH /api/leads/:id/assign-direct — BL direct designer assignment ────────
-leadsRouter.patch('/:id/assign-direct', verifyToken, requireRole('BL'), async (req, res) => {
+leadsRouter.patch('/:id/assign-direct', verifyToken, requirePermission('LEAD_ASSIGN_DIRECT'), async (req, res) => {
   try {
     const user = req.user!;
     const { id } = req.params;
@@ -1734,7 +1735,7 @@ leadsRouter.patch('/:id/assign-direct', verifyToken, requireRole('BL'), async (r
 // Normally the EL → MQL transition allocates a BL automatically. CRE can use
 // this path for an MQL lead still awaiting a BL (e.g. none was active when it
 // qualified). Clear the CRE placeholder so the BL can assign a real designer.
-leadsRouter.post('/:id/allocate-bl', verifyToken, requireRole('CRE', 'BRANCH_HEAD'), async (req, res) => {
+leadsRouter.post('/:id/allocate-bl', verifyToken, requirePermission('LEAD_ALLOCATE_BL'), async (req, res) => {
   try {
     const user = req.user!;
     const { id } = req.params;
@@ -1810,7 +1811,7 @@ leadsRouter.post('/:id/allocate-bl', verifyToken, requireRole('CRE', 'BRANCH_HEA
 // reverts to EFFECTIVE_LEAD, assignedBLId is cleared, and the original CRE
 // (assignedCREId) is re-parked in assignedDesignerId for legacy scope compat.
 // mqlPushbackCount, mqlPushbackReason and mqlPushbackAt are updated.
-leadsRouter.post('/:id/pushback-mql', verifyToken, requireRole('BL', 'BRANCH_HEAD'), async (req, res) => {
+leadsRouter.post('/:id/pushback-mql', verifyToken, requirePermission('LEAD_PUSHBACK_MQL'), async (req, res) => {
   try {
     const user = req.user!;
     const { id } = req.params;
@@ -2555,7 +2556,7 @@ leadsRouter.get('/:id/eligible-designers', verifyToken, requireRole('DESIGNER', 
 // Allows a DESIGNER/BL/BH to request a team member for a lead that hasn't yet
 // reached DESIGN_IN_PROGRESS (no project exists). Creates the project stub on
 // demand — the DIP transition's alreadyExists guard ensures no double-creation.
-leadsRouter.post('/:id/request-team-member', verifyToken, requireRole('DESIGNER', 'BL', 'BRANCH_HEAD'), async (req, res) => {
+leadsRouter.post('/:id/request-team-member', verifyToken, requirePermission('PROJECT_TEAM_REQUEST'), async (req, res) => {
   try {
     const user = req.user!;
     const { id } = req.params;

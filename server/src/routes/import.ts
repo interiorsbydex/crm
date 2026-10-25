@@ -2,12 +2,13 @@ import { Router } from 'express';
 import multer from 'multer';
 import ExcelJS from 'exceljs';
 import { prisma } from '../lib/prisma.js';
-import { verifyToken, requireRole } from '../middleware/auth.js';
+import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { selectCREForLead } from '../services/assignmentService.js';
 import { resolveImportOwnership } from '../lib/importOwnership.js';
 
 import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
+import { requirePermission } from '../lib/permissions.js';
 
 export const importRouter = Router();
 
@@ -215,7 +216,7 @@ async function parseRows(file: Express.Multer.File): Promise<Record<string, stri
 }
 
 // ── GET /api/leads/import/template — downloadable CSV matching the real headers ─
-importRouter.get('/template', verifyToken, requireRole('BL', 'BRANCH_HEAD'), (_req, res) => {
+importRouter.get('/template', verifyToken, requirePermission('LEAD_IMPORT'), (_req, res) => {
   const headers = [
     'PID', 'Lead Name', 'Contact number', 'Alternate Phone', 'Mail id', 'Alternate Email',
     'Lead Stage', 'Lead Source', 'Project Type', 'Project Type 1', 'Scope', 'Location',
@@ -239,7 +240,7 @@ importRouter.get('/template', verifyToken, requireRole('BL', 'BRANCH_HEAD'), (_r
 // `status` (ACTIVE | INACTIVE | ON_HOLD) is a required form field, not a
 // column — the team's real exports are one file per status bucket rather
 // than a status column per row.
-importRouter.post('/', verifyToken, requireRole('BL', 'BRANCH_HEAD'), upload.single('file') as any, async (req, res) => {
+importRouter.post('/', verifyToken, requirePermission('LEAD_IMPORT'), upload.single('file') as any, async (req, res) => {
   try {
     if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return; }
     const dryRun = req.query.dryRun === 'true';

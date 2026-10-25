@@ -7,11 +7,12 @@
 
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { verifyToken, requireRole } from '../middleware/auth.js';
+import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 import { requiredDipChecksComplete } from '../lib/dipChecklistRules.js';
+import { requirePermission } from '../lib/permissions.js';
 
 export const dipChecklistRouter = Router({ mergeParams: true });
 
@@ -53,7 +54,7 @@ dipChecklistRouter.get('/', verifyToken, async (req, res) => {
 });
 
 // ── PATCH /api/leads/:id/dip-checklist ───────────────────────────────────────
-dipChecklistRouter.patch('/', verifyToken, requireRole('BL'), async (req, res) => {
+dipChecklistRouter.patch('/', verifyToken, requirePermission('DIP_CHECKLIST_EDIT'), async (req, res) => {
   try {
     const { leadId: id } = req.params;
     const user = req.user!;

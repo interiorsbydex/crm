@@ -4,6 +4,7 @@ import { api } from '../../lib/api';
 import { getStoredUser } from '../../lib/auth';
 import { Link } from 'react-router-dom';
 import { cycleDescription } from '../../lib/crmSettings';
+import { usePermissions } from '../../lib/permissions';
 
 type Designer = { id: string; name: string };
 type Validation = { leadId: string; name: string; bookingValue: number; rating: number | null; status: string; releasePct: number | null };
@@ -68,7 +69,8 @@ function Row({ label, detail, credits }: { label: string; detail?: string; credi
 
 export default function CreditsPanel({ showTitle = true }: { showTitle?: boolean }) {
   const role = getStoredUser()?.role ?? '';
-  const canEnterAttendance = role === 'BRANCH_HEAD' || role === 'BL';
+  const { can } = usePermissions();
+  const canEnterAttendance = (role === 'BRANCH_HEAD' || role === 'BL') && can('ATTENDANCE_CREDITS');
   const [cycle, setCycle] = useState(cycleOptions()[0].value);
   const [designerId, setDesignerId] = useState('');
   const [data, setData] = useState<Resp | null>(null);

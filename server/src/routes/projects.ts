@@ -1,6 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { verifyToken, requireRole } from '../middleware/auth.js';
+import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { computeDesignPipelineTimeline } from '../config/slaConfig.js';
 import { getCrmSettings } from '../lib/crmSettings.js';
@@ -8,6 +8,7 @@ import { isAuthorizedForProject, isBLForProject } from '../lib/projectAuth.js';
 import { createNotification } from '../lib/notifications.js';
 import { buildLeadRoleWhere } from '../lib/leadScope.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
+import { requirePermission } from '../lib/permissions.js';
 
 export const projectsRouter = Router();
 
@@ -350,7 +351,7 @@ projectsRouter.get('/:id/eligible-team-members', verifyToken, async (req, res) =
 projectsRouter.post(
   '/:id/team-members',
   verifyToken,
-  requireRole('DESIGNER', 'BL', 'BRANCH_HEAD'),
+  requirePermission('PROJECT_TEAM_REQUEST'),
   async (req, res) => {
     try {
       const user = req.user!;
@@ -443,7 +444,7 @@ projectsRouter.post(
 projectsRouter.patch(
   '/:id/team-members/:memberId/approve',
   verifyToken,
-  requireRole('BL', 'BRANCH_HEAD'),
+  requirePermission('PROJECT_TEAM_APPROVE'),
   async (req, res) => {
     try {
       const user = req.user!;
@@ -492,7 +493,7 @@ projectsRouter.patch(
 projectsRouter.patch(
   '/:id/team-members/:memberId/reject',
   verifyToken,
-  requireRole('BL', 'BRANCH_HEAD'),
+  requirePermission('PROJECT_TEAM_APPROVE'),
   async (req, res) => {
     try {
       const user = req.user!;
@@ -541,7 +542,7 @@ projectsRouter.patch(
 projectsRouter.patch(
   '/:id/team-members/:memberId/primary',
   verifyToken,
-  requireRole('BL', 'BRANCH_HEAD'),
+  requirePermission('PROJECT_TEAM_APPROVE'),
   async (req, res) => {
     try {
       const user = req.user!;

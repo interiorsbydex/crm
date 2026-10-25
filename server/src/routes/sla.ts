@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { verifyToken, requireRole } from '../middleware/auth.js';
+import { verifyToken } from '../middleware/auth.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
+import { requirePermission } from '../lib/permissions.js';
 
 export const slaRouter = Router();
 
 // ── GET /api/sla/breaches ─────────────────────────────────────────────────────
-slaRouter.get('/breaches', verifyToken, requireRole('BL', 'BRANCH_HEAD'), async (req, res) => {
+slaRouter.get('/breaches', verifyToken, requirePermission('SLA_MANAGE'), async (req, res) => {
   const user = req.user!;
   const { rule, resolved } = req.query as { rule?: string; resolved?: string };
 
@@ -61,7 +62,7 @@ slaRouter.get('/breaches', verifyToken, requireRole('BL', 'BRANCH_HEAD'), async 
 });
 
 // ── PATCH /api/sla/breaches/:id/resolve ──────────────────────────────────────
-slaRouter.patch('/breaches/:id/resolve', verifyToken, requireRole('BL', 'BRANCH_HEAD'), async (req, res) => {
+slaRouter.patch('/breaches/:id/resolve', verifyToken, requirePermission('SLA_MANAGE'), async (req, res) => {
   const { id } = req.params;
 
   const breach = await prisma.sLABreach.findUnique({ where: { id } });

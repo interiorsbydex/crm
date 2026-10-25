@@ -31,6 +31,7 @@ import {
 import { mountVersionedConfig } from '../lib/versionedConfig.js';
 import { automationsConfig, AUTOMATION_EVENTS, CC_ROLES } from '../lib/automations.js';
 import { dashboardLayoutsConfig } from '../lib/dashboardLayouts.js';
+import { permissionsConfig, PERMISSIONS } from '../lib/permissions.js';
 import {
   CrmSettingsError, DEFAULT_CRM_SETTINGS, LEAD_DETAIL_OPTIONS, HIDEABLE_STAGES, NAMEABLE_STAGES, DESIGN_PHASE_KEYS,
   loadCrmSettingsState, saveCrmSettings, resetCrmSettings, crmSettingsHistory, getCrmSettings, previewCycleStartDay,
@@ -1063,6 +1064,11 @@ mountVersionedConfig(adminRouter, '/automations', automationsConfig, async () =>
 // ── Dashboards (Admin → Dashboards) ───────────────────────────────────────────
 // Hidden tiles, tile order within sections and tile names, per role's dashboard.
 mountVersionedConfig(adminRouter, '/dashboards', dashboardLayoutsConfig);
+
+// ── Permissions (Admin → Permissions) ─────────────────────────────────────────
+// Which roles may do each action; roles can only be switched off/on among those
+// the action was built for (lib/permissions.ts).
+mountVersionedConfig(adminRouter, '/permissions', permissionsConfig, async () => ({ catalog: { permissions: PERMISSIONS } }));
 
 // ── Document types (Admin → Document Types) ───────────────────────────────────
 adminRouter.get('/document-types', async (_req, res) => {

@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
+import { requirePermission } from '../lib/permissions.js';
 
 export const offersRouter = Router();
 export const leadOfferRouter = Router({ mergeParams: true });
@@ -19,7 +20,7 @@ offersRouter.get('/', verifyToken, async (req, res) => {
 });
 
 // ── POST /api/offers ──────────────────────────────────────────────────────────
-offersRouter.post('/', verifyToken, requireRole('BL', 'BRANCH_HEAD'), async (req, res) => {
+offersRouter.post('/', verifyToken, requirePermission('OFFERS_MANAGE'), async (req, res) => {
   const { name, description, startDate, endDate } = req.body as {
     name?: string; description?: string; startDate?: string; endDate?: string;
   };
@@ -37,7 +38,7 @@ offersRouter.post('/', verifyToken, requireRole('BL', 'BRANCH_HEAD'), async (req
 });
 
 // ── PATCH /api/offers/:id ─────────────────────────────────────────────────────
-offersRouter.patch('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), async (req, res) => {
+offersRouter.patch('/:id', verifyToken, requirePermission('OFFERS_MANAGE'), async (req, res) => {
   const { id } = req.params;
   const { name, description, startDate, endDate, isActive } = req.body;
 
@@ -69,7 +70,7 @@ offersRouter.patch('/:id/toggle', verifyToken, requireRole('BRANCH_HEAD'), async
 });
 
 // ── DELETE /api/offers/:id (soft delete) ──────────────────────────────────────
-offersRouter.delete('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), async (req, res) => {
+offersRouter.delete('/:id', verifyToken, requirePermission('OFFERS_MANAGE'), async (req, res) => {
   await prisma.offer.update({ where: { id: req.params.id }, data: { isActive: false } });
   res.json({ message: 'Offer deactivated' });
 });

@@ -8,6 +8,7 @@ import { getEffectiveStageSla } from '../lib/stageSla.js';
 import { isLenientLaunch } from '../lib/lenientMode.js';
 import { getDocumentTypes } from '../lib/documentTypes.js';
 import { dashboardLayoutsConfig } from '../lib/dashboardLayouts.js';
+import { PERMISSIONS, hasPermission } from '../lib/permissions.js';
 import { getCrmSettings, describeCycles } from '../lib/crmSettings.js';
 import { DEFAULT_CYCLE_SCHEDULE } from '../lib/targetCycle.js';
 
@@ -32,6 +33,16 @@ configRouter.get('/crm-settings', verifyToken, async (_req, res) => {
 configRouter.get('/dashboards', verifyToken, async (_req, res) => {
   try {
     res.json({ layouts: await dashboardLayoutsConfig.get() });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/config/my-permissions — what the signed-in user may do (Admin → Permissions) ──
+configRouter.get('/my-permissions', verifyToken, async (req, res) => {
+  try {
+    const entries = await Promise.all(PERMISSIONS.map(async (p) => [p.key, await hasPermission(req.user!.role, p.key)] as const));
+    res.json({ permissions: Object.fromEntries(entries) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

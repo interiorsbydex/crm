@@ -28,6 +28,7 @@ import StageCaptureModal from '../components/StageCaptureModal';
 import EmailPreviewModal from '../components/EmailPreviewModal';
 import { getStoredUser } from '../lib/auth';
 import { stageLabel, sourceValue, useCrmSettings, sourceLabel } from '../lib/crmSettings';
+import { usePermissions } from '../lib/permissions';
 
 // 'activity' = combined Calls + Meetings + Tasks feed (new)
 // 'audit'    = system audit log + ChatTab (renamed from 'activity')
@@ -287,6 +288,7 @@ function fmtDateTime(iso?: string) {
 }
 
 export default function LeadDetail() {
+  const { can } = usePermissions();
   const crm = useCrmSettings();
   const lenient = useLenientLaunch();
   const { leadId } = useParams<{ leadId: string }>();
@@ -2569,7 +2571,7 @@ export default function LeadDetail() {
 
                 {/* CRE module Stage 2 — BL pushback form: shown to the assigned BL
                     at MQL so they can return the lead for re-qualification if needed */}
-                {currentUser?.role === 'BL' && lead.stage === 'MQL' && lead.assignedBLId === currentUser?.id && (
+                {currentUser?.role === 'BL' && can('LEAD_PUSHBACK_MQL') && lead.stage === 'MQL' && lead.assignedBLId === currentUser?.id && (
                   <div className="mt-3 pt-2.5 border-t border-gray-100">
                     {!showPushbackForm ? (
                       <button
@@ -2625,7 +2627,7 @@ export default function LeadDetail() {
 
                 {/* CRE module Stage 2 — allocate-BL panel: visible to CRE when
                     lead is at MQL and no BL has been assigned yet */}
-                {currentUser?.role === 'CRE' && lead.stage === 'MQL' && !lead.assignedBLId && (
+                {currentUser?.role === 'CRE' && can('LEAD_ALLOCATE_BL') && lead.stage === 'MQL' && !lead.assignedBLId && (
                   <div className="mt-3 pt-2.5 border-t border-gray-100">
                     <p className="text-xs text-gray-500 mb-1.5 font-medium">Allocate to Business Lead</p>
                     <div className="flex gap-1.5">

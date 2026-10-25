@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, Target, Megaphone, Route, FileText, SlidersHorizontal, Zap, LayoutDashboard, type LucideIcon } from 'lucide-react';
+import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, Target, Megaphone, Route, FileText, SlidersHorizontal, Zap, LayoutDashboard, ShieldCheck, type LucideIcon } from 'lucide-react';
 import { api, uploadFile } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
 import { DateInput } from '../components/ui/DateTimeInputs';
@@ -12,6 +12,7 @@ import DocumentTypesAdmin from '../components/admin/DocumentTypesAdmin';
 import CrmSettingsAdmin from '../components/admin/CrmSettingsAdmin';
 import AutomationsAdmin from '../components/admin/AutomationsAdmin';
 import DashboardsAdmin from '../components/admin/DashboardsAdmin';
+import PermissionsAdmin from '../components/admin/PermissionsAdmin';
 import { cycleDescription } from '../lib/crmSettings';
 
 interface User {
@@ -47,7 +48,7 @@ const ROLE_COLORS: Record<string, string> = {
   BRANCH_HEAD: 'bg-green-100 text-green-700',
 };
 
-type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers' | 'import' | 'targets' | 'credits' | 'content' | 'stageRules' | 'docTypes' | 'crmSettings' | 'automations' | 'dashboards';
+type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers' | 'import' | 'targets' | 'credits' | 'content' | 'stageRules' | 'docTypes' | 'crmSettings' | 'automations' | 'dashboards' | 'permissions';
 
 interface ImportPreviewRow {
   row: number; status: 'WILL_IMPORT' | 'DUPLICATE' | 'INVALID';
@@ -460,6 +461,7 @@ export default function Admin() {
     { id: 'crmSettings', label: 'CRM Settings', Icon: SlidersHorizontal },
     { id: 'automations', label: 'Automations', Icon: Zap },
     { id: 'dashboards', label: 'Dashboards', Icon: LayoutDashboard },
+    { id: 'permissions', label: 'Permissions', Icon: ShieldCheck },
   ];
 
   const hasLeads = (deactivatePreview?.activeLeads ?? 0) > 0;
@@ -1208,6 +1210,7 @@ export default function Admin() {
         {tab === 'crmSettings' && <CrmSettingsAdmin />}
         {tab === 'automations' && <AutomationsAdmin />}
         {tab === 'dashboards' && <DashboardsAdmin />}
+        {tab === 'permissions' && <PermissionsAdmin />}
       </div>
     </div>
   );

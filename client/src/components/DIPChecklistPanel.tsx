@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Check, Mail } from 'lucide-react';
 import { api } from '../lib/api';
 import toast from 'react-hot-toast';
+import { usePermissions } from '../lib/permissions';
 
 interface DIPChecklist {
   id: string;
@@ -33,7 +34,10 @@ const REQUIRED_ITEMS = ITEMS.filter((item) => !item.optional);
 
 type ChecklistKey = typeof ITEMS[number]['key'];
 
-export default function DIPChecklistPanel({ leadId, stage, onComplete, isLocked }: Props) {
+export default function DIPChecklistPanel({ leadId, stage, onComplete, isLocked: lockedByStatus }: Props) {
+  // Read-only for roles without the DIP checklist permission (Admin → Permissions).
+  const { can } = usePermissions();
+  const isLocked = lockedByStatus || !can('DIP_CHECKLIST_EDIT');
   const [checklist, setChecklist] = useState<DIPChecklist | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -181,7 +185,12 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete, isLocked 
         </div>
       )}
 
-      {isLocked && (
+      {!lockedByStatus && isLocked && (
+        <div className="mb-3 text-xs text-stone-600 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2">
+          Your role can view this checklist but not change it (Admin → Permissions).
+        </div>
+      )}
+      {lockedByStatus && (
         <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
           Lead is Inactive — reactivate the lead to update the checklist.
         </div>

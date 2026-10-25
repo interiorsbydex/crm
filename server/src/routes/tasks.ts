@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { verifyToken, requireRole } from '../middleware/auth.js';
+import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendEmail } from '../lib/email.js';
@@ -16,6 +16,7 @@ import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { validateFutureDate } from '../lib/nextPlanOfAction.js';
 import { creCreatedTaskIds, type TaskWithCreatorEvidence } from '../lib/creTaskScope.js';
 import { isAutomationOn } from '../lib/automations.js';
+import { requirePermission } from '../lib/permissions.js';
 
 type TaskAttachmentInput = AttachmentEntry;
 
@@ -320,7 +321,7 @@ myTasksRouter.get('/my', verifyToken, async (req, res) => {
 myTasksRouter.get(
   '/team',
   verifyToken,
-  requireRole('BL', 'BRANCH_HEAD'),
+  requirePermission('TEAM_TASKS_VIEW'),
   async (req, res) => {
     const user = req.user!;
     const { createdByRole } = req.query as { createdByRole?: string };
