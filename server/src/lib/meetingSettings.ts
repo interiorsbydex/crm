@@ -70,6 +70,13 @@ export const meetingSettingsConfig = versionedConfig<MeetingSettings>({
     if (!MEETING_MODES.some((m) => data.modes[m].active)) {
       throw new ConfigError(400, 'The meeting settings could not be saved', ['Keep at least one meeting type in use']);
     }
+    // Two types with one name could not be told apart in the booking form.
+    const seen = new Set<string>();
+    for (const m of MEETING_MODES) {
+      const name = data.modes[m].label.trim().toLowerCase();
+      if (seen.has(name)) throw new ConfigError(400, 'The meeting settings could not be saved', [`"${data.modes[m].label.trim()}" is used by two meeting types`]);
+      seen.add(name);
+    }
     return data;
   },
 });

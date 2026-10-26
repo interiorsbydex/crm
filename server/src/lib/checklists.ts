@@ -133,6 +133,12 @@ async function validateChecklists(raw: unknown): Promise<ChecklistsConfig> {
       if (!item) problems.push(`${CHECKLIST_NAMES[kind]}: unknown item "${key}"`);
       else if (label !== item.label) labels[key] = label;
     }
+    // Two items with one name could not be told apart on the checklist.
+    const names = new Set<string>();
+    for (const name of [...BUILT_IN_ITEMS[kind].map((i) => labels[i.key] ?? i.label), ...s.custom.map((c) => c.label)]) {
+      if (names.has(name.trim().toLowerCase())) problems.push(`${CHECKLIST_NAMES[kind]}: "${name.trim()}" is used by two items`);
+      names.add(name.trim().toLowerCase());
+    }
     out[kind] = { optional: s.optional.filter((k) => builtIn.has(k) && !builtIn.get(k)!.lockedReason), custom: s.custom, labels };
   }
   if (problems.length) throw new ConfigError(400, 'The checklists could not be saved', problems);

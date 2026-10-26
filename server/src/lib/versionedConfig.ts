@@ -131,10 +131,26 @@ export function mountVersionedConfig<T>(router: Router, path: string, config: Ve
 }
 
 /** Turn zod issues into plain-words problems, naming sections by `names`. */
+/** The validator's built-in messages in everyday words (custom messages pass through). */
+export function plainMessage(message: string): string {
+  return message
+    .replace(/^Number must be greater than or equal to (-?[\d.]+)$/, 'must be at least $1')
+    .replace(/^Number must be greater than (-?[\d.]+)$/, 'must be more than $1')
+    .replace(/^Number must be less than or equal to (-?[\d.]+)$/, 'must be $1 or less')
+    .replace(/^Number must be less than (-?[\d.]+)$/, 'must be less than $1')
+    .replace(/^Expected integer, received float$/, 'must be a whole number')
+    .replace(/^Expected number, received (string|nan|null|undefined)$/, 'needs a number')
+    .replace(/^Required$/, 'is missing')
+    .replace(/^String must contain at least 1 character\(s\)$/, 'cannot be empty')
+    .replace(/^String must contain at most (\d+) character\(s\)$/, 'is limited to $1 characters')
+    .replace(/^Array must contain at most (\d+) element\(s\)$/, 'can have at most $1 entries')
+    .replace(/^Array must contain at least (\d+) element\(s\)$/, 'needs at least $1 entries');
+}
+
 export function describeIssues(issues: { path: (string | number)[]; message: string }[], names: Record<string, string> = {}): string[] {
   return issues.map((i) => {
     const [section, ...rest] = i.path;
     const where = names[String(section)] ?? String(section ?? 'Settings');
-    return `${where}${rest.length ? ` (${rest.join(' → ')})` : ''}: ${i.message}`;
+    return `${where}${rest.length ? ` (${rest.join(' → ')})` : ''}: ${plainMessage(i.message)}`;
   });
 }

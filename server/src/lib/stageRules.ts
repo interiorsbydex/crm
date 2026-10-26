@@ -7,6 +7,7 @@
  * for the change history, and previews a change's effect on live leads.
  */
 import { z } from 'zod';
+import { plainMessage } from './versionedConfig.js';
 import { prisma } from './prisma.js';
 import { logActivity } from './activityLog.js';
 import {
@@ -97,7 +98,7 @@ const edgeName = (edge: string) => edge.replace('->', ' → ');
 export async function validateStageRules(raw: unknown): Promise<StageRulesConfig> {
   const parsed = configSchema.safeParse(raw);
   if (!parsed.success) {
-    throw new StageRulesError(400, 'The stage rules could not be saved', parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`));
+    throw new StageRulesError(400, 'The stage rules could not be saved', parsed.error.issues.map((i) => `${i.path.join('.')}: ${plainMessage(i.message)}`));
   }
   const [docTypes, customFields] = await Promise.all([
     getDocumentTypes(),
@@ -125,7 +126,7 @@ export async function validateStageRules(raw: unknown): Promise<StageRulesConfig
       const res = itemSchema.safeParse(rawItem);
       const where = `${edgeName(edge)}, requirement ${i + 1}`;
       if (!res.success) {
-        problems.push(...res.error.issues.map((iss) => `${where}: ${iss.path.length ? `${iss.path.join('.')} — ` : ''}${iss.message}`));
+        problems.push(...res.error.issues.map((iss) => `${where}: ${iss.path.length ? `${iss.path.join('.')} — ` : ''}${plainMessage(iss.message)}`));
         continue;
       }
       const item = res.data as RuleItem;

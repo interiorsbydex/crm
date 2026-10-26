@@ -86,6 +86,15 @@ describe.skipIf(!safeDb)('CRM settings store (local test DB)', () => {
     expect(p).toMatch(/Stage names \(DQL\): cannot be empty/);
   });
 
+  it('refuses two stages or two sources with the same name', () => {
+    const bad = clone(DEFAULT_CRM_SETTINGS) as any;
+    bad.stageLabels.DQL = 'mql';
+    bad.leadSources.push({ value: 'META_2', label: 'Meta Ads', active: true });
+    const p = problemsOf(bad).join('\n');
+    expect(p).toMatch(/"mql" is used by two stages/);
+    expect(p).toMatch(/"Meta Ads" is used by two sources/);
+  });
+
   it('saving is versioned, logged and refuses a stale save', async () => {
     const s: CrmSettings = clone(DEFAULT_CRM_SETTINGS);
     s.onHoldReasons = [...s.onHoldReasons, 'Vastu check'];

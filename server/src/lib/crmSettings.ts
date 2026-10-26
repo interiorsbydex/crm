@@ -10,6 +10,7 @@
  * applies — the values the CRM shipped with.
  */
 import { z } from 'zod';
+import { plainMessage } from './versionedConfig.js';
 import { isLenientLaunch } from './lenientMode.js';
 import { prisma } from './prisma.js';
 import { logActivity } from './activityLog.js';
@@ -92,9 +93,13 @@ export const crmSettingsSchema = z.object({
     active: z.boolean(),
   }).strict()).min(1).max(60).superRefine((sources, ctx) => {
     const seen = new Set<string>();
+    const names = new Set<string>();
     sources.forEach((s, i) => {
       if (seen.has(s.value)) ctx.addIssue({ code: 'custom', path: [i, 'value'], message: `"${s.value}" is listed twice` });
       seen.add(s.value);
+      // Two sources with one name could not be told apart in forms and reports.
+      if (names.has(s.label.toLowerCase())) ctx.addIssue({ code: 'custom', path: [i, 'label'], message: `"${s.label}" is used by two sources` });
+      names.add(s.label.toLowerCase());
     });
     if (!sources.some((s) => s.value === 'OTHER' && s.active)) ctx.addIssue({ code: 'custom', message: 'Keep the "Other" source switched on (it lets designers type a new source)' });
   }),
@@ -131,7 +136,16 @@ export const crmSettingsSchema = z.object({
   weeklyDigestDay: z.number().int().min(0).max(6),
   designPhaseDays: z.record(z.enum(DESIGN_PHASE_KEYS), z.number().int().min(1).max(365)),
   designOverallDays: z.number().int().min(1).max(730),
-  stageLabels: z.record(z.enum(NAMEABLE_STAGES), text(40)),
+  stageLabels: z.record(z.enum(NAMEABLE_STAGES), text(40)).superRefine((labels, ctx) => {
+    // Two stages with one name could not be told apart on any screen.
+    const all = { ...DEFAULT_CRM_SETTINGS.stageLabels, ...labels } as Record<string, string>;
+    const seen = new Map<string, string>();
+    for (const [stage, name] of Object.entries(all)) {
+      const k = name.trim().toLowerCase();
+      if (seen.has(k)) ctx.addIssue({ code: 'custom', path: [stage], message: `"${name.trim()}" is used by two stages` });
+      seen.set(k, stage);
+    }
+  }),
   hiddenStages: z.array(z.enum(HIDEABLE_STAGES)),
   /** Day of the month incentive/target cycles start on (1–28). Takes effect when the current cycle ends. */
   cycleStartDay: z.number().int().min(1, 'must be between 1 and 28').max(28, 'must be between 1 and 28 (every month has those days)'),
@@ -260,7 +274,7 @@ export function validateCrmSettings(raw: unknown): CrmSettings {
     throw new CrmSettingsError(400, 'The settings could not be saved', parsed.error.issues.map((i) => {
       const [section, ...rest] = i.path;
       const where = SECTION_NAMES[String(section)] ?? String(section ?? 'Settings');
-      return `${where}${rest.length ? ` (${rest.join(' → ')})` : ''}: ${i.message}`;
+      return `${where}${rest.length ? ` (${rest.join(' → ')})` : ''}: ${plainMessage(i.message)}`;
     }));
   }
   return parsed.data;

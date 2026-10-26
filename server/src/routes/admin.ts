@@ -28,7 +28,7 @@ import { defaultStageRules, FUNNEL_EDGES, SKIPPABLE_CANDIDATES, WARNABLE_TARGETS
 import {
   DOCUMENT_TYPES_CONFIG_KEY, documentTypeOverridesSchema, loadDocumentTypeOverrides, resolveDocumentTypes,
 } from '../lib/documentTypes.js';
-import { mountVersionedConfig } from '../lib/versionedConfig.js';
+import { mountVersionedConfig, plainMessage } from '../lib/versionedConfig.js';
 import { automationsConfig, AUTOMATION_EVENTS, CC_ROLES } from '../lib/automations.js';
 import { dashboardLayoutsConfig } from '../lib/dashboardLayouts.js';
 import { permissionsConfig, PERMISSIONS } from '../lib/permissions.js';
@@ -38,7 +38,7 @@ import { formulaSettingsConfig } from '../lib/formulaSettings.js';
 import { meetingSettingsConfig } from '../lib/meetingSettings.js';
 import { alertSettingsConfig, NOTIFICATION_TYPES, ALERT_ROLES } from '../lib/notifications.js';
 import { reportDefinitionsConfig, WON_STAGE_CHOICES, NPS_SURVEYS, NPS_SURVEY_LABELS, NPS_TRIGGER_STAGES } from '../lib/reportDefinitions.js';
-import { getDocumentTypes } from '../lib/documentTypes.js';
+import { BUILT_IN_DOCUMENT_TYPES, getDocumentTypes } from '../lib/documentTypes.js';
 import {
   CrmSettingsError, DEFAULT_CRM_SETTINGS, LEAD_DETAIL_OPTIONS, HIDEABLE_STAGES, NAMEABLE_STAGES, DESIGN_PHASE_KEYS,
   loadCrmSettingsState, saveCrmSettings, resetCrmSettings, crmSettingsHistory, getCrmSettings, previewCycleStartDay,
@@ -1124,7 +1124,14 @@ adminRouter.put('/document-types', async (req, res) => {
     const { overrides, revision } = req.body as { overrides?: unknown; revision?: unknown };
     const parsed = documentTypeOverridesSchema.safeParse(overrides);
     if (!parsed.success) {
-      res.status(400).json({ error: 'The document types could not be saved', problems: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) });
+      res.status(400).json({ error: 'The document types could not be saved', problems: parsed.error.issues.map((i) => {
+        // Name the type the way the screen does, not by its internal path.
+        const [group, at] = i.path;
+        const custom = group === 'custom' && typeof at === 'number' ? (overrides as any)?.custom?.[at]?.label : null;
+        const builtIn = group === 'builtIn' ? BUILT_IN_DOCUMENT_TYPES.find((t) => t.key === at)?.label : null;
+        const name = custom || builtIn;
+        return name ? `${name}: ${plainMessage(i.message)}` : plainMessage(i.message);
+      }) });
       return;
     }
     const current = await loadDocumentTypeOverrides();

@@ -47,4 +47,10 @@ describe.skipIf(!safeDb)('meeting settings', () => {
     t.modes.EC_VISIT.stars = 6;
     expect((await problemsOf(t)).join()).toMatch(/1 to 5/);
   });
+
+  it('refuses two meeting types with the same name', async () => {
+    const s = defaultMeetingSettings();
+    s.modes.VIRTUAL.label = 'site visit';
+    expect(await problemsOf(s)).toEqual(['"site visit" is used by two meeting types']);
+  });
 });

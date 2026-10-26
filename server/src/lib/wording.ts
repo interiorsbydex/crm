@@ -5,7 +5,7 @@
  * Shown before sign-in too (the app name), so nothing here may be private.
  */
 import { z } from 'zod';
-import { ConfigError, versionedConfig } from './versionedConfig.js';
+import { ConfigError, plainMessage, versionedConfig } from './versionedConfig.js';
 
 export const WORDING_KEYS: { key: string; where: string; text: string; long?: boolean }[] = [
   { key: 'app.name', where: 'App name (sidebar)', text: 'FYX' },
@@ -29,7 +29,7 @@ export const wordingConfig = versionedConfig<Wording>({
   merge: (saved) => Object.fromEntries(Object.entries(saved ?? {}).filter((e): e is [string, string] => typeof e[1] === 'string')),
   validate: (raw) => {
     const parsed = z.record(z.string(), z.string().trim().min(1, 'a label cannot be empty').max(400, 'labels are limited to 400 characters')).safeParse(raw);
-    if (!parsed.success) throw new ConfigError(400, 'The wording could not be saved', parsed.error.issues.map((i) => `${String(i.path[0] ?? '')}: ${i.message}`));
+    if (!parsed.success) throw new ConfigError(400, 'The wording could not be saved', parsed.error.issues.map((i) => `${String(i.path[0] ?? '')}: ${plainMessage(i.message)}`));
     const unknown = Object.keys(parsed.data).filter((k) => !KEYS.has(k));
     if (unknown.length) throw new ConfigError(400, 'The wording could not be saved', unknown.map((k) => `Unknown label "${k}"`));
     const defaults = new Map(WORDING_KEYS.map((w) => [w.key, w.text]));

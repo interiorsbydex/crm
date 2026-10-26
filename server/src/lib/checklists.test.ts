@@ -101,6 +101,11 @@ describe.skipIf(!safeDb)('checklists', () => {
     expect((await problemsOf({ dip: { optional: [], custom: [], labels: { nope: 'x' } } }))[0]).toMatch(/unknown item/);
   });
 
+  it('refuses two items with the same name on one checklist', async () => {
+    const p = await problemsOf({ dip: { optional: [], custom: [], labels: { paymentScreenshot: 'Client OK', cxApprovalReceived: 'client ok' } } });
+    expect(p.join()).toMatch(/is used by two items/);
+  });
+
   it('defaults cover all three checklists', () => {
     expect(Object.keys(defaultChecklists())).toEqual(['pdOb', 'obObm', 'dip']);
   });

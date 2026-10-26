@@ -59,7 +59,12 @@ export const documentTypeOverridesSchema = z.object({
   }).strict()).max(100).default([]),
 }).strict().superRefine((v, ctx) => {
   const keys = new Set<string>();
-  const names = new Set(BUILT_IN_DOCUMENT_TYPES.map((t) => (v.builtIn[t.key]?.label ?? t.label).toLowerCase()));
+  const names = new Set<string>();
+  BUILT_IN_DOCUMENT_TYPES.forEach((t) => {
+    const name = (v.builtIn[t.key]?.label ?? t.label).toLowerCase();
+    if (names.has(name)) ctx.addIssue({ code: 'custom', path: ['builtIn', t.key, 'label'], message: `"${v.builtIn[t.key]?.label ?? t.label}" is already used by another document type` });
+    names.add(name);
+  });
   v.custom.forEach((c, i) => {
     if (keys.has(c.key)) ctx.addIssue({ code: 'custom', path: ['custom', i, 'key'], message: `Duplicate key "${c.key}"` });
     keys.add(c.key);
