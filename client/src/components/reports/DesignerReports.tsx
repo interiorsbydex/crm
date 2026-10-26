@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useReportTabs } from '../../lib/dashboardLayout';
+import { reportTabId, REPORT_BLOCK_IDS } from '../../lib/dashboardTiles';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Table as ServerReportTable, type TableData } from './BlAdminReports';
@@ -698,14 +700,21 @@ function presetRange(v: string): { from?: string; to?: string } {
 }
 
 export default function DesignerReports({ role }: { role: string }) {
-  const [tab, setTab] = useState<ReportKey>('my-performance');
+  const [tabSel, setTab] = useState<ReportKey>('my-performance');
   const [period, setPeriod] = useState<Record<ReportKey, string>>({
     'my-performance': '0', 'my-commitment': '0', 'my-lead-funnel': 'all', 'meeting-performance': '3m',
     'sales-cycle': '12m', 'my-trends-sales': '6', 'task-call-activity': '30d',
     'bl-pipeline': 'all', 'bl-conversion': 'all', 'discount-metrics': 'all',
     'designer-pipeline': 'all', 'designer-conversion': 'all', 'designer-discount-metrics': 'all',
   });
-  const tabs = role === 'BL' ? BL_TABS : role === 'DESIGNER' ? DESIGNER_TABS : TABS;
+  // Admin → Dashboards → Reports page: which tabs show, their order and names.
+  const { visible: tabs, blockHidden, heading } = useReportTabs(
+    REPORT_BLOCK_IDS.dr, (k) => reportTabId('dr', k),
+    role === 'BL' ? BL_TABS : role === 'DESIGNER' ? DESIGNER_TABS : TABS,
+    role === 'DESIGNER' ? 'My Reports' : role === 'BL' ? 'BL Reports' : 'Designer Reports',
+  );
+  // If the tab last opened was hidden, fall back to the first one that is still shown.
+  const tab: ReportKey = (tabs.find((t) => t.key === tabSel)?.key ?? tabs[0]?.key ?? tabSel) as ReportKey;
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [designerId, setDesignerId] = useState('');
@@ -729,6 +738,7 @@ export default function DesignerReports({ role }: { role: string }) {
 
   const load = useCallback(async () => {
     const seq = ++reqSeq.current;
+    if (blockHidden) return;
     if (dateIssue) { setData(null); setError(null); setLoading(false); return; }
     const p = new URLSearchParams();
     if (tab === 'my-performance' || tab === 'my-commitment') {
@@ -761,23 +771,25 @@ export default function DesignerReports({ role }: { role: string }) {
     } finally {
       if (seq === reqSeq.current) setLoading(false);
     }
-  }, [tab, sel, from, to, designerId, dateIssue, asOf]);
+  }, [tab, sel, from, to, designerId, dateIssue, asOf, blockHidden]);
 
   useEffect(() => { void load(); }, [load]);
 
   const options = tab === 'my-performance' || tab === 'my-commitment' ? CYCLE_OPTIONS : tab === 'my-trends-sales' ? TREND_OPTIONS : RANGE_OPTIONS;
   const periodLabel = tab === 'my-performance' || tab === 'my-commitment' ? `Period (${cycleDescription()} cycle)` : tab === 'my-trends-sales' ? 'Cycles' : 'Date range';
 
+  if (blockHidden) return null;
+
   return (
     <div className="space-y-3" data-testid="designer-reports">
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-        {role === 'DESIGNER' ? 'My Reports' : role === 'BL' ? 'BL Reports' : 'Designer Reports'}
+        {heading}
       </p>
       <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm space-y-4">
         <div className="flex flex-wrap gap-1.5" role="tablist">
           {tabs.map((t) => (
             <button key={t.key} role="tab" data-testid={`tab-${t.key}`} aria-selected={tab === t.key}
-              onClick={() => { setTab(t.key); setData(null); }}
+              onClick={() => { setTab(t.key as ReportKey); setData(null); }}
               className={`rounded-full px-3 py-1 text-xs font-medium ${tab === t.key ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
               {t.label}
             </button>

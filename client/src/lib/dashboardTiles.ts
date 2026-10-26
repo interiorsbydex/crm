@@ -92,3 +92,29 @@ export const DASHBOARD_TILES: DashboardTileDef[] = [
   { id: 'reports.conversionDetail', dashboard: 'reports', section: 'Additional reports', label: 'Conversion funnel detail' },
   { id: 'reports.clientHealth', dashboard: 'reports', section: 'Designer view — bottom', label: 'Client health' },
 ];
+
+// ── Report tabs (the tabs inside the Designer / BL report blocks on the Reports page) ──────────────────────────
+/** The first row of each block is the block's heading: untick it to hide the whole block, or type a new heading. Tab names: renaming "My Performance" renames it for Designers, BLs and Branch Heads alike. Tab ids are stable per block: "dr" = Designer Reports / BL Reports / My Reports, "ba" = BL & Admin Reports (Branch Head). */
+export function reportTabId(block: 'dr' | 'ba', key: string): string {
+  return `reports.${block}${key.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('')}`;
+}
+export const REPORT_BLOCK_IDS = { dr: 'reports.drBlock', ba: 'reports.baBlock' } as const;
+
+const DR_TAB_NAMES: [string, string][] = [
+  ['my-performance', 'My Performance'], ['my-lead-funnel', 'My Lead Funnel'], ['my-commitment', 'My Commitment'],
+  ['my-trends-sales', 'Trends — Sales'], ['task-call-activity', 'Task / Call Activity'],
+  ['bl-pipeline', 'BL Pipeline'], ['bl-conversion', 'BL Conversion'], ['discount-metrics', 'Discount Metrics'],
+  ['designer-pipeline', 'Designer Pipeline'], ['designer-conversion', 'Designer Conversion'], ['designer-discount-metrics', 'Designer Discount Metrics'],
+];
+const BA_TAB_NAMES: [string, string][] = [
+  ['bl-performance', 'BL Performance'], ['bl-pipeline', 'BL Pipeline'], ['bl-conversion', 'BL Conversion'], ['discount-metrics', 'Discount Metrics'],
+  ['team-meetings', 'Team Meetings'], ['company-lead-summary', 'Company Lead Summary'], ['company-pipeline', 'Company Pipeline'],
+  ['designer-performance-all', 'Designer Performance (All)'], ['bl-performance-all', 'BL Performance (All)'], ['source-campaign', 'Source & Campaign'],
+  ['inactive-leads', 'Inactive Leads'], ['lead-aging', 'Lead Aging'], ['trend', 'Trend'], ['offer-performance', 'Offer Performance'],
+];
+DASHBOARD_TILES.push(
+  { id: REPORT_BLOCK_IDS.dr, dashboard: 'reports', section: 'Report tabs — Designer Reports / BL Reports / My Reports', label: 'Designer Reports' },
+  ...DR_TAB_NAMES.map(([key, label]) => ({ id: reportTabId('dr', key), dashboard: 'reports', section: 'Report tabs — Designer Reports / BL Reports / My Reports', label })),
+  { id: REPORT_BLOCK_IDS.ba, dashboard: 'reports', section: 'Report tabs — BL & Admin Reports (Branch Head)', label: 'BL & Admin Reports' },
+  ...BA_TAB_NAMES.map(([key, label]) => ({ id: reportTabId('ba', key), dashboard: 'reports', section: 'Report tabs — BL & Admin Reports (Branch Head)', label })),
+);

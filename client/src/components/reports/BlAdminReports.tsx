@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useReportTabs } from '../../lib/dashboardLayout';
+import { reportTabId, REPORT_BLOCK_IDS } from '../../lib/dashboardTiles';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { stageLabel } from '../../lib/crmSettings';
@@ -130,8 +132,14 @@ export function Table({ tab, t }: { tab: string; t: TableData }) {
 
 export default function BlAdminReports({ role }: { role: string }) {
   // BL: no separate Team Meetings tab (meeting performance is not wanted for BL).
-  const tabs = role === 'BRANCH_HEAD' ? [...BL_TABS, ...ADMIN_TABS] : BL_TABS.filter((t) => t.key !== 'team-meetings');
-  const [tab, setTab] = useState(tabs[0].key);
+  const { visible: tabs, blockHidden, heading } = useReportTabs(
+    REPORT_BLOCK_IDS.ba, (k) => reportTabId('ba', k),
+    role === 'BRANCH_HEAD' ? [...BL_TABS, ...ADMIN_TABS] : BL_TABS.filter((t) => t.key !== 'team-meetings'),
+    role === 'BRANCH_HEAD' ? 'BL & Admin Reports' : 'BL Reports',
+  );
+  const [tabSel, setTab] = useState(BL_TABS[0].key);
+  // If the tab last opened was hidden, fall back to the first one still shown.
+  const tab = tabs.find((t) => t.key === tabSel)?.key ?? tabs[0]?.key ?? tabSel;
   const [f, setF] = useState({ from: '', to: '', designerId: '', blId: '', source: '', stage: '', projectType: '', location: '' });
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -147,6 +155,7 @@ export default function BlAdminReports({ role }: { role: string }) {
   const appliedIssue = filterIssue(applied);
 
   const load = useCallback(async () => {
+    if (blockHidden) return;
     if (appliedIssue) { setData(null); setError(null); return; }
     const p = new URLSearchParams();
     Object.entries(applied).forEach(([k, v]) => { if (v.trim()) p.set(k, v.trim()); });
@@ -158,7 +167,7 @@ export default function BlAdminReports({ role }: { role: string }) {
       setData(null);
       setError(e instanceof Error ? e.message : 'Failed to load report');
     } finally { setLoading(false); }
-  }, [tab, applied, appliedIssue]);
+  }, [tab, applied, appliedIssue, blockHidden]);
   useEffect(() => { void load(); }, [load]);
 
   const field = (k: keyof typeof f, label: string, type = 'text') => (
@@ -168,9 +177,11 @@ export default function BlAdminReports({ role }: { role: string }) {
     </label>
   );
 
+  if (blockHidden) return null;
+
   return (
     <div className="space-y-3" data-testid="bl-admin-reports">
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{role === 'BRANCH_HEAD' ? 'BL & Admin Reports' : 'BL Reports'}</p>
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{heading}</p>
       <div className="space-y-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap gap-1.5" role="tablist">
           {tabs.map((t) => (

@@ -84,3 +84,20 @@ export function TileGroup({ dashboard, className, children }: { dashboard: strin
   if (!sorted.length) return null;
   return <div className={className}>{sorted.map((el, i) => <Fragment key={idOf(el) ?? i}>{el}</Fragment>)}</div>;
 }
+
+/**
+ * The tabs of a report block as the admin set them: hidden ones dropped, the rest in the admin's order and with their
+ * chosen names. `block` is hidden entirely when the admin hid it or hid every tab.
+ */
+export function useReportTabs<T extends { key: string; label: string }>(
+  blockId: string, tabIdOf: (key: string) => string, tabs: T[], defaultHeading: string,
+) {
+  const { layout, label } = useDashboardLayout('reports');
+  const rank = (t: T, i: number) => { const pos = layout.order.indexOf(tabIdOf(t.key)); return pos === -1 ? layout.order.length + i : pos; };
+  const visible = tabs
+    .map((t, i) => ({ t, r: rank(t, i) }))
+    .filter(({ t }) => !layout.hidden.includes(tabIdOf(t.key)))
+    .sort((a, b) => a.r - b.r)
+    .map(({ t }) => ({ ...t, label: label(tabIdOf(t.key), t.label) }));
+  return { visible, blockHidden: layout.hidden.includes(blockId) || visible.length === 0, heading: label(blockId, defaultHeading) };
+}
