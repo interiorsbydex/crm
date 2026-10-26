@@ -131,6 +131,23 @@ adminRouter.post('/users/invite', async (req, res) => {
   }
 });
 
+/**
+ * Admin is Branch Head only, so switching off or demoting the last active
+ * Branch Head (or yourself) would lock everyone out of Admin. Returns the
+ * reason to refuse, or null.
+ */
+async function adminLockoutReason(actorId: string, targetId: string, change: { deactivate?: boolean; role?: string }): Promise<string | null> {
+  const target = await prisma.user.findUnique({ where: { id: targetId }, select: { role: true, isActive: true } });
+  if (!target || target.role !== 'BRANCH_HEAD' || !target.isActive) return null;
+  const losesAdmin = change.deactivate || (change.role !== undefined && change.role !== 'BRANCH_HEAD');
+  if (!losesAdmin) return null;
+  if (targetId === actorId) return change.deactivate
+    ? 'You cannot switch off your own account. Ask another Branch Head to do it.'
+    : 'You cannot change your own role away from Branch Head. Ask another Branch Head to do it.';
+  const others = await prisma.user.count({ where: { role: 'BRANCH_HEAD', isActive: true, id: { not: targetId } } });
+  return others === 0 ? 'This is the only active Branch Head. Make someone else Branch Head first, or nobody can open Admin.' : null;
+}
+
 // ── PATCH /api/admin/users/:id/deactivate ─────────────────────────────────────
 adminRouter.patch('/users/:id/deactivate', async (req, res) => {
   try {
@@ -141,6 +158,8 @@ adminRouter.patch('/users/:id/deactivate', async (req, res) => {
 
     const user = await prisma.user.findUnique({ where: { id } });
     if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+    const lockout = await adminLockoutReason(req.user!.id, id, { deactivate: true });
+    if (lockout) { res.status(400).json({ error: lockout }); return; }
 
     // Step 1 — reassign leads if targets provided. Inactive leads are frozen
     // (task #149) and keep their existing assignment — they're excluded here
@@ -193,6 +212,8 @@ adminRouter.patch('/users/:id/deactivate', async (req, res) => {
 adminRouter.patch('/users/:id', async (req, res) => {
   try {
     const { name, role, blId, designManagerId, isActive, designation } = req.body;
+    const lockout = await adminLockoutReason(req.user!.id, req.params.id, { deactivate: isActive === false, role: role || undefined });
+    if (lockout) { res.status(400).json({ error: lockout }); return; }
     const validDesignations = ['DESIGN_TEAM_LEAD'];
     if (designation && !validDesignations.includes(designation)) {
       res.status(400).json({ error: `designation must be one of: ${validDesignations.join(', ')}` });
