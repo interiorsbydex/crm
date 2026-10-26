@@ -337,6 +337,7 @@ export default function CrmSettingsAdmin() {
         <h3 className={H3}>Reminders and digests</h3>
         <div className="flex flex-wrap items-end gap-6">
           <NumField label="Remind before a meeting or follow-up" suffix="minutes" min={15} value={draft.reminderMinutesBefore} onChange={(n) => set('reminderMinutesBefore', n)} />
+          <NumField label="Remind before an on-hold lead reopens" suffix="days (0 = no reminder)" min={0} value={draft.onHoldReminderDaysBefore} onChange={(n) => set('onHoldReminderDaysBefore', n)} />
           <label className="block text-xs text-gray-600">
             <span className="font-medium text-gray-800">Weekly digest day (08:00)</span>
             <select value={draft.weeklyDigestDay} onChange={(e) => set('weeklyDigestDay', Number(e.target.value))} className={`${INPUT} mt-1 block`}>

@@ -25,6 +25,7 @@ export interface CrmSettings {
   designOverallDays: number;
   stageLabels: Record<string, string>;
   hiddenStages: string[];
+  onHoldReminderDaysBefore: number;
   cycleStartDay: number;
   cycleSchedule?: { from: string; startDay: number }[];
 }
@@ -58,6 +59,7 @@ const FALLBACK: CrmSettings = {
     DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',
   },
   hiddenStages: [],
+  onHoldReminderDaysBefore: 1,
   cycleStartDay: 16,
 };
 

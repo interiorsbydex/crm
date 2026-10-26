@@ -147,6 +147,8 @@ export const crmSettingsSchema = z.object({
     }
   }),
   hiddenStages: z.array(z.enum(HIDEABLE_STAGES)),
+  /** In-app reminder to the designer and Business Lead this many days before an On Hold lead reopens (0 = no reminder). */
+  onHoldReminderDaysBefore: z.number().int('must be a whole number of days').min(0, 'cannot be negative (use 0 for no reminder)').max(30, 'must be 30 days or fewer'),
   /** Day of the month incentive/target cycles start on (1–28). Takes effect when the current cycle ends. */
   cycleStartDay: z.number().int().min(1, 'must be between 1 and 28').max(28, 'must be between 1 and 28 (every month has those days)'),
   /** Worked out by the server from cycleStartDay (lib/targetCycle.ts); anything sent in is ignored. */
@@ -201,6 +203,7 @@ export const DEFAULT_CRM_SETTINGS: CrmSettings = {
     DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',
   },
   hiddenStages: [],
+  onHoldReminderDaysBefore: 1,
   cycleStartDay: 16,
   cycleSchedule: DEFAULT_CYCLE_SCHEDULE,
 };
@@ -264,7 +267,7 @@ const SECTION_NAMES: Record<string, string> = {
   cities: 'Cities', leadSources: 'Lead sources', onHoldReasons: 'On-hold reasons', inactiveReasons: 'Inactive reasons',
   reactivationReasons: 'Reactivation reasons', flagCategories: 'Flag categories', leadCreateRequired: 'New lead details',
   discount: 'Discount limits', calls: 'Calls', notifyClientByDefault: 'Notify client by default', defaultPhoneCountry: 'Default phone country', pipelineCardFields: 'Pipeline cards', reminderMinutesBefore: 'Reminder timing', weeklyDigestDay: 'Weekly digest day',
-  designPhaseDays: 'Design phase days', designOverallDays: 'Overall design days', stageLabels: 'Stage names', hiddenStages: 'Switched-off stages',
+  designPhaseDays: 'Design phase days', designOverallDays: 'Overall design days', stageLabels: 'Stage names', hiddenStages: 'Switched-off stages', onHoldReminderDaysBefore: 'On-hold reminder',
   cycleStartDay: 'Cycle start day',
 };
 

@@ -58,7 +58,7 @@ export const NOTIFICATION_TYPES: { type: NotificationType; label: string }[] = [
   { type: 'STAGE_MOVED_BACKWARD', label: 'A lead is moved back a stage' },
   { type: 'INTENT_RATING_CHANGED', label: 'A lead\'s intent rating changes' },
   { type: 'LEAD_ON_HOLD', label: 'A lead is put on hold' },
-  { type: 'ON_HOLD_REOPEN', label: 'An on-hold lead\'s reopen date arrives' },
+  { type: 'ON_HOLD_REOPEN', label: 'An on-hold lead is about to reopen (days before: CRM Settings)' },
   { type: 'LEAD_REACTIVATED', label: 'A lead is reactivated' },
   { type: 'LEAD_INACTIVATED', label: 'A lead is made inactive' },
   { type: 'OB_DATE_REMINDER', label: 'An expected onboarding date is near' },

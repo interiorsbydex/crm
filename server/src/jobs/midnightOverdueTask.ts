@@ -5,6 +5,7 @@ import { createNotification } from '../lib/notifications.js';
 import { reactivateLead } from '../lib/leadStatusActions.js';
 import { sendDraft } from '../lib/emailService.js';
 import { istDayBounds } from '../lib/istTime.js';
+import { sendOnHoldReminders } from '../lib/onHoldReminder.js';
 
 // SYSTEM_USER_ID isn't a real user row (see .agents/memory/system-user-id-fk.md)
 // — logActivity/createNotification need an actual user id. Auto-reactivation
@@ -107,6 +108,13 @@ export async function runMidnightCheck(): Promise<{ markedOverdue: number; reope
     }
     details.push(`task:${task.id} lead:${task.lead.leadId} assignee:${task.assignedTo.name}`);
   }
+
+  // ── 1b. Heads-up before an On Hold lead reopens (Admin → CRM Settings) ─────────
+  const reminders = await sendOnHoldReminders().catch((e) => {
+    console.warn('[jobs] On Hold reminders failed:', e);
+    return { reminded: 0, details: [] as string[] };
+  });
+  details.push(...reminders.details);
 
   // ── 2. Auto-reactivate ON_HOLD leads whose reopen date has arrived (task #88) ──
   // Trigger is "date has arrived" (<= today), not "arriving tomorrow" — this
