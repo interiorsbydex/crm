@@ -31,6 +31,7 @@ import { evaluateChecklist, mergeCustomValues } from '../lib/checklists.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 import { getCommercialContextForLead } from '../lib/stageTimeline.js';
 import { ConfigError } from '../lib/versionedConfig.js';
+import { recalculateMilestones } from '../lib/milestones.js';
 
 export const pdObChecklistRouter = Router({ mergeParams: true });
 
@@ -449,6 +450,7 @@ export async function completePdObWelcomeSent(leadId: string, userId: string): P
     fromCommercialContext,
     toCommercialContext: await getCommercialContextForLead(leadId),
   });
+  await recalculateMilestones(leadId).catch((e) => console.warn('[milestones] recalculation failed:', e));
   await logActivity(userId, 'PD_OB_WELCOME_MAIL_SENT', leadId, {});
 
   const notifyId = lead.assignedBLId ?? lead.assignedDesignerId;

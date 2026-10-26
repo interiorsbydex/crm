@@ -1,5 +1,6 @@
 import { findDuplicateLead, duplicateMessage } from '../lib/duplicateLeads.js';
 import { leadOrderBy } from '../lib/leadSort.js';
+import { recalculateMilestones } from '../lib/milestones.js';
 import { Router } from 'express';
 import multer from 'multer';
 import { prisma } from '../lib/prisma.js';
@@ -1691,6 +1692,8 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         fromCommercialContext,
         toCommercialContext,
       });
+      // The PP → Onboarding day count is measured to this move.
+      if (stage === 'ONBOARDING') await recalculateMilestones(id).catch((e) => console.warn('[milestones] recalculation failed:', e));
 
       if (gateOverride) {
         await logActivity(user.id, 'GATE_OVERRIDDEN', id, { from: prevStage, to: stage, reason: gateOverride.reason, missing: gateOverride.missing });
