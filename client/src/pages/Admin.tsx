@@ -591,6 +591,10 @@ export default function Admin() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        <p className="text-xs text-gray-500" data-testid="admin-settings-pointer">
+          Looking for response-time limits (SLA hours), email wording and welcome documents, WhatsApp templates or offers?
+          They are on the <Link to="/settings" className="text-brand-600 underline">Settings page</Link>.
+        </p>
         {loading && <div className="text-center py-20 text-gray-400 animate-pulse">Loading…</div>}
 
         {/* ── USERS TAB ──────────────────────────────────────────────────────── */}
