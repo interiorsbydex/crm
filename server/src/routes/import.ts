@@ -273,7 +273,7 @@ importRouter.post('/', verifyToken, requirePermission('LEAD_IMPORT'), upload.sin
         where: {
           OR: [
             ...canonicalPhones.map((p) => ({ phone: { endsWith: p } })),
-            { email: { in: emails } },
+            ...emails.map((e) => ({ email: { equals: e, mode: 'insensitive' as const } })),
           ],
         },
         select: { phone: true, email: true, leadId: true },
@@ -282,7 +282,7 @@ importRouter.post('/', verifyToken, requirePermission('LEAD_IMPORT'), upload.sin
       prisma.user.findMany({ where: { role: { in: ['DESIGNER', 'CRE', 'BL'] } }, select: { id: true, name: true, role: true } }),
     ]);
     const existingPhoneSet = new Set(existingLeads.map((l) => canonicalPhone(l.phone)));
-    const existingEmailSet = new Set(existingLeads.map((l) => l.email).filter((e): e is string => !!e));
+    const existingEmailSet = new Set(existingLeads.map((l) => l.email?.toLowerCase()).filter((e): e is string => !!e));
     const existingLeadIdSet = new Set(existingLeadIds.map((l) => l.leadId));
 
     // Get last counter value — advanced past both freshly-generated IDs and
@@ -331,7 +331,7 @@ importRouter.post('/', verifyToken, requirePermission('LEAD_IMPORT'), upload.sin
       }
 
       const phoneKey = canonicalPhone(rawPhone);
-      if (existingPhoneSet.has(phoneKey) || (r.email && existingEmailSet.has(r.email))) {
+      if (existingPhoneSet.has(phoneKey) || (r.email && existingEmailSet.has(r.email.toLowerCase()))) {
         skippedCount++;
         preview.push({ row: rowNum, status: 'DUPLICATE', phone: rawPhone, name: r.name, reason: 'phone or email already in CRM' });
         continue;
@@ -351,7 +351,7 @@ importRouter.post('/', verifyToken, requirePermission('LEAD_IMPORT'), upload.sin
 
       // Guard against duplicates within the same file (same phone/email/PID twice).
       existingPhoneSet.add(phoneKey);
-      if (r.email) existingEmailSet.add(r.email);
+      if (r.email) existingEmailSet.add(r.email.toLowerCase());
       if (r.leadId) existingLeadIdSet.add(r.leadId);
 
       const providedOwners = {

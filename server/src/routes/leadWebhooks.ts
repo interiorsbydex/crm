@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { logActivity } from '../lib/activityLog.js';
+import { findDuplicateLead, recordDuplicateEnquiry } from '../lib/duplicateLeads.js';
 
 import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
 import { routeAdLead, incrementAssigned } from '../services/assignmentService.js';
@@ -61,8 +62,12 @@ async function createLeadFromWebhook(data: {
     return null;
   }
 
-  const existing = await prisma.lead.findFirst({ where: { phone: data.phone } });
-  if (existing) return existing.id;
+  // Same person again: no new lead, but the existing lead's history and team are told.
+  const existing = await findDuplicateLead({ phone: data.phone, email: data.email });
+  if (existing) {
+    await recordDuplicateEnquiry(existing, await resolveSystemUserId(), { source: data.source, name: data.name, phone: data.phone, email: data.email });
+    return existing.id;
+  }
 
   // Ad-sourced leads go to the next CRE in turn for qualification, or wait
   // unassigned if Admin → Lead Routing & Access says so.
@@ -202,7 +207,7 @@ leadWebhooksRouter.post('/google', async (req, res) => {
       if (!isValidPhone(phone)) { console.warn(`[google:webhook] Rejected lead with invalid phone "${phone}"`); return; }
       if (b.email && !isValidEmail(b.email)) { console.warn(`[google:webhook] Rejected lead with invalid email "${b.email}"`); return; }
 
-      const existing = await prisma.lead.findFirst({ where: { phone } });
+      const existing = await findDuplicateLead({ phone, email: b.email });
       if (!existing) {
         // Next CRE in turn, or unassigned (Admin → Lead Routing & Access).
         const cre = await routeAdLead();
@@ -239,7 +244,8 @@ leadWebhooksRouter.post('/google', async (req, res) => {
         });
         console.log(`[google:webhook] Lead created: ${lead.leadId} for ${name}`);
       } else {
-        console.log(`[google:webhook] Duplicate phone ${phone}, skipping`);
+        await recordDuplicateEnquiry(existing, await resolveSystemUserId(), { source: 'GOOGLE_ADS', name, phone, email: b.email || undefined });
+        console.log(`[google:webhook] Duplicate of ${existing.leadId}, recorded on the existing lead`);
       }
     } catch (e) {
       console.error('[google:webhook] Error:', e);
@@ -292,13 +298,12 @@ leadWebhooksRouter.post('/agency', async (req, res) => {
     if (!isValidPhone(phone)) { res.status(400).json({ error: 'phone: invalid number' }); return; }
     if (email && !isValidEmail(email)) { res.status(400).json({ error: 'email: invalid format' }); return; }
 
-    // Duplicate by last-10 digits of phone, or by email.
-    const last10 = phone.replace(/\D/g, '').slice(-10);
-    const dup = await prisma.lead.findFirst({
-      where: { OR: [{ phone: { endsWith: last10 } }, ...(email ? [{ email }] : [])] },
-      select: { leadId: true },
-    });
-    if (dup) { res.status(200).json({ status: 'duplicate', leadId: dup.leadId }); return; }
+    // Duplicate by last-10 digits of phone, or by email (any case).
+    const dup = await findDuplicateLead({ phone, email });
+    if (dup) {
+      await recordDuplicateEnquiry(dup, await resolveSystemUserId(), { source, name, phone, email: email || undefined });
+      res.status(200).json({ status: 'duplicate', leadId: dup.leadId }); return;
+    }
 
     // "2 BhK" -> "2BHK" to match the CRM's existing free-text convention.
     const projectType = propertyType.replace(/\s+/g, '').toUpperCase() || undefined;

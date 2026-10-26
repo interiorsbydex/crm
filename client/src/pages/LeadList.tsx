@@ -34,7 +34,7 @@ function StarFilter({ value, onChange }: { value: string; onChange: (v: string) 
 interface Lead {
   id: string; leadId: string; name: string; phone: string; email?: string;
   source?: string; stage: string; status: 'ACTIVE' | 'ON_HOLD' | 'INACTIVE'; isSLABreached: boolean;
-  estimatedValue?: string | null; intentRating?: number | null;
+  estimatedValue?: string | null; intentRating?: number | null; isDuplicate?: boolean;
   daysLeadToDQL?: number | null; daysDQLToPP?: number | null; daysPPToOnboarding?: number | null;
   overallPipelineAgeDays?: number;
   designerAssignmentAgeDays?: number | null;
@@ -691,6 +691,7 @@ export default function LeadList() {
                             <span className="text-brand-600 font-mono text-xs font-bold">{lead.leadId}</span>
                             {lead.isSLABreached && <AlertTriangle size={10} strokeWidth={2.5} className="ml-1 text-red-400 inline" />}
                             {isUnread && <span className="ml-1.5 text-[9px] font-bold bg-brand-100 text-brand-600 px-1.5 py-0.5 rounded-full">NEW</span>}
+                            {lead.isDuplicate && <span className="ml-1.5 text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full" title="Flagged as a duplicate enquiry">Duplicate</span>}
                           </td>
                           <td className="py-3 px-4 whitespace-nowrap">
                             {/* Task #90 — NPS shown right next to the name instead of its own column */}

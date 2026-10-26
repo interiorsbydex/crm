@@ -21,6 +21,8 @@ export function describeActivity(action: string, meta?: Record<string, any>): st
       return `Proceeded with missing items (${Array.isArray(m.missing) ? m.missing.join('; ') : '—'})`;
     case 'STAGE_CHANGED':
       return `${m.isBackward ? '↩ Moved backward: ' : 'Moved stage: '}${stageLabel(m.from)} → ${stageLabel(m.to)}`;
+    case 'DUPLICATE_ENQUIRY':
+      return `Enquired again${m.source ? ` via ${String(m.source).replace(/_/g, ' ').toLowerCase()}` : ''}${m.name ? ` as "${m.name}"` : ''} — no new lead was made (matched on ${m.matchedOn === 'email' ? 'email' : 'phone number'})`;
     case 'NOTE_ADDED':
       return `Added a note: ${m.note ?? ''}`;
     case 'INTENT_RATING_UPDATED': {

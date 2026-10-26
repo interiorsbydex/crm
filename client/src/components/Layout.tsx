@@ -133,6 +133,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [creating, setCreating] = useState(false);
   const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', source: '', sourceOther: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '', isTestLead: false });
   const [newLeadErrors, setNewLeadErrors] = useState<Record<string, string>>({});
+  const [dupLead, setDupLead] = useState<{ id: string; leadId: string; message: string } | null>(null);
   const [newLeadPossessionMode, setNewLeadPossessionMode] = useState<'custom' | 'received'>('custom');
   // Name, phone and source are always mandatory; which project details are
   // too comes from Admin → CRM Settings (the server enforces the same list).
@@ -265,6 +266,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       return;
     }
     setCreating(true);
+    setDupLead(null);
     try {
       const { sourceOther, ...rest } = newLead;
       const payload = { ...rest, source: newLead.source === 'OTHER' ? sourceOther.trim() : newLead.source };
@@ -279,7 +281,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       setNewLeadErrors({});
       setShowNewLead(false);
     } catch (e: any) {
-      toast.error(e.message);
+      if (e.status === 409 && e.data?.existingId) {
+        setDupLead({ id: e.data.existingId, leadId: e.data.existingLeadId, message: e.message });
+      } else {
+        toast.error(e.message);
+      }
     } finally {
       setCreating(false);
     }
@@ -671,8 +677,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </>
                 )}
               </div>
+              {dupLead && (
+                <div className="col-span-2 rounded-xl px-3 py-2.5 text-sm flex items-center justify-between gap-3" style={{ background: '#FEF3C7', border: '1px solid #F59E0B', color: '#92400E' }}>
+                  <span>{dupLead.message}</span>
+                  <button type="button" className="font-semibold underline whitespace-nowrap"
+                    onClick={() => { const id = dupLead.id; setDupLead(null); setShowNewLead(false); navigate(`/leads/${id}`); }}>
+                    Open {dupLead.leadId}
+                  </button>
+                </div>
+              )}
               <div className="col-span-2 flex justify-end gap-2 pt-1">
-                <button type="button" onClick={() => { setShowNewLead(false); setNewLeadErrors({}); }}
+                <button type="button" onClick={() => { setShowNewLead(false); setNewLeadErrors({}); setDupLead(null); }}
                   className="px-4 py-2.5 text-sm font-medium text-stone-600 rounded-xl hover:bg-stone-50 transition-colors"
                   style={{ border: '1px solid #EDE8E3' }}>
                   Cancel

@@ -1747,6 +1747,7 @@ export default function LeadDetail() {
               </div>
               <p className="text-xs text-stone-400 mt-0.5 font-medium">
                 {lead.leadId}
+                {lead.isDuplicate && <span className="ml-1.5 text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full" title="This lead was flagged as a duplicate of another enquiry">Duplicate</span>}
                 {lead.projectType ? ` · ${lead.projectType}` : ''}
                 {lead.scope ? ` · ${lead.scope}` : ''}
                 {lead.location ? ` · ${lead.location}` : ''}

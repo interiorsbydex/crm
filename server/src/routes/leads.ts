@@ -1,3 +1,4 @@
+import { findDuplicateLead, duplicateMessage } from '../lib/duplicateLeads.js';
 import { Router } from 'express';
 import multer from 'multer';
 import { prisma } from '../lib/prisma.js';
@@ -468,20 +469,11 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
       return;
     }
 
-    // Check duplicate phone
-    const existing = await prisma.lead.findFirst({ where: { phone } });
+    // Same phone (last 10 digits) or same email (any case) as an existing lead
+    const existing = await findDuplicateLead({ phone, email });
     if (existing) {
-      res.status(409).json({ isDuplicate: true, error: 'A lead with this phone number already exists', existingLeadId: existing.leadId });
+      res.status(409).json({ isDuplicate: true, error: duplicateMessage(existing), existingLeadId: existing.leadId, existingId: existing.id, matchedOn: existing.matchedOn });
       return;
-    }
-
-    // Check duplicate email
-    if (email?.trim()) {
-      const emailExisting = await prisma.lead.findFirst({ where: { email: email.trim() } });
-      if (emailExisting) {
-        res.status(409).json({ isDuplicate: true, error: 'A lead with this email already exists', existingLeadId: emailExisting.leadId });
-        return;
-      }
     }
 
     const leadId = await generateLeadId();
@@ -610,30 +602,18 @@ leadsRouter.post(
         return;
       }
 
-      // Duplicate check — phone
-      const phoneMatch = await prisma.lead.findFirst({ where: { phone: phone.trim() } });
-      if (phoneMatch) {
+      // Duplicate check — phone (last 10 digits) and email (any case)
+      const dup = await findDuplicateLead({ phone, email });
+      if (dup) {
         res.status(409).json({
           isDuplicate: true,
-          error: 'A lead with this phone number already exists',
-          existingLeadId: phoneMatch.leadId,
-          warning: `Phone ${phone.trim()} is already registered as lead ${phoneMatch.leadId}`,
+          error: duplicateMessage(dup),
+          existingLeadId: dup.leadId,
+          existingId: dup.id,
+          matchedOn: dup.matchedOn,
+          warning: duplicateMessage(dup),
         });
         return;
-      }
-
-      // Duplicate check — email (if provided)
-      if (email?.trim()) {
-        const emailMatch = await prisma.lead.findFirst({ where: { email: email.trim() } });
-        if (emailMatch) {
-          res.status(409).json({
-            isDuplicate: true,
-            error: 'A lead with this email already exists',
-            existingLeadId: emailMatch.leadId,
-            warning: `Email ${email.trim()} is already registered as lead ${emailMatch.leadId}`,
-          });
-          return;
-        }
       }
 
       // This capture form can create either a qualified MQL lead or an
