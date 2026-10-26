@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import type { FollowUpTask } from '../lib/api';
 import toast from 'react-hot-toast';
 import { getStoredUser } from '../lib/auth';
+import { usePermissions } from '../lib/permissions';
 import { formatISTDate, todayISTDateString } from '../lib/dateFormat';
 import { DateInput, TimeInput } from '../components/ui/DateTimeInputs';
 
@@ -164,7 +165,9 @@ export default function Tasks() {
   const [filter, setFilter] = useState<Filter>('upcoming');
   const [tab, setTab] = useState<'my' | 'team'>('my');
   const user = getStoredUser();
-  const isBLOrHead = user?.role === 'BL' || user?.role === 'BRANCH_HEAD';
+  const { can } = usePermissions();
+  // Team tasks follow Admin → Permissions ("See the team's tasks").
+  const isBLOrHead = (user?.role === 'BL' || user?.role === 'BRANCH_HEAD') && can('TEAM_TASKS_VIEW');
 
   // Action modal: complete / not-done / reschedule — mirrors FollowUpTab.tsx's lead-scoped version.
   const [actionModal, setActionModal] = useState<{ taskId: string; kind: 'complete' | 'not-done' | 'reschedule' } | null>(null);
@@ -179,7 +182,7 @@ export default function Tasks() {
       const [myRes, teamRes] = await Promise.all([
         api.get<{ tasks: FollowUpTask[] }>('/tasks/my?createdByRole=CRE'),
         isBLOrHead
-          ? api.get<{ tasks: FollowUpTask[] }>('/tasks/team?createdByRole=CRE')
+          ? api.get<{ tasks: FollowUpTask[] }>('/tasks/team?createdByRole=CRE').catch(() => ({ tasks: [] as FollowUpTask[] }))
           : Promise.resolve({ tasks: [] }),
       ]);
       setMyTasks(myRes.tasks ?? []);

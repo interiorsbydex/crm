@@ -500,7 +500,7 @@ const taskCallHeaders = (): Hdr[] => {
   ];
 };
 
-const stageActivityHeaders: Hdr[] = (() => {
+const stageActivityHeaders = (): Hdr[] => {
   const tcols: Col[] = [{ key: 'status', label: 'Status' }, dateCol('dueDate', 'Due date')];
   const mcols: Col[] = [{ key: 'meetingType', label: 'Type' }, dateCol('scheduledAt', 'Scheduled at'), { key: 'status', label: 'Status' }];
   const d = (k: string, cols?: Col[]) => ({ path: (r: Row) => r.drilldown[k] ?? [], cols });
@@ -520,18 +520,18 @@ const stageActivityHeaders: Hdr[] = (() => {
     { key: 'overdue', label: 'Overdue', drill: d('overdue', tcols) },
     { key: 'noActivity', label: `No Activity > ${formulas().noActivityDays} days`, drill: d('noActivity', [dateCol('lastActivityAt', 'Last activity')]) },
   ];
-})();
+};
 
 function TaskCall({ data }: { data: Row }) {
   const rows = data.rows;
   return (
     <div className="space-y-3">
       <Note>
-        <b>Counted as:</b> Due = {data.definitions.followUpsDue}. Completed = {data.definitions.followUpsCompleted}. Pending = {data.definitions.pending}. Not Done = {data.definitions.notDone}. Overdue = {data.definitions.overdue}. Meetings — Total Scheduled: {data.definitions.meetings.totalScheduled}; Upcoming: {data.definitions.meetings.upcoming}; Completed: {data.definitions.meetings.completed}; No-Show: {data.definitions.meetings.noShow}; Rescheduled: {data.definitions.meetings.rescheduled}. No Activity &gt; 3 Days = {data.definitions.noActivity}. Leads and Projects are separate columns and are not added together.
+        <b>Counted as:</b> Due = {data.definitions.followUpsDue}. Completed = {data.definitions.followUpsCompleted}. Pending = {data.definitions.pending}. Not Done = {data.definitions.notDone}. Overdue = {data.definitions.overdue}. Meetings — Total Scheduled: {data.definitions.meetings.totalScheduled}; Upcoming: {data.definitions.meetings.upcoming}; Completed: {data.definitions.meetings.completed}; No-Show: {data.definitions.meetings.noShow}; Rescheduled: {data.definitions.meetings.rescheduled}. No Activity &gt; {formulas().noActivityDays} Days = {data.definitions.noActivity}. Leads and Projects are separate columns and are not added together.
       </Note>
       {data.byStage && (
         <>
-          <DrillTableCards title="Activity by stage" rows={data.byStage} headers={stageActivityHeaders} />
+          <DrillTableCards title="Activity by stage" rows={data.byStage} headers={stageActivityHeaders()} />
           <p className="text-[11px] text-gray-400">{data.byStageNote}</p>
         </>
       )}

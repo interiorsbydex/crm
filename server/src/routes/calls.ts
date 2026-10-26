@@ -786,7 +786,7 @@ callsRouter.get('/', verifyToken, async (req, res) => {
   // Enforce lead-scope authorization before exposing signed attachment URLs
   const scopeLead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, assignedDesignerId: true, assignedBLId: true },
+    select: { id: true, assignedDesignerId: true, assignedBLId: true, createdAt: true },
   });
   if (!scopeLead) { res.status(404).json({ error: 'Lead not found' }); return; }
   if (!(await isAuthorizedForLead(scopeLead, user))) {
@@ -829,7 +829,12 @@ callsRouter.get('/', verifyToken, async (req, res) => {
     orderBy: { dueDate: 'asc' },
   });
 
-  res.json({ calls, rnrCount, needsEscalation: rnrCount >= (await getCrmSettings()).calls.rnrEscalationAfter, scheduledCalls });
+  const callRules = (await getCrmSettings()).calls;
+  const pastAttemptLimit = rnrCount >= callRules.rnrEscalationAfter;
+  // Same rule as when a call is logged: an old enough lead gets the "make it inactive" prompt instead of escalation.
+  const monthsOld = (Date.now() - scopeLead.createdAt.getTime()) / (1000 * 60 * 60 * 24 * 30);
+  const needsInactivationPrompt = pastAttemptLimit && monthsOld >= callRules.rnrInactivationMonths;
+  res.json({ calls, rnrCount, needsEscalation: pastAttemptLimit && !needsInactivationPrompt, needsInactivationPrompt, scheduledCalls });
 });
 
 // ── POST /api/leads/:leadId/calls/upload-attachment ───────────────────────────

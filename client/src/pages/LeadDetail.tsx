@@ -2550,8 +2550,10 @@ export default function LeadDetail() {
                   ) : (
                     <div className="flex items-center justify-between">
                       <AvatarChip name={lead.assignedDesigner?.name} />
-                      <button onClick={() => { setReassignField('designer'); setReassignValue(lead.assignedDesignerId ?? ''); }}
-                        className="text-xs text-brand-500 hover:underline">Change</button>
+                      {!(getStoredUser()?.role === 'BL' && !can('LEAD_ASSIGN_DIRECT')) && (
+                        <button onClick={() => { setReassignField('designer'); setReassignValue(lead.assignedDesignerId ?? ''); }}
+                          className="text-xs text-brand-500 hover:underline">Change</button>
+                      )}
                     </div>
                   )}
                 </div>

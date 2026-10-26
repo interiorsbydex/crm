@@ -167,6 +167,7 @@ export default function CallLogTab({ leadId, isLocked, onCallLogged }: Props) {
   const [scheduledCalls, setScheduledCalls] = useState<FollowUpTask[]>([]);
   const [rnrCount, setRnrCount] = useState(0);
   const [needsEscalation, setNeedsEscalation] = useState(false);
+  const [needsInactivationPrompt, setNeedsInactivationPrompt] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -236,12 +237,13 @@ export default function CallLogTab({ leadId, isLocked, onCallLogged }: Props) {
 
   const loadCalls = async () => {
     try {
-      const data = await api.get<{ calls: CallRecord[]; rnrCount: number; needsEscalation: boolean; scheduledCalls: FollowUpTask[] }>(
+      const data = await api.get<{ calls: CallRecord[]; rnrCount: number; needsEscalation: boolean; needsInactivationPrompt?: boolean; scheduledCalls: FollowUpTask[] }>(
         `/leads/${leadId}/calls`,
       );
       setCalls(data.calls);
       setRnrCount(data.rnrCount);
       setNeedsEscalation(data.needsEscalation);
+      setNeedsInactivationPrompt(!!data.needsInactivationPrompt);
       setScheduledCalls(data.scheduledCalls ?? []);
     } catch (e: any) {
       setError(e.message);
@@ -565,6 +567,18 @@ export default function CallLogTab({ leadId, isLocked, onCallLogged }: Props) {
             <p className="font-semibold text-red-700">Escalation Required</p>
             <p className="text-sm text-red-600 mt-0.5">
               This lead has {rnrCount} RNR attempts. Please escalate to your Business Lead for review.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {needsInactivationPrompt && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3" data-testid="inactivation-prompt">
+          <AlertTriangle size={18} strokeWidth={2} className="text-amber-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-amber-800">Consider marking this lead inactive</p>
+            <p className="text-sm text-amber-700 mt-0.5">
+              This lead has {rnrCount} RNR attempts and is an older lead. Use “Mark Inactive” on the lead instead of escalating.
             </p>
           </div>
         </div>

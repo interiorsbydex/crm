@@ -57,7 +57,7 @@ export default function ClientHealth() {
             {data.contactCounts && (
               <section className="space-y-3" data-testid="contact-health-summary">
                 <h2 className="text-sm font-bold text-stone-800">Client contact</h2>
-                <p className="text-xs text-stone-500">Dated answered calls and completed meetings only. Warning at 3 IST calendar days; High Risk at 7. Unanswered calls, planned meetings and messages do not reset contact health. Missing dates remain Unknown. Automatic alerts are not activated.</p>
+                <p className="text-xs text-stone-500">Dated answered calls and completed meetings only. Warning at {formulas().contactHealth.warningDays} IST calendar days; High Risk at {formulas().contactHealth.highRiskDays}. Unanswered calls, planned meetings and messages do not reset contact health. Missing dates remain Unknown. Automatic alerts are not activated.</p>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {([
                     ['RECENT', data.contactCounts.recent], ['WARNING', data.contactCounts.warning],
