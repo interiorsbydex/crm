@@ -1,4 +1,5 @@
 import { findDuplicateLead, duplicateMessage } from '../lib/duplicateLeads.js';
+import { leadOrderBy } from '../lib/leadSort.js';
 import { Router } from 'express';
 import multer from 'multer';
 import { prisma } from '../lib/prisma.js';
@@ -117,6 +118,7 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       // Dashboard drill-through: the ownership scope the dashboard counted,
       // not the wider "which leads may I open" scope.
       mine,
+      sort, dir,
     } = req.query as Record<string, string>;
 
     const user = req.user!;
@@ -268,7 +270,7 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       prisma.lead.findMany({
         where,
         include: LEAD_INCLUDE,
-        orderBy: { createdAt: 'desc' },
+        orderBy: leadOrderBy(sort, dir),
         skip,
         take: limitNum,
       }),
@@ -802,6 +804,7 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
       budgetMin, budgetMax,
       possessionDateFrom, possessionDateTo,
       projectedObFrom, projectedObTo,
+      sort, dir,
     } = req.query as Record<string, string>;
 
     const user = req.user!;
@@ -904,7 +907,7 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
         assignedDesigner: { select: { name: true } },
         assignedBL: { select: { name: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: leadOrderBy(sort, dir),
     });
 
     const columns = ['Lead ID', 'Name', 'Phone', 'Email', 'Stage', 'Source', 'Estimated Value', 'Intent Rating', 'Designer', 'BL', 'Created At'];

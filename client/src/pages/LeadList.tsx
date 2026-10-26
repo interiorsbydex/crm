@@ -192,6 +192,8 @@ export default function LeadList() {
   const [pages, setPages] = useState(1);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  // Column sorting is done by the server so it holds across pages (and in the export).
+  const [sort, setSort] = useState<{ by: string; dir: 'asc' | 'desc' } | null>(null);
   const [exporting, setExporting] = useState(false);
   // Seed filters from the URL so links elsewhere in the app (e.g. dashboard
   // KPI tiles) can deep-link into a pre-filtered list, e.g. /leads?status=ACTIVE.
@@ -276,6 +278,7 @@ export default function LeadList() {
       if (filters.excludeStages) params.set('excludeStages', filters.excludeStages);
       if (filters.hasUnresolvedSlaBreach) params.set('hasUnresolvedSlaBreach', filters.hasUnresolvedSlaBreach);
       if (filters.mine) params.set('mine', filters.mine);
+      if (sort) { params.set('sort', sort.by); params.set('dir', sort.dir); }
       const data = await api.get<{ leads: Lead[]; total: number; pages: number }>(`/leads?${params}`);
       setLeads(data.leads);
       setTotal(data.total);
@@ -285,7 +288,7 @@ export default function LeadList() {
     } finally {
       setLoading(false);
     }
-  }, [page, filters]);
+  }, [page, filters, sort]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -346,6 +349,7 @@ export default function LeadList() {
        if (filters.intent) exportParams.set('intent', filters.intent);
        if (filters.projectedObFrom) exportParams.set('projectedObFrom', filters.projectedObFrom);
        if (filters.projectedObTo) exportParams.set('projectedObTo', filters.projectedObTo);
+      if (sort) { exportParams.set('sort', sort.by); exportParams.set('dir', sort.dir); }
       if (fmt === 'xlsx') exportParams.set('format', 'xlsx');
       const resp = await fetch(`/api/leads/export?${exportParams}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('crm_token')}` },
@@ -663,10 +667,20 @@ export default function LeadList() {
                   <thead>
                     <tr style={{ background: '#FAF6F2', borderBottom: '1px solid #EDE8E3' }}>
                       {(userRole === 'DESIGNER'
-                        ? ['Lead ID', 'Name', 'Stage', 'Status', 'Value', 'Source', 'MQL→DQL', 'DQL→PP', 'PP→OB', 'Designer Assignment Age', 'Updated']
-                        : ['Lead ID', 'Name', 'Stage', 'Status', 'Value', 'Designer', 'Source', 'Intent', 'Rating', 'Updated']
-                      ).map((h) => (
-                        <th key={h} className="text-left py-2.5 px-4 text-xs font-bold text-stone-500 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                        ? [['Lead ID', 'leadId'], ['Name', 'name'], ['Stage', 'stage'], ['Status', 'status'], ['Value', 'value'], ['Source', 'source'], ['MQL→DQL'], ['DQL→PP'], ['PP→OB'], ['Designer Assignment Age'], ['Created', 'created'], ['Updated', 'updated']]
+                        : [['Lead ID', 'leadId'], ['Name', 'name'], ['Stage', 'stage'], ['Status', 'status'], ['Value', 'value'], ['Designer', 'designer'], ['Source', 'source'], ['Intent', 'intent'], ['Rating'], ['Created', 'created'], ['Updated', 'updated']]
+                      ).map(([h, key]) => (
+                        <th key={h}
+                          aria-sort={key && sort?.by === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+                          className="text-left py-2.5 px-4 text-xs font-bold text-stone-500 uppercase tracking-widest whitespace-nowrap">
+                          {key ? (
+                            <button type="button" title={`Sort by ${h}`} data-testid={`sort-${key}`}
+                              onClick={() => { setSort((c) => c?.by === key ? { by: key, dir: c.dir === 'asc' ? 'desc' : 'asc' } : { by: key, dir: ['value', 'intent', 'created', 'updated'].includes(key) ? 'desc' : 'asc' }); setPage(1); }}
+                              className="uppercase tracking-widest font-bold hover:text-stone-800 inline-flex items-center gap-1">
+                              {h}<span className="text-[9px]">{sort?.by === key ? (sort.dir === 'asc' ? '▲' : '▼') : ''}</span>
+                            </button>
+                          ) : h}
+                        </th>
                       ))}
                     </tr>
                   </thead>
@@ -734,6 +748,7 @@ export default function LeadList() {
                               <td className="py-3 px-4"><Stars rating={lead.intentRating} /></td>
                             </>
                           )}
+                          <td className="py-3 px-4 text-stone-400 text-xs whitespace-nowrap">{new Date(lead.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })}</td>
                           <td className="py-3 px-4 text-stone-400 text-xs whitespace-nowrap">{relTime(lead.updatedAt)}</td>
                         </tr>
                       );
