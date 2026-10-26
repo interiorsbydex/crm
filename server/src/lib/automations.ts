@@ -63,6 +63,7 @@ export const AUTOMATION_EVENTS: AutomationEvent[] = [
   { code: 'TEAM_STAGE_BACKWARD', label: 'Lead sent back to Effective Lead', when: 'A BL pushes a lead back from MQL', audience: 'team', channels: ['email'] },
   { code: 'TEAM_INTENT_CHANGED', label: 'Intent rating changed', when: 'A lead\'s intent rating is changed by hand', audience: 'team', channels: ['email'] },
   { code: 'TEAM_INTERNAL_CALL_NOTES', label: 'Internal call notes', when: 'Internal notes are added to a call', audience: 'team', channels: ['email'] },
+  { code: 'TEAM_SLA_BREACH', label: 'SLA breach', when: 'A lead misses an SLA target (checked hourly); emailed once to its Business Lead and the Branch Heads', audience: 'team', channels: ['email'] },
   { code: 'TEAM_NO_SHOW_NO_PLAN', label: 'No-show without a new plan', when: 'A no-show is recorded with no replan', audience: 'team', channels: ['email'] },
   { code: 'STAFF_WEEKLY_DIGEST', label: 'Weekly task digest', when: 'On the weekly digest day (CRM Settings)', audience: 'team', channels: ['email'] },
   { code: 'CRE_DIGESTS', label: 'CRE pipeline reports', when: 'Daily and monthly, to CREs', audience: 'team', channels: ['email'] },

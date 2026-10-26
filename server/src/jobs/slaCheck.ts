@@ -3,6 +3,7 @@ import { connection } from './index.js';
 import { prisma } from '../lib/prisma.js';
 import { createNotification } from '../lib/notifications.js';
 import { logActivity } from '../lib/activityLog.js';
+import { emailSlaBreach } from '../lib/slaBreachEmail.js';
 
 const QUEUE_NAME = 'sla-engine';
 
@@ -157,6 +158,8 @@ export async function runSLACheck(): Promise<{ totalBreaches: number; details: s
       for (const bh of branchHeads) {
         await createNotification(bh.id, 'SLA_BREACH', message, lead.id);
       }
+
+      await emailSlaBreach(lead, label);
 
       await logActivity(systemUserId, 'SLA_BREACH', lead.id, { rule, label });
       details.push(`${lead.leadId}: ${rule}`);

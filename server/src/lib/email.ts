@@ -155,6 +155,23 @@ export function noShowNoPlanEmail(opts: {
   };
 }
 
+export function slaBreachEmail(opts: {
+  recipientName: string;
+  leadId: string;
+  leadName: string;
+  ruleLabel: string;
+}): EmailPayload {
+  return {
+    to: '',
+    subject: `SLA Breach: Lead ${opts.leadId} — Interiors by DeX CRM`,
+    html: `<p>Hi ${opts.recipientName},</p>
+<p>Lead <strong>${opts.leadId} — ${opts.leadName}</strong> has missed a response-time target:</p>
+<p><strong>${opts.ruleLabel}</strong></p>
+<p>Please open the lead and take action. You will not be emailed about this breach again.</p>
+<p><em>Team Interiors by DeX CRM</em></p>`,
+  };
+}
+
 export function onHoldInternalEmail(opts: {
   recipientName: string;
   leadId: string;
