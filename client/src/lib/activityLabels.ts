@@ -61,6 +61,18 @@ export function describeActivity(action: string, meta?: Record<string, any>): st
       return `Rejected discount request${m.discountPct != null ? ` (${Number(m.discountPct).toFixed(1)}%)` : ''}${m.reviewerComment ? ` — ${m.reviewerComment}` : ''}`;
     case 'DISCOUNT_FORWARDED':
       return `Forwarded discount request${m.discountPct != null ? ` (${Number(m.discountPct).toFixed(1)}%)` : ''} to Branch Head`;
+    case 'LEAD_DETAILS_UPDATED': {
+      const list = Array.isArray(m.changes) ? m.changes as { label: string; from: string | null; to: string | null }[] : [];
+      const part = (c: { label: string; from: string | null; to: string | null }) =>
+        c.from == null && c.to == null ? `${c.label} changed` : `${c.label}: ${c.from ?? '—'} → ${c.to ?? '—'}`;
+      return `Changed lead details — ${list.map(part).join('; ') || 'details updated'}`;
+    }
+    case 'OFFER_REMOVED':
+      return `Removed offer${m.offerName ? `: ${m.offerName}` : ''}`;
+    case 'CLIENT_EMAIL_SENT':
+      return `Sent an email to the client${m.subject ? ` — "${m.subject}"` : ''}`;
+    case 'WHATSAPP_RECEIVED':
+      return `Client sent a WhatsApp message${m.preview ? `: "${m.preview}"` : ''}`;
     case 'OFFER_APPLIED':
       return `Applied offer${m.offerName ? `: ${m.offerName}` : ''}`;
     case 'QUOTE_RECEIVED':

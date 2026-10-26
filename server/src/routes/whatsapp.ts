@@ -169,6 +169,11 @@ whatsappRouter.post('/webhook', async (req, res) => {
     },
   });
 
+  // Lead history: the client messaged us. (Logged under the lead's own BL/designer, or a Branch Head.)
+  const actorId = lead.assignedBLId ?? lead.assignedDesignerId
+    ?? (await prisma.user.findFirst({ where: { role: 'BRANCH_HEAD', isActive: true }, select: { id: true } }))?.id;
+  if (actorId) await logActivity(actorId, 'WHATSAPP_RECEIVED', lead.id, { preview: Body.substring(0, 80) }).catch(() => {});
+
   // Notify assigned designer
   if (lead.assignedDesignerId) {
     await createNotification(

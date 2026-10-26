@@ -1,5 +1,6 @@
 import { findDuplicateLead, duplicateMessage } from '../lib/duplicateLeads.js';
 import { leadOrderBy } from '../lib/leadSort.js';
+import { diffLeadDetails } from '../lib/leadChanges.js';
 import { recalculateMilestones } from '../lib/milestones.js';
 import { Router } from 'express';
 import multer from 'multer';
@@ -1369,6 +1370,14 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       },
       include: LEAD_INCLUDE,
     });
+
+    // History: which details this edit changed, old → new (nothing logged when nothing changed).
+    const detailChanges = diffLeadDetails(existing as unknown as Record<string, unknown>, lead as unknown as Record<string, unknown>);
+    if (detailChanges.length) await logActivity(user.id, 'LEAD_DETAILS_UPDATED', id, { changes: detailChanges });
+    if (currentOfferId !== undefined && !currentOfferId && existing.currentOfferId) {
+      const removed = await prisma.offer.findUnique({ where: { id: existing.currentOfferId }, select: { name: true } });
+      await logActivity(user.id, 'OFFER_REMOVED', id, { offerId: existing.currentOfferId, offerName: removed?.name ?? existing.offer1 ?? null });
+    }
 
     // The generic lead editor is also an assignment path. Snapshot its
     // assignee ID so ageing starts at the actual assignment, not lead origin.

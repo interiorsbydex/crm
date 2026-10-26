@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { prisma } from './prisma.js';
+import { logActivity } from './activityLog.js';
 import { sendEmail, type EmailAttachment } from './email.js';
 import { automationCc, eventForDraftType } from './automations.js';
 
@@ -135,5 +136,10 @@ export async function sendDraft(key: string, to: string, sentByUserId?: string):
     await prisma.emailLog.create({
       data: { leadId: draft.meta.leadId, type: draft.meta.type, sentTo: to, subject: draft.subject },
     }).catch((e) => console.warn('[emailService] Log write failed:', e.message));
+    // Lead history: an email went to the client. (Mails that move a lead to its next stage already leave their own entry.)
+    if (sentByUserId && !draft.meta.onSentAction) {
+      await logActivity(sentByUserId, 'CLIENT_EMAIL_SENT', draft.meta.leadId, { type: draft.meta.type, subject: draft.subject, to })
+        .catch((e) => console.warn('[emailService] Activity write failed:', e.message));
+    }
   }
 }
