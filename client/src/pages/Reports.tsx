@@ -11,8 +11,9 @@ import { DateInput } from '../components/ui/DateTimeInputs';
 import DesignerReports from '../components/reports/DesignerReports';
 import BlAdminReports from '../components/reports/BlAdminReports';
 import CreditsPanel from '../components/reports/CreditsPanel';
-import { stageShortLabel, cycleDescription } from '../lib/crmSettings';
+import { stageShortLabel, stageLabel, cycleDescription, useCrmSettings } from '../lib/crmSettings';
 import { Tile, TileGroup, useDashboardLayout } from '../lib/dashboardLayout';
+import { downloadCsv } from '../lib/csv';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type AnyRow = Record<string, unknown>;
@@ -291,6 +292,24 @@ export default function Reports() {
 
   const exportFn = useExport();
 
+  // Filters for Branch Head and Business Lead; every lead-based report and its CSV export follows them.
+  const crm = useCrmSettings();
+  const [filters, setFilters] = useState({ designerId: '', blId: '', source: '', stage: '', projectType: '', location: '' });
+  const [people, setPeople] = useState<{ designers: { id: string; name: string }[]; bls: { id: string; name: string }[] }>({ designers: [], bls: [] });
+  const setFilter = (k: keyof typeof filters, v: string) => setFilters((f) => ({ ...f, [k]: v }));
+  const filtersActive = Object.values(filters).some(Boolean);
+  useEffect(() => {
+    if (!showFull) return;
+    // A Business Lead's designer list is only their own team; the Branch Head sees everyone.
+    if (isBL) {
+      api.get<{ members: { id: string; name: string }[] }>('/leads/meta/team-members')
+        .then((d) => setPeople({ designers: d.members, bls: [] })).catch(() => {});
+    } else {
+      api.get<{ users: { id: string; name: string; role: string }[] }>('/leads/meta/allocated-users')
+        .then((d) => setPeople({ designers: d.users.filter((u) => u.role === 'DESIGNER'), bls: d.users.filter((u) => u.role === 'BL') })).catch(() => {});
+    }
+  }, [showFull, isBL]);
+
   const buildQS = useCallback(() => {
     const { startDate, endDate } = preset === 'custom'
       ? { startDate: customStart, endDate: customEnd }
@@ -298,8 +317,9 @@ export default function Reports() {
     const p = new URLSearchParams();
     if (startDate) p.set('startDate', startDate);
     if (endDate) p.set('endDate', endDate);
+    if (showFull) for (const [k, v] of Object.entries(filters)) if (v.trim()) p.set(k, v.trim());
     return p.toString();
-  }, [preset, customStart, customEnd]);
+  }, [preset, customStart, customEnd, filters, showFull]);
 
   const doExport = (type: string) => exportFn(type, buildQS());
 
@@ -350,6 +370,10 @@ export default function Reports() {
   useEffect(() => {
     if (preset !== 'custom') fetchAll();
   }, [preset, fetchAll]);
+  // With a custom date range, changing a filter reloads straight away once both dates are set.
+  useEffect(() => {
+    if (preset === 'custom' && customStart && customEnd) fetchAll();
+  }, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [trendView, setTrendView] = useState<'monthly' | 'quarterly' | 'annual'>('monthly');
 
@@ -466,6 +490,46 @@ export default function Reports() {
             </button>
           </div>
         )}
+        {showFull && (
+          <div className="basis-full flex flex-wrap items-center gap-2" data-testid="report-filters">
+            <span className="text-xs font-medium text-gray-500">Filter by</span>
+            {(() => {
+              const sel = 'border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white';
+              return (<>
+                <select aria-label="Designer" className={sel} value={filters.designerId} onChange={(e) => setFilter('designerId', e.target.value)}>
+                  <option value="">All designers</option>
+                  {people.designers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+                {!isBL && (
+                  <select aria-label="Business Lead" className={sel} value={filters.blId} onChange={(e) => setFilter('blId', e.target.value)}>
+                    <option value="">All Business Leads</option>
+                    {people.bls.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                )}
+                <select aria-label="Source" className={sel} value={filters.source} onChange={(e) => setFilter('source', e.target.value)}>
+                  <option value="">All sources</option>
+                  {crm.leadSources.filter((x) => x.active).map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}
+                </select>
+                <select aria-label="Stage" className={sel} value={filters.stage} onChange={(e) => setFilter('stage', e.target.value)}>
+                  <option value="">All stages</option>
+                  {['MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS']
+                    .filter((st) => !crm.hiddenStages.includes(st)).map((st) => <option key={st} value={st}>{stageLabel(st)}</option>)}
+                </select>
+                <input aria-label="Project type" placeholder="Project type (e.g. 2BHK)" className={`${sel} w-40`} value={filters.projectType} onChange={(e) => setFilter('projectType', e.target.value)} />
+                <select aria-label="Location" className={sel} value={filters.location} onChange={(e) => setFilter('location', e.target.value)}>
+                  <option value="">All locations</option>
+                  {crm.cities.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+                {filtersActive && (
+                  <button type="button" className="text-xs font-medium text-brand-600 hover:underline"
+                    onClick={() => setFilters({ designerId: '', blId: '', source: '', stage: '', projectType: '', location: '' })}>
+                    Clear filters
+                  </button>
+                )}
+              </>);
+            })()}
+          </div>
+        )}
       </div>
 
       {/* ── Scrollable content ────────────────────────────────────────────── */}
@@ -490,6 +554,10 @@ export default function Reports() {
               <SectionCard
                 title={reportLabel('reports.npsAnalytics', 'NPS analytics')}
                 subtitle="Sales, Design Freeze, and Sign Off NPS trends for the last six months."
+                onExport={designerReport ? () => downloadCsv('nps_analytics', [
+                  { Month: 'This month', 'Sales NPS': designerReport.npsThisMonth.SALE ?? '', 'Design Freeze NPS': designerReport.npsThisMonth.DESIGN_FREEZE ?? '', 'Sign Off NPS': designerReport.npsThisMonth.SIGN_OFF ?? '' },
+                  ...designerReport.npsTrend.map((m) => ({ Month: m.month, 'Sales NPS': m.SALE ?? '', 'Design Freeze NPS': m.DESIGN_FREEZE ?? '', 'Sign Off NPS': m.SIGN_OFF ?? '' })),
+                ]) : undefined}
               >
                 {r.designer_incentive?.loading ? <Loader /> : !designerReport ? (
                   <EmptyState msg="NPS data is not available." />
@@ -1027,6 +1095,10 @@ export default function Reports() {
             id="client-health"
             title={reportLabel('reports.clientHealth', 'Client health')}
             subtitle="Detailed health status from qualified lead through active project delivery."
+            onExport={designerReport?.clientHealth ? () => downloadCsv('client_health', [
+              ...designerReport.clientHealth.leads.map((l) => ({ Type: 'Lead', Client: l.clientName, 'Lead ID': l.leadId, 'Stage / project': stageLabel(l.stage), Health: l.health, Alerts: l.attentionCount })),
+              ...designerReport.clientHealth.projects.map((p) => ({ Type: 'Project', Client: p.clientName, 'Lead ID': p.leadId, 'Stage / project': p.projectCode, Health: p.health, Alerts: p.attentionCount })),
+            ]) : undefined}
           >
             {r.designer_incentive?.loading ? <Loader /> : !designerReport?.clientHealth ? (
               <EmptyState msg="Client health data is not available." />

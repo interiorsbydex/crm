@@ -5,6 +5,7 @@ import { getStoredUser } from '../../lib/auth';
 import { Link } from 'react-router-dom';
 import { cycleDescription } from '../../lib/crmSettings';
 import { usePermissions } from '../../lib/permissions';
+import { downloadCsv } from '../../lib/csv';
 
 type Designer = { id: string; name: string };
 type Validation = { leadId: string; name: string; bookingValue: number; rating: number | null; status: string; releasePct: number | null };
@@ -104,6 +105,23 @@ export default function CreditsPanel({ showTitle = true }: { showTitle?: boolean
   };
 
   const r = data?.result;
+  const exportCredits = () => {
+    if (!r) return;
+    const line = (section: string, item: string, detail: string, credits: number | string) => ({ Designer: r.designer.name, Cycle: r.cycle.label, Section: section, Item: item, Detail: detail, Credits: credits });
+    downloadCsv(`credits_${r.designer.name.replace(/\s+/g, '_')}_${r.cycle.label.replace(/\s+/g, '_')}`, [
+      line('Core', 'Standard booking credits', r.core.note, r.core.standard),
+      line('Core', 'Booking overachievement', 'Extra credits per ₹1L above target', r.core.overachievement),
+      line('Booster', 'Monthly pitches', `${r.booster.pitch.pitches} pitch(es)`, r.booster.pitch.credits),
+      line('Booster', 'Same-day lead → pitch', `${r.booster.speed.sameDayPitchLeads} lead(s)`, r.booster.speed.sameDayPitchCredits),
+      line('Booster', 'Same-day lead → booking', `${r.booster.speed.sameDayBookingLeads} lead(s)`, r.booster.speed.sameDayBookingCredits),
+      line('Booster', 'Zero escalations', `${r.booster.zeroEscalation.escalations} flag(s)`, r.booster.zeroEscalation.credits),
+      line('Booster', 'Attendance', r.booster.attendance.notEntered ? 'Not entered' : r.booster.attendance.awarded ? 'Approved' : 'Not approved', r.booster.attendance.credits),
+      line('Total', 'Core credits', '', r.core.total),
+      line('Total', 'Booster credits', '', r.booster.total),
+      line('Total', 'Total credits', '', r.totalCredits),
+      ...r.validation.rows.map((v) => line('NPS / client validation', v.leadId, `${v.status === 'VERIFIED' ? 'Verified' : 'Pending validation'}; rating ${v.rating ?? '—'}; release ${v.releasePct == null ? '—' : v.releasePct + '%'}`, '')),
+    ]);
+  };
   const bandStyle = r?.eligibility.band === 'CORE_ELIGIBLE' ? 'border-green-200 bg-green-50 text-green-800'
     : r?.eligibility.band === 'BOOSTER_ONLY' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-gray-200 bg-gray-50 text-gray-700';
 
@@ -124,6 +142,12 @@ export default function CreditsPanel({ showTitle = true }: { showTitle?: boolean
             {cycleOptions().map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </label>
+        {r && (
+          <button type="button" onClick={exportCredits} data-testid="credits-export"
+            className="text-xs font-medium text-gray-500 hover:text-gray-800 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 transition-colors">
+            ↓ Export CSV
+          </button>
+        )}
       </div>
 
       {loading ? <p className="py-6 text-center text-sm text-gray-400">Loading credits…</p>

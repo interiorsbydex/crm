@@ -40,7 +40,7 @@ function endOfDayIST(v: string): Date {
 }
 
 // ── Build date + filter where clause from query params ────────────────────────
-async function buildLeadWhere(q: Record<string, string>, userRole?: string, userId?: string) {
+export async function buildLeadWhere(q: Record<string, string>, userRole?: string, userId?: string) {
   const where: any = { isTestLead: false };
   if (q.startDate) where.createdAt = { ...where.createdAt, gte: new Date(q.startDate) };
   if (q.endDate) where.createdAt = { ...where.createdAt, lte: endOfDayIST(q.endDate) };
@@ -48,8 +48,9 @@ async function buildLeadWhere(q: Record<string, string>, userRole?: string, user
   if (q.blId) where.assignedBLId = q.blId;
   if (q.source) where.AND = [...(Array.isArray(where.AND) ? where.AND : []), await sourceMatchWhere(q.source)];
   if (q.stage) where.stage = q.stage;
-  if (q.projectType) where.projectType = q.projectType;
-  if (q.location) where.location = q.location;
+  // Typed project types match whatever capitals were used; a city matches areas inside it ("Chennai" finds "Adyar, Chennai").
+  if (q.projectType) where.projectType = { equals: q.projectType.trim(), mode: 'insensitive' };
+  if (q.location) where.location = { contains: q.location.trim(), mode: 'insensitive' };
   // Role scope is AND-ed (own key `AND`), so no query parameter above can widen it.
   // DESIGN_MANAGER (and any other role) is intentionally left unscoped — unresolved.
   const scope = await leadScope(userRole, userId);
