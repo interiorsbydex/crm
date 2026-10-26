@@ -43,10 +43,8 @@ export default function FormulasAdmin() {
               suffix="%" max={100} value={f.salesPctBookingWeight} onChange={(n) => set({ ...f, salesPctBookingWeight: n })} />
             <Num label={<>Designer medal score — share from Sales % <span className="text-xs text-gray-400">(the rest from Design DIP %: {100 - f.designerMedalSalesWeight}%)</span></>}
               suffix="%" max={100} value={f.designerMedalSalesWeight} onChange={(n) => set({ ...f, designerMedalSalesWeight: n })} />
-            <p className="pt-2 text-xs text-gray-500">Overall performance score: how much each part counts (0 leaves it out; equal numbers mean equal weight).</p>
-            <Num label="Conversion %" max={10} value={f.performanceWeights.conversion} onChange={(n) => set({ ...f, performanceWeights: { ...f.performanceWeights, conversion: n } })} />
-            <Num label="Target achievement %" max={10} value={f.performanceWeights.targetAchievement} onChange={(n) => set({ ...f, performanceWeights: { ...f.performanceWeights, targetAchievement: n } })} />
-            <Num label="Average booking value" max={10} value={f.performanceWeights.averageBookingValue} onChange={(n) => set({ ...f, performanceWeights: { ...f.performanceWeights, averageBookingValue: n } })} />
+            {/* The overall performance-score weights are not offered here: no screen shows that
+                score, so changing them would have no visible effect. They stay at equal weight. */}
           </div>
 
           <div className={CARD}>
