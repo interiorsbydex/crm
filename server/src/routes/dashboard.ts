@@ -1098,19 +1098,6 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       averageNps: avgNPS,
     };
 
-    // Design Score remains a separate future-facing placeholder.
-    const tierScoreBase: Record<string, number> = { BASIC: 45, STANDARD: 65, PREMIUM: 82 };
-    const perfBase = tierScoreBase[designerRecord?.performanceTier ?? 'BASIC'] ?? 45;
-    const designCategories = [
-      { name: 'Design Performance', score: Math.min(Math.round(perfBase - 3), 95), weight: 50 },
-      { name: 'Timeline Adherence', score: Math.min(Math.round(perfBase + 2), 95), weight: 50 },
-    ];
-    const designScore = {
-      overall: Math.round((designCategories[0].score + designCategories[1].score) / 2),
-      tier: designerRecord?.performanceTier ?? 'BASIC',
-      categories: designCategories,
-    };
-
     designerDash = {
       activeProjects: {
         total: activeProjectsTotal,
@@ -1191,7 +1178,6 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       })),
       stageFunnelValues,
       overallScore: overallScoreDetail,
-      designScore,
     };
   }
 

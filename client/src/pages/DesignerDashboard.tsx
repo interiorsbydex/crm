@@ -77,7 +77,6 @@ interface DesignerDash {
     averageTatDays: number | null;
     averageNps: number | null;
   };
-  designScore: { overall: number; tier: string; categories: Array<{ name: string; score: number; weight: number }> };
 }
 
 interface DashData {
@@ -641,7 +640,7 @@ export default function DesignerDashboard({ designerId, designerName }: { design
             </Tile>
           )}
 
-          {/* ── Row 3: Conversion Insights + Design Score + Today's Focus ── */}
+          {/* ── Row 3: Conversion Insights + Today's Focus ── */}
           <TileGroup dashboard="designer" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
             {/* Conversion Insights */}
@@ -686,8 +685,6 @@ export default function DesignerDashboard({ designerId, designerName }: { design
               </div>
             </Panel>
             </Tile>
-
-            {/* Design Score hidden per client feedback (weights TBD). */}
 
             {/* Today's Focus — date-grouped live work-item feed */}
             <Tile id="designer.todaysFocus">
