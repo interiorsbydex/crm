@@ -189,7 +189,7 @@ function BHDashboard({ data }: { data: DashboardData }) {
           value={fmt(data.pipelineValue)}
           sub={`${data.activeLeads} active leads, est. value`}
           accent
-          to="/leads?status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
+          to="/leads?mine=1&status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
         />
         </Tile>
 <Tile id="bh.activeLeads">
@@ -197,7 +197,7 @@ function BHDashboard({ data }: { data: DashboardData }) {
           label={L('bh.activeLeads', 'Active Leads')}
           value={data.activeLeads}
           sub={`${fmt(data.activeLeadsValue ?? 0)} estimated value`}
-          to="/leads?status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
+          to="/leads?mine=1&status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
         />
         </Tile>
 <Tile id="bh.activeProjects">
@@ -239,7 +239,7 @@ function BHDashboard({ data }: { data: DashboardData }) {
           sub={`${attentionCount} project${attentionCount !== 1 ? 's' : ''} · ${slaCount} SLA lead${slaCount !== 1 ? 's' : ''}`}
           links={[
             ...(attentionCount > 0 ? [{ label: `${attentionCount} flagged project${attentionCount !== 1 ? 's' : ''}`, to: '/projects?dashboardScope=true&hasAttention=true' }] : []),
-            ...(slaCount > 0 ? [{ label: `${slaCount} SLA-breached lead${slaCount !== 1 ? 's' : ''}`, to: '/leads?hasUnresolvedSlaBreach=true' }] : []),
+            ...(slaCount > 0 ? [{ label: `${slaCount} SLA-breached lead${slaCount !== 1 ? 's' : ''}`, to: '/leads?mine=1&hasUnresolvedSlaBreach=true' }] : []),
           ]}
         />
         </Tile>
@@ -506,7 +506,7 @@ function BLDashboard({ data }: { data: DashboardData }) {
           value={fmt(data.pipelineValue)}
           sub={`${data.activeLeads ?? 0} active leads in scope`}
           accent
-          to="/leads?status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
+          to="/leads?mine=1&status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
         />
         </Tile>
 <Tile id="bl.inDelivery">
@@ -540,7 +540,7 @@ function BLDashboard({ data }: { data: DashboardData }) {
           sub={`${attentionCount} project · ${slaCount} SLA`}
           links={[
             ...(attentionCount > 0 ? [{ label: `${attentionCount} flagged project${attentionCount !== 1 ? 's' : ''}`, to: '/projects?dashboardScope=true&hasAttention=true' }] : []),
-            ...(slaCount > 0 ? [{ label: `${slaCount} SLA-breached lead${slaCount !== 1 ? 's' : ''}`, to: '/leads?hasUnresolvedSlaBreach=true' }] : []),
+            ...(slaCount > 0 ? [{ label: `${slaCount} SLA-breached lead${slaCount !== 1 ? 's' : ''}`, to: '/leads?mine=1&hasUnresolvedSlaBreach=true' }] : []),
           ]}
         />
         </Tile>

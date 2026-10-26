@@ -218,6 +218,9 @@ export default function LeadList() {
     slaBreached: searchParams.get('slaBreached') ?? '',
     excludeStages: searchParams.get('excludeStages') ?? '',
     hasUnresolvedSlaBreach: searchParams.get('hasUnresolvedSlaBreach') ?? '',
+    // From a dashboard number: only the leads that number counted (yours /
+    // your team's), even when Lead Routing & Access lets you see more.
+    mine: searchParams.get('mine') ?? '',
   });
   const [statusSummary, setStatusSummary] = useState<Record<string, { count: number; value: number }> | null>(null);
 
@@ -272,6 +275,7 @@ export default function LeadList() {
       if (filters.slaBreached) params.set('isSLABreached', filters.slaBreached);
       if (filters.excludeStages) params.set('excludeStages', filters.excludeStages);
       if (filters.hasUnresolvedSlaBreach) params.set('hasUnresolvedSlaBreach', filters.hasUnresolvedSlaBreach);
+      if (filters.mine) params.set('mine', filters.mine);
       const data = await api.get<{ leads: Lead[]; total: number; pages: number }>(`/leads?${params}`);
       setLeads(data.leads);
       setTotal(data.total);
@@ -375,7 +379,7 @@ export default function LeadList() {
       originDateFrom: '', originDateTo: '', budgetMin: '', budgetMax: '',
       possessionDateFrom: '', possessionDateTo: '', intent: '',
       intentMin: '', intentMax: '', projectedObFrom: '', projectedObTo: '', slaBreached: '', excludeStages: '',
-      hasUnresolvedSlaBreach: '',
+      hasUnresolvedSlaBreach: '', mine: '',
     });
     setPage(1);
   };
@@ -396,7 +400,12 @@ export default function LeadList() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-extrabold text-stone-900 tracking-tight">Leads</h1>
-            <p className="text-xs text-stone-400 mt-0.5">All leads in your scope</p>
+            {filters.mine ? (
+              <p className="text-xs text-stone-500 mt-0.5" data-testid="mine-note">
+                Only the leads your dashboard counted ·{' '}
+                <button onClick={() => { setFilters((f) => ({ ...f, mine: '' })); setPage(1); }} className="text-brand-600 hover:underline">Show all leads you can see</button>
+              </p>
+            ) : <p className="text-xs text-stone-400 mt-0.5">All leads in your scope</p>}
           </div>
           <div className="flex items-center gap-2">
             {/* Task #90 — export controls are admin/BL only; the designer/CRE

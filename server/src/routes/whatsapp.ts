@@ -218,7 +218,7 @@ whatsappRouter.get('/inbox', verifyToken, async (req, res) => {
 
   // Chats of the leads this user can open (Admin → Lead Routing & Access),
   // or every chat with the "See every WhatsApp chat" permission.
-  const leadFilter: any = await hasPermission(user.role, 'WHATSAPP_ALL_CHATS') ? {} : await buildLeadRoleWhere(user, prisma);
+  const leadFilter: any = await hasPermission(user.role, 'WHATSAPP_ALL_CHATS') ? {} : await buildLeadRoleWhere(user, prisma, { access: true });
 
   // Get all leads matching filter that have WhatsApp messages
   const leads = await prisma.lead.findMany({

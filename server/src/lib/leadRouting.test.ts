@@ -29,14 +29,21 @@ describe.skipIf(!safeDb)('lead routing & access', () => {
 
   it('"all leads" opens every lead for that role only', async () => {
     await save({ visibility: { DESIGNER: 'all', CRE: 'own', BL: 'team' } });
-    expect(await buildLeadRoleWhere({ id: 'd1', role: 'DESIGNER' }, prisma)).toEqual({});
+    expect(await buildLeadRoleWhere({ id: 'd1', role: 'DESIGNER' }, prisma, { access: true })).toEqual({});
     expect(await isAuthorizedForLead({ assignedDesignerId: 'someone', assignedBLId: 'bl' }, { id: 'd1', role: 'DESIGNER' })).toBe(true);
+    expect(await buildLeadRoleWhere({ id: 'c1', role: 'CRE' }, prisma, { access: true })).not.toEqual({});
+  });
+
+  it('seeing more leads never changes whose leads they are (dashboards, reports)', async () => {
+    await save({ visibility: { DESIGNER: 'all', CRE: 'all', BL: 'all' } });
+    expect(await buildLeadRoleWhere({ id: 'd1', role: 'DESIGNER' }, prisma)).toEqual({ assignedDesignerId: 'd1' });
     expect(await buildLeadRoleWhere({ id: 'c1', role: 'CRE' }, prisma)).not.toEqual({});
+    expect(await buildLeadRoleWhere({ id: 'bl', role: 'BL' }, prisma)).not.toEqual({});
   });
 
   it('"team" for a designer without a BL stays on their own leads', async () => {
     await save({ visibility: { DESIGNER: 'team', CRE: 'own', BL: 'team' } });
-    expect(await buildLeadRoleWhere({ id: 'no-such-user', role: 'DESIGNER' }, prisma)).toEqual({ assignedDesignerId: 'no-such-user' });
+    expect(await buildLeadRoleWhere({ id: 'no-such-user', role: 'DESIGNER' }, prisma, { access: true })).toEqual({ assignedDesignerId: 'no-such-user' });
   });
 
   it('manual routing assigns nobody', async () => {

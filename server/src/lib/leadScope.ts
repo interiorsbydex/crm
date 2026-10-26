@@ -17,8 +17,17 @@ export interface ScopeUser {
 export async function buildLeadRoleWhere(
   user: ScopeUser,
   prisma: { user: { findMany: (args: any) => Promise<{ id: string }[]> } },
+  /**
+   * `access: true` — which leads this person may OPEN (Leads list, export,
+   * WhatsApp inbox), widened by Admin → Lead Routing & Access.
+   * Default — whose leads these ARE (dashboards, reports, targets, credits):
+   * always the original ownership scope, whatever the visibility setting.
+   */
+  opts: { access?: boolean } = {},
 ): Promise<any> {
-  const vis = ['DESIGNER', 'CRE', 'BL'].includes(user.role) ? await leadVisibility() : null;
+  const vis = opts.access && ['DESIGNER', 'CRE', 'BL'].includes(user.role)
+    ? await leadVisibility()
+    : { DESIGNER: 'own', CRE: 'own', BL: 'team' } as const;
   if (user.role === 'DESIGNER') {
     if (vis!.DESIGNER === 'all') return {};
     if (vis!.DESIGNER === 'team') {
@@ -68,7 +77,7 @@ export async function userCanAccessLead(
   db: any,
 ): Promise<boolean> {
   if (user.role !== 'DESIGNER' && user.role !== 'CRE') return true;
-  const roleWhere = await buildLeadRoleWhere(user, db);
+  const roleWhere = await buildLeadRoleWhere(user, db, { access: true });
   if ((await db.lead.count({ where: { AND: [{ id: leadId }, roleWhere] } })) > 0) return true;
   if (user.role === 'DESIGNER') {
     const project = await db.project.findFirst({

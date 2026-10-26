@@ -113,6 +113,9 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       // DESIGN_IN_PROGRESS/HANDED_OVER stages) without a separate endpoint.
       excludeStages,
       hasUnresolvedSlaBreach,
+      // Dashboard drill-through: the ownership scope the dashboard counted,
+      // not the wider "which leads may I open" scope.
+      mine,
     } = req.query as Record<string, string>;
 
     const user = req.user!;
@@ -120,7 +123,7 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
 
     // Role-scope — shared with the dashboard (buildLeadRoleWhere) so the two
     // never drift apart and KPI drill-through counts stay exact.
-    const roleWhere = await buildLeadRoleWhere(user, prisma);
+    const roleWhere = await buildLeadRoleWhere(user, prisma, { access: mine !== '1' });
     if (Object.keys(roleWhere).length > 0) where.AND = [roleWhere];
 
     // Task #88: status (ACTIVE/ON_HOLD/INACTIVE) is a real field, independent
@@ -832,7 +835,7 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
     const where: any = {};
 
     // Export must use the same role scope as the paginated list, including CRE.
-    const roleWhere = await buildLeadRoleWhere(user, prisma);
+    const roleWhere = await buildLeadRoleWhere(user, prisma, { access: true });
     if (Object.keys(roleWhere).length > 0) where.AND = [roleWhere];
 
     if (stage) where.stage = stage;
