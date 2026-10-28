@@ -1,5 +1,5 @@
 import { Worker, Queue } from 'bullmq';
-import { connection } from './index.js';
+import { queueOpts, workerOpts } from './index.js';
 import { prisma } from '../lib/prisma.js';
 import { createNotification } from '../lib/notifications.js';
 import { logActivity } from '../lib/activityLog.js';
@@ -7,7 +7,7 @@ import { emailSlaBreach } from '../lib/slaBreachEmail.js';
 
 const QUEUE_NAME = 'sla-engine';
 
-export const slaQueue = new Queue(QUEUE_NAME, { connection });
+export const slaQueue = new Queue(QUEUE_NAME, queueOpts);
 
 const SYSTEM_USER_ID = process.env.SYSTEM_USER_ID ?? 'system';
 
@@ -188,5 +188,5 @@ export async function scheduleSLACheck() {
 export const slaWorker = new Worker(
   QUEUE_NAME,
   async () => { await runSLACheck(); },
-  { connection },
+  workerOpts,
 );

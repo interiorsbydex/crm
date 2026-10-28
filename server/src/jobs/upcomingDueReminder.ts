@@ -1,5 +1,5 @@
 import { Worker, Queue } from 'bullmq';
-import { connection } from './index.js';
+import { queueOpts, workerOpts } from './index.js';
 import { prisma } from '../lib/prisma.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendEmail } from '../lib/email.js';
@@ -20,7 +20,7 @@ import { isAutomationOn, automationCc } from '../lib/automations.js';
 
 const QUEUE_NAME = 'upcoming-due-reminder';
 
-export const upcomingDueReminderQueue = new Queue(QUEUE_NAME, { connection });
+export const upcomingDueReminderQueue = new Queue(QUEUE_NAME, queueOpts);
 
 export async function scheduleUpcomingDueReminder() {
   await upcomingDueReminderQueue.add(
@@ -256,5 +256,5 @@ export async function runUpcomingDueReminder(): Promise<{ taskReminders: number;
 export const upcomingDueReminderWorker = new Worker(
   QUEUE_NAME,
   async () => { await runUpcomingDueReminder(); },
-  { connection },
+  workerOpts,
 );

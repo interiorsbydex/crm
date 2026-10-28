@@ -1,5 +1,5 @@
 import { Worker, Queue } from 'bullmq';
-import { connection } from './index.js';
+import { queueOpts, workerOpts } from './index.js';
 import { prisma } from '../lib/prisma.js';
 import { createNotification } from '../lib/notifications.js';
 import { reactivateLead } from '../lib/leadStatusActions.js';
@@ -34,7 +34,7 @@ async function resolveSystemActor(lead: { assignedBLId: string | null; assignedD
 
 const QUEUE_NAME = 'midnight-overdue-check';
 
-export const midnightQueue = new Queue(QUEUE_NAME, { connection });
+export const midnightQueue = new Queue(QUEUE_NAME, queueOpts);
 
 // Schedule repeatable job at midnight IST (18:30 UTC)
 export async function scheduleMidnightJob() {
@@ -184,5 +184,5 @@ export async function runMidnightCheck(): Promise<{ markedOverdue: number; reope
 export const midnightWorker = new Worker(
   QUEUE_NAME,
   async () => { await runMidnightCheck(); },
-  { connection },
+  workerOpts,
 );

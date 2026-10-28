@@ -9,12 +9,12 @@
  */
 
 import { Queue, Worker } from 'bullmq';
-import { connection } from './index.js';
+import { queueOpts, workerOpts } from './index.js';
 import { prisma } from '../lib/prisma.js';
 
 const QUEUE_NAME = 'performance-recalc';
 
-export const performanceRecalcQueue = new Queue(QUEUE_NAME, { connection });
+export const performanceRecalcQueue = new Queue(QUEUE_NAME, queueOpts);
 
 export async function schedulePerformanceRecalc() {
   await performanceRecalcQueue.add(
@@ -150,5 +150,5 @@ export const performanceRecalcWorker = new Worker(
 
     console.log(`[performance] Done. ${updated} designer(s) recalculated.`);
   },
-  { connection },
+  workerOpts,
 );

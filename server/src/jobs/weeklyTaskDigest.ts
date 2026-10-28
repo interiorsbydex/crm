@@ -1,6 +1,6 @@
 import { Worker, Queue } from 'bullmq';
 import { scheduleDaily0800Ist, isWeeklyDigestDay } from './weeklyDigestDay.js';
-import { connection } from './index.js';
+import { queueOpts, workerOpts } from './index.js';
 import { prisma } from '../lib/prisma.js';
 import { sendEmail } from '../lib/email.js';
 import { IST_TZ } from '../lib/istTime.js';
@@ -17,7 +17,7 @@ import { isAutomationOn } from '../lib/automations.js';
 
 const QUEUE_NAME = 'weekly-task-digest';
 
-export const weeklyTaskDigestQueue = new Queue(QUEUE_NAME, { connection });
+export const weeklyTaskDigestQueue = new Queue(QUEUE_NAME, queueOpts);
 
 export async function scheduleWeeklyTaskDigest() {
   await scheduleDaily0800Ist(weeklyTaskDigestQueue, 'weekly-digest', 'weekly-task-digest-singleton');
@@ -173,5 +173,5 @@ export async function runWeeklyTaskDigest(): Promise<{ emailsSent: number }> {
 export const weeklyTaskDigestWorker = new Worker(
   QUEUE_NAME,
   async () => { if (await isWeeklyDigestDay()) await runWeeklyTaskDigest(); },
-  { connection },
+  workerOpts,
 );

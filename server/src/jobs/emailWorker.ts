@@ -1,5 +1,5 @@
 import { Worker } from 'bullmq';
-import { connection } from './index.js';
+import { queueOpts, workerOpts } from './index.js';
 import { sendEmail, type EmailPayload } from '../lib/email.js';
 
 export const emailWorker = new Worker(
@@ -9,5 +9,5 @@ export const emailWorker = new Worker(
     await sendEmail(emailPayload);
     console.log(`[emailWorker] Sent: "${emailPayload.subject}" → ${emailPayload.to}`);
   },
-  { connection },
+  workerOpts,
 );

@@ -11,7 +11,7 @@
  */
 
 import { Worker, Queue } from 'bullmq';
-import { connection } from './index.js';
+import { queueOpts, workerOpts } from './index.js';
 import { prisma } from '../lib/prisma.js';
 import { sendEmail } from '../lib/email.js';
 import { isAutomationOn } from '../lib/automations.js';
@@ -19,7 +19,7 @@ import { isAutomationOn } from '../lib/automations.js';
 // ── Queue ─────────────────────────────────────────────────────────────────────
 
 const QUEUE_NAME = 'cre-digest';
-export const creDigestQueue = new Queue(QUEUE_NAME, { connection });
+export const creDigestQueue = new Queue(QUEUE_NAME, queueOpts);
 
 // ── HTML builders ─────────────────────────────────────────────────────────────
 
@@ -409,7 +409,7 @@ export const creDigestWorker = new Worker(
     const sent = type === 'DAILY' ? await runDailyCreDigest() : await runMonthlyCreMetrics();
     console.log(`[cre-digest] ${type} complete — ${sent} email(s) sent.`);
   },
-  { connection },
+  workerOpts,
 );
 
 export async function scheduleCREDigestJobs() {

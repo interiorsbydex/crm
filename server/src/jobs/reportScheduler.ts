@@ -1,10 +1,10 @@
 import { Worker, Queue } from 'bullmq';
-import { connection } from './index.js';
+import { queueOpts, workerOpts } from './index.js';
 import { prisma } from '../lib/prisma.js';
 import { sendEmailByType } from '../lib/emailService.js';
 
 const QUEUE_NAME = 'report-scheduler';
-export const reportQueue = new Queue(QUEUE_NAME, { connection });
+export const reportQueue = new Queue(QUEUE_NAME, queueOpts);
 
 export async function scheduleReportJobs() {
   // Weekly: every Monday at 8am IST (02:30 UTC)
@@ -79,5 +79,5 @@ export const reportWorker = new Worker(
 
     console.log(`[reports] ${type} report sent to ${recipients.length} recipient(s).`);
   },
-  { connection },
+  workerOpts,
 );
