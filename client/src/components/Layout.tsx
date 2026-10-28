@@ -411,6 +411,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             >
               Sign out
             </button>
+            <p className="px-2 mt-1 text-[10px] text-stone-300" title="Tell the team this if something looks out of date" data-testid="app-build">Version {__APP_BUILD__}</p>
           </div>
         )}
       </aside>
