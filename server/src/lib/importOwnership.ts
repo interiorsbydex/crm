@@ -42,7 +42,9 @@ export function resolveImportOwnership(
   if (!fields.designerName?.trim() && cre) assignedDesignerId = cre.id;
   const supplied = Object.values(fields).some((v) => !!v?.trim());
   const allocationEligible = !supplied && stage === 'EFFECTIVE_LEAD' && status === 'ACTIVE';
-  const outcome = issues.length || (!supplied && !allocationEligible)
+  // An ownerless Active MQL follows Admin → Lead Routing & Access, like an MQL created by hand.
+  const qualifiedAllocationEligible = !supplied && stage === 'MQL' && status === 'ACTIVE';
+  const outcome = issues.length || (!supplied && !allocationEligible && !qualifiedAllocationEligible)
     ? 'MANUAL_REVIEW' as const : supplied ? 'PRESERVED' as const : 'ALLOCATION_PENDING' as const;
   const reason = issues.length
     ? `Ownership needs manual review: ${issues.join('; ')}. Valid matched fields are retained; no automatic replacement.`
@@ -50,9 +52,11 @@ export function resolveImportOwnership(
       ? `Historical ownership preserved (${names.join('; ')}). No automatic replacement.`
       : allocationEligible
         ? 'Ownerless Active Effective Lead: CRE allocation is checked on confirmation; preview does not allocate.'
-        : `Unassigned — manual ownership review. Automatic import allocation applies only to ownerless Active Effective Leads (${status}, ${stage}).`;
+        : qualifiedAllocationEligible
+          ? 'Ownerless Active MQL: BL allocation (Admin → Lead Routing & Access) is checked on confirmation; preview does not allocate.'
+          : `Unassigned — manual ownership review. Automatic import allocation applies only to ownerless Active Effective Leads and MQLs (${status}, ${stage}).`;
   return {
     assignedDesignerId, assignedBLId: bl?.id, assignedCREId,
-    allocationEligible, outcome, reason, issues,
+    allocationEligible, qualifiedAllocationEligible, outcome, reason, issues,
   };
 }

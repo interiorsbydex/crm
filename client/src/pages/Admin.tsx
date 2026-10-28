@@ -992,7 +992,8 @@ export default function Admin() {
               <p className="text-xs text-gray-500 mb-4">
                 Optional Designer Name, BL Name and CRE Name columns preserve historical ownership.
                 Unknown or ambiguous names need manual review and are never replaced automatically.
-                Only ownerless Active Effective Leads use automatic CRE allocation.
+                Ownerless Active Effective Leads go to the next CRE; ownerless Active MQLs go to the next BL
+                (Lead Routing &amp; Access). Other ownerless rows wait for manual review.
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end mb-4">

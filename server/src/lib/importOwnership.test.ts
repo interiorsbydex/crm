@@ -48,12 +48,16 @@ describe('historical import ownership', () => {
     expect(resolveImportOwnership({ blName: 'BL One' }, staff, 'EFFECTIVE_LEAD', 'ACTIVE'))
       .toMatchObject({ assignedBLId: 'b', assignedDesignerId: undefined, allocationEligible: false, outcome: 'PRESERVED' });
   });
-  it('allows only the existing ownerless Active Effective Lead allocation path', () => {
+  it('allocates only ownerless Active Effective Leads (to a CRE) and Active MQLs (by Lead Routing)', () => {
     expect(resolveImportOwnership({}, staff, 'EFFECTIVE_LEAD', 'ACTIVE'))
-      .toMatchObject({ allocationEligible: true, outcome: 'ALLOCATION_PENDING' });
-    for (const [stage, status] of [['MQL', 'ACTIVE'], ['DQL', 'ACTIVE'], ['EFFECTIVE_LEAD', 'ON_HOLD'], ['EFFECTIVE_LEAD', 'INACTIVE']]) {
+      .toMatchObject({ allocationEligible: true, qualifiedAllocationEligible: false, outcome: 'ALLOCATION_PENDING' });
+    expect(resolveImportOwnership({}, staff, 'MQL', 'ACTIVE'))
+      .toMatchObject({ allocationEligible: false, qualifiedAllocationEligible: true, outcome: 'ALLOCATION_PENDING' });
+    expect(resolveImportOwnership({ designerName: 'Designer' }, staff, 'MQL', 'ACTIVE'))
+      .toMatchObject({ qualifiedAllocationEligible: false });
+    for (const [stage, status] of [['MQL', 'ON_HOLD'], ['DQL', 'ACTIVE'], ['EFFECTIVE_LEAD', 'ON_HOLD'], ['EFFECTIVE_LEAD', 'INACTIVE']]) {
       expect(resolveImportOwnership({}, staff, stage, status))
-        .toMatchObject({ assignedDesignerId: undefined, allocationEligible: false, outcome: 'MANUAL_REVIEW' });
+        .toMatchObject({ assignedDesignerId: undefined, allocationEligible: false, qualifiedAllocationEligible: false, outcome: 'MANUAL_REVIEW' });
     }
   });
 });

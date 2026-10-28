@@ -4,7 +4,7 @@ import ExcelJS from 'exceljs';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
-import { routeAdLead } from '../services/assignmentService.js';
+import { routeAdLead, routeQualifiedLead } from '../services/assignmentService.js';
 import { resolveImportOwnership } from '../lib/importOwnership.js';
 
 import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
@@ -361,14 +361,21 @@ importRouter.post('/', verifyToken, requirePermission('LEAD_IMPORT'), upload.sin
       // A dry-run must not make an assignment or promise the same candidate for
       // every row. Current round-robin availability is checked on confirmation.
       const cre = !dryRun && ownership.allocationEligible ? await routeAdLead() : null;
-      const assignedDesignerId = ownership.assignedDesignerId ?? cre?.id;
+      const route = !dryRun && ownership.qualifiedAllocationEligible ? await routeQualifiedLead(null) : null;
+      const routedBL = route?.blId ? staff.find((u) => u.id === route.blId) : undefined;
+      const assignedDesignerId = ownership.assignedDesignerId ?? cre?.id ?? (route?.blId ? route.designerId ?? undefined : undefined);
       const assignedCREId = ownership.assignedCREId ?? cre?.id;
-      const assignmentOutcome = cre ? 'AUTO_ALLOCATED'
-        : ownership.allocationEligible && !dryRun ? 'MANUAL_REVIEW' : ownership.outcome;
+      const assignedBLId = ownership.assignedBLId ?? route?.blId ?? undefined;
+      const anyAllocationEligible = ownership.allocationEligible || ownership.qualifiedAllocationEligible;
+      const assignmentOutcome = cre || route?.blId ? 'AUTO_ALLOCATED'
+        : anyAllocationEligible && !dryRun ? 'MANUAL_REVIEW' : ownership.outcome;
       const assignmentReason = cre ? `Auto-allocated to CRE ${cre.name} using configured allocation.`
-        : ownership.allocationEligible && !dryRun
-          ? 'Unassigned — no active CRE available. Manual ownership review required.'
-          : ownership.reason;
+        : route?.blId ? `Auto-allocated to BL ${routedBL?.name ?? route.blId} using Lead Routing & Access.`
+          : ownership.qualifiedAllocationEligible && !dryRun
+            ? 'Unassigned — Lead Routing & Access is set to manual for qualified leads, or no active BL. Manual ownership review required.'
+            : ownership.allocationEligible && !dryRun
+              ? 'Unassigned — no active CRE available. Manual ownership review required.'
+              : ownership.reason;
 
       // Preserve the source PID as leadId when present and not already used;
       // otherwise mint the next X#### number.
@@ -399,7 +406,7 @@ importRouter.post('/', verifyToken, requirePermission('LEAD_IMPORT'), upload.sin
         row: rowNum, status: 'WILL_IMPORT',
         name: r.name, phone: rawPhone, email: r.email || null,
         source: source || null, stage, leadStatus: status, leadId,
-        designerId: assignedDesignerId || null, blId: ownership.assignedBLId || null,
+        designerId: assignedDesignerId || null, blId: assignedBLId || null,
         creId: assignedCREId || null, creName: cre?.name ?? r.creName ?? null,
         assignmentOutcome, reason: assignmentReason,
         estimatedValue: estimatedValue ?? null,
@@ -435,7 +442,7 @@ importRouter.post('/', verifyToken, requirePermission('LEAD_IMPORT'), upload.sin
               notes: r.notes || undefined,
               assignedDesignerId,
               assignedCREId,
-              assignedBLId: ownership.assignedBLId,
+              assignedBLId,
               createdById: req.user!.id,
               createdAt: r.createdAt ? new Date(r.createdAt) : undefined,
               leadOriginDate,
@@ -446,13 +453,17 @@ importRouter.post('/', verifyToken, requirePermission('LEAD_IMPORT'), upload.sin
           if (cre) await tx.user.update({
             where: { id: cre.id }, data: { totalLeadsAssigned: { increment: 1 } },
           });
+          // Routed BL (and designer) take their turn, so the next row goes to the next one.
+          for (const routedId of [route?.blId, route?.blId ? route.designerId : null]) {
+            if (routedId) await tx.user.update({ where: { id: routedId }, data: { totalLeadsAssigned: { increment: 1 } } });
+          }
           await tx.activityLog.create({
             data: {
               userId: req.user!.id, action: 'LEAD_IMPORTED', leadId: lead.id,
               meta: {
                 assignmentOutcome, reason: assignmentReason, providedOwners,
                 assignedDesignerId: assignedDesignerId ?? null,
-                assignedBLId: ownership.assignedBLId ?? null,
+                assignedBLId: assignedBLId ?? null,
                 assignedCREId: assignedCREId ?? null,
                 // This is evidence of the import, not a fabricated historical
                 // assignment event or verified historical effective date.

@@ -2309,7 +2309,7 @@ leadsRouter.post('/:id/attention-flag', verifyToken, async (req, res) => {
 
     const lead = await prisma.lead.findUnique({
       where: { id },
-      select: { id: true, assignedDesignerId: true, assignedBLId: true, status: true },
+      select: { id: true, leadId: true, name: true, assignedDesignerId: true, assignedBLId: true, status: true },
     });
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
     if (!(await isAuthorizedForLead(lead, user))) {
@@ -2322,6 +2322,16 @@ leadsRouter.post('/:id/attention-flag', verifyToken, async (req, res) => {
     });
 
     await logActivity(user.id, 'LEAD_ATTENTION_FLAG_ADDED', id, { category, description });
+
+    // Tell the lead's designer, its BL and every Branch Head (not whoever raised it).
+    // Who sees it can be switched off per role in Admin → In-app Alerts.
+    const branchHeads = await prisma.user.findMany({ where: { role: 'BRANCH_HEAD', isActive: true }, select: { id: true } });
+    const recipients = new Set([lead.assignedDesignerId, lead.assignedBLId, ...branchHeads.map((b) => b.id)]);
+    recipients.delete(user.id);
+    const message = `Lead ${lead.leadId} — ${lead.name} was flagged (${category.trim()}): ${description.trim()}`;
+    for (const userId of recipients) {
+      if (userId) await createNotification(userId, 'LEAD_FLAGGED', message, lead.id);
+    }
 
     res.status(201).json({ flag });
   } catch (err: any) {

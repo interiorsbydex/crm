@@ -36,7 +36,8 @@ export type NotificationType =
   | 'MQL_ALLOCATED_TO_BL'
   | 'MQL_PUSHED_BACK'
   | 'TEAM_CHAT_MESSAGE'
-  | 'DUPLICATE_ENQUIRY';
+  | 'DUPLICATE_ENQUIRY'
+  | 'LEAD_FLAGGED';
 
 /** Every in-app alert type, with the name shown in Admin → In-app Alerts. */
 export const NOTIFICATION_TYPES: { type: NotificationType; label: string }[] = [
@@ -73,6 +74,7 @@ export const NOTIFICATION_TYPES: { type: NotificationType; label: string }[] = [
   { type: 'DTL_ASSIGNED', label: 'A Design Team Lead is assigned' },
   { type: 'TEAM_CHAT_MESSAGE', label: 'A message in a lead\'s team chat' },
   { type: 'DUPLICATE_ENQUIRY', label: 'Someone we already have enquires again (ad or form)' },
+  { type: 'LEAD_FLAGGED', label: 'A lead is flagged for attention' },
 ];
 export const ALERT_ROLES = ['DESIGNER', 'DESIGN_MANAGER', 'CRE', 'BL', 'BRANCH_HEAD'] as const;
 export type AlertRole = (typeof ALERT_ROLES)[number];

@@ -5,7 +5,7 @@ import ExcelJS from 'exceljs';
 
 const state = vi.hoisted(() => ({
   leads: [] as any[], logs: [] as any[], staff: [] as any[],
-  selections: 0, failCounter: false, failAudit: false, counter: 1000,
+  selections: 0, failCounter: false, failAudit: false, counter: 1000, routingManual: false,
 }));
 vi.mock('../lib/prisma.js', () => {
   const db = {
@@ -49,6 +49,13 @@ vi.mock('../services/assignmentService.js', () => ({
     return [...state.staff].filter((s) => s.role === 'CRE' && s.isActive)
       .sort((a, b) => a.totalLeadsAssigned - b.totalLeadsAssigned)[0] ?? null;
   },
+  // Qualified leads go to the next BL in turn (Admin → Lead Routing & Access), or nobody when manual.
+  routeQualifiedLead: async () => {
+    state.selections++;
+    const bl = state.routingManual ? null : [...state.staff].filter((s) => s.role === 'BL' && s.isActive)
+      .sort((a, b) => a.totalLeadsAssigned - b.totalLeadsAssigned)[0];
+    return { mode: state.routingManual ? 'MANUAL' : 'BL_ONLY', blId: bl?.id ?? null, designerId: null };
+  },
 }));
 vi.mock('../middleware/auth.js', () => ({
   verifyToken: (req: any, res: any, next: any) => {
@@ -72,7 +79,7 @@ beforeAll(async () => {
 });
 afterAll(async () => { await new Promise<void>((resolve) => server.close(() => resolve())); });
 beforeEach(() => {
-  Object.assign(state, { leads: [], logs: [], selections: 0, failCounter: false, failAudit: false, counter: 1000 });
+  Object.assign(state, { leads: [], logs: [], selections: 0, failCounter: false, failAudit: false, counter: 1000, routingManual: false });
   state.staff = [
     { id: 'd', name: 'Fixture Designer', role: 'DESIGNER', isActive: true, totalLeadsAssigned: 4 },
     { id: 'b', name: 'Fixture BL', role: 'BL', isActive: true, totalLeadsAssigned: 4 },
@@ -151,8 +158,21 @@ describe('bulk import ownership safety', () => {
     expect(body.imported).toBe(1); expect(body.assignmentCounts.manualReview).toBe(1);
     expect(state.selections).toBe(0); expect(state.leads[0].assignedCREId).toBeUndefined();
   });
-  it('leaves later-stage ownerless leads for review without inventing an allocation rule', async () => {
+  it('routes an ownerless Active MQL to the next BL, like an MQL created by hand', async () => {
     const { body } = await upload(['X1100,Qualified,9990000101,MQL,,,,']);
+    expect(body.preview[0].assignmentOutcome).toBe('AUTO_ALLOCATED');
+    expect(body.preview[0].reason).toBe('Auto-allocated to BL Fixture BL using Lead Routing & Access.');
+    expect(state.leads[0].assignedBLId).toBe('b');
+    expect(state.staff.find((s) => s.id === 'b').totalLeadsAssigned).toBe(5);
+  });
+  it('leaves an ownerless MQL for review when Lead Routing is manual', async () => {
+    state.routingManual = true;
+    const { body } = await upload(['X1100,Qualified,9990000101,MQL,,,,']);
+    expect(body.preview[0].assignmentOutcome).toBe('MANUAL_REVIEW');
+    expect(state.leads[0].assignedBLId).toBeUndefined();
+  });
+  it('leaves later-stage ownerless leads for review without inventing an allocation rule', async () => {
+    const { body } = await upload(['X1100,Qualified,9990000101,DQL,,,,']);
     expect(body.preview[0].assignmentOutcome).toBe('MANUAL_REVIEW');
     expect(state.selections).toBe(0);
   });
