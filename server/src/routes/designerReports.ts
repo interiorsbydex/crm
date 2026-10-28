@@ -29,6 +29,8 @@ type Scope = { designerIds: string[]; designers: { id: string; name: string }[] 
 async function resolveScope(
   user: { id: string; role: string },
   designerIdParam: unknown,
+  /** Branch Head only: one Business Lead's team (that BL's designers). */
+  blIdParam?: unknown,
 ): Promise<Scope> {
   let designers: { id: string; name: string }[];
   if (user.role === 'DESIGNER') {
@@ -41,7 +43,7 @@ async function resolveScope(
     });
   } else if (user.role === 'BRANCH_HEAD') {
     designers = await prisma.user.findMany({
-      where: { role: 'DESIGNER', isActive: true },
+      where: { role: 'DESIGNER', isActive: true, ...(typeof blIdParam === 'string' && blIdParam ? { blId: blIdParam } : {}) },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     });
@@ -126,7 +128,7 @@ export const DASHBOARD_ONBOARDING_OR = [
 // `leadFilter` is optional (used by BL/Admin reports): an extra lead-level condition AND-ed onto the
 // scoped base. Omitted => `base` is exactly what it was before.
 export async function myPerformance(user: { id: string; role: string }, q: Record<string, unknown>, leadFilter?: Record<string, unknown>) {
-  const scope = await resolveScope(user, q.designerId);
+  const scope = await resolveScope(user, q.designerId, q.blId);
   const cycles = resolveCycles(q);
   const base: any = { assignedDesignerId: { in: scope.designerIds }, isTestLead: false, ...(leadFilter ? { AND: [leadFilter] } : {}) };
 
@@ -305,7 +307,7 @@ export const FUNNEL_STAGES = [
 ] as const;
 
 export async function myLeadFunnel(user: { id: string; role: string }, q: Record<string, unknown>) {
-  const scope = await resolveScope(user, q.designerId);
+  const scope = await resolveScope(user, q.designerId, q.blId);
   const range = resolveRange(q);
   // Optional "as of" date (YYYY-MM-DD, IST): rebuild the pipeline as it stood at the end of that day
   // from the stage / status history logs. Leads created after that day are left out.
@@ -460,7 +462,7 @@ export async function myLeadFunnel(user: { id: string; role: string }, q: Record
 const MEETING_STATUSES = ['SCHEDULED', 'COMPLETED', 'NO_SHOW', 'RESCHEDULED'] as const;
 
 export async function meetingPerformanceByType(user: { id: string; role: string }, q: Record<string, unknown>, leadFilter?: Record<string, unknown>) {
-  const scope = await resolveScope(user, q.designerId);
+  const scope = await resolveScope(user, q.designerId, q.blId);
   const range = resolveRange(q);
   // Filtered by meetings.scheduledAt (not the lead's createdAt).
   const meetings = await prisma.meeting.findMany({
@@ -519,7 +521,7 @@ export async function meetingPerformanceByType(user: { id: string; role: string 
 // not exist in schema.prisma (searched case-insensitively for "pid"), so PID is
 // always N/A; no other field is substituted.
 async function salesCycle(user: { id: string; role: string }, q: Record<string, unknown>) {
-  const scope = await resolveScope(user, q.designerId);
+  const scope = await resolveScope(user, q.designerId, q.blId);
   const range = resolveRange(q);
   const base: any = { assignedDesignerId: { in: scope.designerIds }, isTestLead: false };
   const candidates = await prisma.lead.findMany({
@@ -580,7 +582,7 @@ function resolveTrendCycles(q: Record<string, unknown>): TargetCycle[] {
 // cycle and count how many of those same leads have reached each stage (or any later stage), divided by
 // total MQLs received in that cycle.
 async function myTrendsSales(user: { id: string; role: string }, q: Record<string, unknown>) {
-  const scope = await resolveScope(user, q.designerId);
+  const scope = await resolveScope(user, q.designerId, q.blId);
   const cycles = resolveTrendCycles(q);
   const base: any = { assignedDesignerId: { in: scope.designerIds }, isTestLead: false };
   const leads = await prisma.lead.findMany({
@@ -699,7 +701,7 @@ async function myTrendsSales(user: { id: string; role: string }, q: Record<strin
 // "Onboarded" = Design in Progress (or later) with the DIP checklist complete, as in My Performance.
 // RESCHEDULED archives retain commitments; they never count as completions.
 async function myCommitment(user: { id: string; role: string }, q: Record<string, unknown>) {
-  const scope = await resolveScope(user, q.designerId);
+  const scope = await resolveScope(user, q.designerId, q.blId);
   const cycles = resolveCycles(q);
   const nonTest = { isTestLead: false };
   const scheduledRange = { gte: cycles[0].cycleStart, lte: cycles[cycles.length - 1].cycleEnd };
@@ -783,7 +785,7 @@ function followUpDueInstant(t: { dueDate: Date; dueTime: string | null; timeFrom
 }
 
 async function taskCallActivity(user: { id: string; role: string }, q: Record<string, unknown>) {
-  const scope = await resolveScope(user, q.designerId);
+  const scope = await resolveScope(user, q.designerId, q.blId);
   const range = resolveRange(q);
   const now = new Date();
   const noActivityDays = (await getFormulas()).noActivityDays;

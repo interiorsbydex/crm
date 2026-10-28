@@ -757,13 +757,55 @@ function BHBLDashboard() {
   );
 }
 
+// ── Branch Head: the branch overview, or any Business Lead's team / any designer, as they see it ──
+const VIEW_KEY = 'fyx.bhDashboardView';
+function BranchHeadDashboard() {
+  const [people, setPeople] = useState<{ id: string; name: string; role: string; blName?: string | null }[]>([]);
+  const [view, setView] = useState<string>(() => { try { return localStorage.getItem(VIEW_KEY) ?? ''; } catch { return ''; } });
+  useEffect(() => {
+    api.get<{ users?: any[] } | any[]>('/admin/users')
+      .then((r) => {
+        const list = (Array.isArray(r) ? r : r.users ?? []) as any[];
+        setPeople(list.filter((u) => u.isActive && (u.role === 'BL' || u.role === 'DESIGNER'))
+          .map((u) => ({ id: u.id, name: u.name, role: u.role, blName: u.bl?.name ?? null })));
+      })
+      .catch(() => setPeople([]));
+  }, []);
+  const choose = (v: string) => { setView(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* private window */ } };
+  const [kind, id] = view.split(':');
+  const person = people.find((p) => p.id === id);
+  const bls = people.filter((p) => p.role === 'BL');
+  const designers = people.filter((p) => p.role === 'DESIGNER');
+  return (
+    <>
+      <div className="px-6 pt-5 max-w-7xl mx-auto flex flex-wrap items-center gap-2" data-testid="bh-view-picker">
+        <label className="text-xs font-semibold text-stone-500" htmlFor="bh-view">View</label>
+        <select id="bh-view" value={person || !view ? view : ''} onChange={(e) => choose(e.target.value)}
+          className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-stone-800">
+          <option value="">Branch overview — all teams</option>
+          {bls.length > 0 && <optgroup label="Business Lead dashboards (as the BL sees it)">{bls.map((b) => <option key={b.id} value={`bl:${b.id}`}>{b.name}</option>)}</optgroup>}
+          {designers.length > 0 && <optgroup label="Designer dashboards (as the designer sees it)">{designers.map((d) => <option key={d.id} value={`designer:${d.id}`}>{d.name}{d.blName ? ` — ${d.blName}` : ''}</option>)}</optgroup>}
+        </select>
+        <span className="text-[11px] text-stone-400">Pick a Business Lead or designer to see exactly their dashboard.</span>
+      </div>
+      {kind === 'bl' && person ? (
+        <BLTeamDashboard key={person.id} blId={person.id} title={`${person.name} — team dashboard`} />
+      ) : kind === 'designer' && person ? (
+        <DesignerDashboard key={person.id} designerId={person.id} designerName={person.name} />
+      ) : (
+        <BHBLDashboard />
+      )}
+    </>
+  );
+}
+
 // ── Main export — routes by role ───────────────────────────────────────────────
 export default function Dashboard() {
   const user = getStoredUser();
   const isDesigner = user?.role === 'DESIGNER';
   const main = user?.role === 'CRE' ? <CREDashboard />
     : user?.role === 'BL' ? <BLTeamDashboard teamExtras={<BHBLDashboard />} />
-    : isDesigner ? <DesignerDashboard /> : <BHBLDashboard />;
+    : isDesigner ? <DesignerDashboard /> : user?.role === 'BRANCH_HEAD' || user?.role === 'ADMIN' ? <BranchHeadDashboard /> : <BHBLDashboard />;
   // Boxes built in Admin → Custom Boxes sit under every role's dashboard.
   return <>{main}<CustomBoxes /></>;
 }

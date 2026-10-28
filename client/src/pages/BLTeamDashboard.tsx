@@ -49,7 +49,9 @@ const pct = (a: number, b: number | null) => (b && b > 0 ? Math.round((a / b) * 
 const card = 'bg-white rounded-2xl shadow-warm-sm';
 const cardStyle = { border: '1px solid #EDE8E3' };
 
-export default function BLTeamDashboard({ teamExtras }: { teamExtras?: ReactNode }) {
+/** `blId`: a Branch Head looking at one Business Lead's team (omit for the BL's own dashboard). */
+export default function BLTeamDashboard({ teamExtras, blId, title }: { teamExtras?: ReactNode; blId?: string; title?: string }) {
+  const blQ = blId ? `blId=${encodeURIComponent(blId)}` : '';
   const [designers, setDesigners] = useState<Designer[]>([]);
   const [funnel, setFunnel] = useState<LeadProgressionRow[] | null>(null);
   const [designerId, setDesignerId] = useState('');
@@ -60,12 +62,12 @@ export default function BLTeamDashboard({ teamExtras }: { teamExtras?: ReactNode
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const loadFunnel = useCallback(() => api.get<{ data: { scope: { designers: Designer[] }; stages: LeadProgressionRow[]; progressionStages?: LeadProgressionRow[] } }>('/designer-reports/my-lead-funnel')
+  const loadFunnel = useCallback(() => api.get<{ data: { scope: { designers: Designer[] }; stages: LeadProgressionRow[]; progressionStages?: LeadProgressionRow[] } }>(`/designer-reports/my-lead-funnel${blQ ? `?${blQ}` : ''}`)
     .then((r) => {
       setDesigners((prev) => (JSON.stringify(prev) === JSON.stringify(r.data.scope.designers) ? prev : r.data.scope.designers));
       setFunnel(r.data.progressionStages ?? r.data.stages);
     })
-    .catch((e) => setError(e.message)), []);
+    .catch((e) => setError(e.message)), [blQ]);
 
   useEffect(() => { void loadFunnel(); }, [loadFunnel]);
 
@@ -73,7 +75,7 @@ export default function BLTeamDashboard({ teamExtras }: { teamExtras?: ReactNode
     if (designers.length === 0) { setRows([]); setLoading(false); return; }
     if (!background) setLoading(true);
     try {
-      const count = async (q: string) => (await api.get<{ total: number }>(`/leads?limit=1${q}`)).total ?? 0;
+      const count = async (q: string) => (await api.get<{ total: number }>(`/leads?limit=1${blQ ? `&${blQ}` : ''}${q}`)).total ?? 0;
       const [teamRows, total, active, onHold, inactive, flagged] = await Promise.all([
         Promise.all(designers.map(async (designer): Promise<Row> => {
           const d: any = await api.get(`/dashboard?designerId=${encodeURIComponent(designer.id)}`);
@@ -96,7 +98,7 @@ export default function BLTeamDashboard({ teamExtras }: { teamExtras?: ReactNode
           };
         })),
         count(''), count('&status=ACTIVE'), count('&status=ON_HOLD'), count('&status=INACTIVE'),
-        api.get<{ leads: { id: string; leadId: string; name: string; assignedDesigner?: { name: string } | null }[] }>('/leads?flagged=true&limit=200'),
+        api.get<{ leads: { id: string; leadId: string; name: string; assignedDesigner?: { name: string } | null }[] }>(`/leads?flagged=true&limit=200${blQ ? `&${blQ}` : ''}`),
       ]);
       setRows(teamRows);
       setAllocation({ total, active, onHold, inactive });
@@ -114,7 +116,7 @@ export default function BLTeamDashboard({ teamExtras }: { teamExtras?: ReactNode
     } finally {
       setLoading(false);
     }
-  }, [designers]);
+  }, [designers, blQ]);
 
   useEffect(() => { void loadTeam(); }, [loadTeam]);
   // The team view asks for every designer's numbers, so it refreshes a little less often.
@@ -144,7 +146,7 @@ export default function BLTeamDashboard({ teamExtras }: { teamExtras?: ReactNode
     <div data-testid="bl-team-dashboard">
       <div className="px-6 pt-6 max-w-7xl mx-auto flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-stone-900 tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-extrabold text-stone-900 tracking-tight">{title ?? 'Dashboard'}</h1>
           <p className="text-sm text-stone-400 mt-0.5">
             {designerId ? 'One designer — same view the designer sees' : 'Whole team — the team picture, then one row per designer'}
           </p>
@@ -337,10 +339,10 @@ export default function BLTeamDashboard({ teamExtras }: { teamExtras?: ReactNode
                   {!allocation ? <p className="text-sm text-stone-400 py-4">Loading…</p> : (
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       {([
-                        ['Total allocated', allocation.total, '/leads', 'bg-stone-50'],
-                        ['Active', allocation.active, '/leads?status=ACTIVE', 'bg-green-50'],
-                        ['On hold', allocation.onHold, '/leads?status=ON_HOLD', 'bg-amber-50'],
-                        ['Inactive', allocation.inactive, '/leads?status=INACTIVE', 'bg-red-50'],
+                        ['Total allocated', allocation.total, `/leads${blQ ? `?${blQ}` : ''}`, 'bg-stone-50'],
+                        ['Active', allocation.active, `/leads?status=ACTIVE${blQ ? `&${blQ}` : ''}`, 'bg-green-50'],
+                        ['On hold', allocation.onHold, `/leads?status=ON_HOLD${blQ ? `&${blQ}` : ''}`, 'bg-amber-50'],
+                        ['Inactive', allocation.inactive, `/leads?status=INACTIVE${blQ ? `&${blQ}` : ''}`, 'bg-red-50'],
                       ] as const).map(([label, n, to, style]) => (
                         <Link key={label} to={to} className={`rounded-xl px-3 py-2 ${style} hover:shadow-sm`}>
                           <p className="text-lg font-extrabold text-stone-900">{n}</p>
