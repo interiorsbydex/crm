@@ -9,7 +9,7 @@
  * left out, as on the dashboards.
  */
 import { z } from 'zod';
-import { ConfigError, describeIssues, versionedConfig } from './versionedConfig.js';
+import { ConfigError, describeIssues, plainMessage, versionedConfig } from './versionedConfig.js';
 
 export const BOX_MEASURES = ['count', 'totalValue', 'avgValue', 'avgAgeDays'] as const;
 export type BoxMeasure = (typeof BOX_MEASURES)[number];
@@ -62,7 +62,19 @@ export const customBoxesConfig = versionedConfig<CustomBoxesConfig>({
   merge: (saved) => ({ boxes: saved?.boxes ?? [] }),
   validate: (raw) => {
     const parsed = schema.safeParse(raw);
-    if (!parsed.success) throw new ConfigError(400, 'The custom boxes could not be saved', describeIssues(parsed.error.issues, {}));
+    if (!parsed.success) {
+      // Name the box the way the screen shows it ("Box 2"), not by its internal path.
+      const boxes = (raw as { boxes?: { title?: unknown }[] } | null)?.boxes;
+      throw new ConfigError(400, 'The custom boxes could not be saved', parsed.error.issues.map((i) => {
+        const [group, at] = i.path;
+        if (group === 'boxes' && typeof at === 'number') {
+          const title = typeof boxes?.[at]?.title === 'string' && boxes[at].title.trim() ? ` ("${boxes[at].title.trim()}")` : '';
+          const msg = i.message.startsWith('Invalid enum value') ? 'one of the choices is not valid' : plainMessage(i.message);
+          return `Box ${at + 1}${title}: ${msg}`;
+        }
+        return describeIssues([i], {})[0];
+      }));
+    }
     const data = parsed.data as CustomBoxesConfig;
     const problems: string[] = [];
     const titles = new Set<string>();
