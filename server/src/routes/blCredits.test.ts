@@ -53,13 +53,13 @@ const call = (who: string, path: string, init: RequestInit = {}) => fetch(`${ori
 
 describe('BL credits access', () => {
   it('a BL sees only their own credits', async () => {
-    const own = await (await call('BL:bl1', '/bl-credits')).json();
+    const own: any = await (await call('BL:bl1', '/bl-credits')).json();
     expect(own.result.bl.id).toBe('bl1');
     expect((await call('BL:bl1', '/bl-credits?blId=bl2')).status).toBe(403);
   });
 
   it('a Branch Head can open any BL', async () => {
-    const res = await (await call('BRANCH_HEAD:bh', '/bl-credits?blId=bl2')).json();
+    const res: any = await (await call('BRANCH_HEAD:bh', '/bl-credits?blId=bl2')).json();
     expect(res.result.bl.id).toBe('bl2');
     expect(res.bls).toHaveLength(2);
   });
@@ -74,14 +74,14 @@ describe('BL settings, targets and approval are Branch Head only', () => {
     const body = JSON.stringify({ config: { sameDayPitchCredits: 4 } });
     expect((await call('BL:bl1', '/bl-config', { method: 'PUT', body })).status).toBe(403);
     expect((await call('BRANCH_HEAD:bh', '/bl-config', { method: 'PUT', body })).status).toBe(200);
-    const read = await (await call('BL:bl1', '/bl-config')).json();
+    const read: any = await (await call('BL:bl1', '/bl-config')).json();
     expect(read.config.sameDayPitchCredits).toBe(4);
   });
 
   it('sets a BL target for the current cycle and lists it; past cycles are locked', async () => {
     expect((await call('BL:bl1', '/bl-targets', { method: 'POST', body: JSON.stringify({ blId: 'bl1', bookingTargetValue: 12000000 }) })).status).toBe(403);
     expect((await call('BRANCH_HEAD:bh', '/bl-targets', { method: 'POST', body: JSON.stringify({ blId: 'bl1', bookingTargetValue: 12000000 }) })).status).toBe(200);
-    const list = await (await call('BRANCH_HEAD:bh', '/bl-targets')).json();
+    const list: any = await (await call('BRANCH_HEAD:bh', '/bl-targets')).json();
     expect(list.bls.find((b: any) => b.blId === 'bl1').bookingTargetValue).toBe(12000000);
     const past = await call('BRANCH_HEAD:bh', '/bl-targets', { method: 'POST', body: JSON.stringify({ blId: 'bl1', bookingTargetValue: 1, cycle: '2020-01-20' }) });
     expect(past.status).toBe(403);
@@ -92,6 +92,6 @@ describe('BL settings, targets and approval are Branch Head only', () => {
     const body = JSON.stringify({ blId: 'bl1', approved: true });
     expect((await call('BL:bl1', '/bl-pitch-approval', { method: 'PUT', body })).status).toBe(403);
     const ok = await call('BRANCH_HEAD:bh', '/bl-pitch-approval', { method: 'PUT', body });
-    expect((await ok.json()).approval).toMatchObject({ approved: true, byId: 'bh' });
+    expect(((await ok.json()) as any).approval).toMatchObject({ approved: true, byId: 'bh' });
   });
 });
