@@ -406,6 +406,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
 
       {showMailModal && (
         <EmailPreviewModal
+          leadId={leadId}
           title="Share welcome mail"
           defaultSubject={template.subject}
           defaultHtml={template.html}

@@ -855,6 +855,7 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
 
       {pendingMail && (
         <EmailPreviewModal
+          leadId={leadId}
           title={
             pendingMail.type === 'MEETING_COMPLETED'
               ? 'Review MOM Email'

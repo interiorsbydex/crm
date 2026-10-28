@@ -1259,6 +1259,7 @@ export default function ActivityFeedTab({
       {/* Email draft preview */}
       {pendingMail && (
         <EmailPreviewModal
+          leadId={leadId}
           title="Review Email Draft"
           defaultSubject={pendingMail.subject}
           defaultHtml={pendingMail.html}

@@ -26,6 +26,7 @@ import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { renderMailTemplate, getWelcomeMailAttachments } from '../lib/mailTemplates.js';
+import { obmDocumentAttachments, obmDocumentRefs } from '../lib/obmDocuments.js';
 import { downloadMasterMailAttachments } from '../lib/mailTemplateAttachments.js';
 import { saveDraft, registerOnSentHandler } from '../lib/emailService.js';
 import { getNpsSendState } from '../lib/npsHelper.js';
@@ -171,7 +172,10 @@ obObmChecklistRouter.get('/', verifyToken, async (req, res) => {
       timelineFields: TIMELINE_FIELDS,
       obmMailTemplate: {
         ...await obmMailTemplate(lead.name, timelineHtml),
-        attachmentNames: (await getWelcomeMailAttachments()).map((file) => file.name),
+        attachmentNames: [
+          ...(await getWelcomeMailAttachments()).map((file) => file.name),
+          ...(checklist ? (await obmDocumentRefs((await evaluateChecklist('obObm', leadId, checklist)).items.filter((i) => i.met).map((i) => i.key))).map((file) => file.name) : []),
+        ],
       },
     });
   } catch (err: any) {
@@ -279,7 +283,7 @@ obObmChecklistRouter.post('/send-obm-mail', verifyToken, async (req, res) => {
     // stage tag is PD/PP, never OB. Removed — the earlier gate covers this.
     // What's still missing comes from the checklist engine (lib/checklists.ts),
     // which applies Admin → Checklists (optional items, the admin's own items).
-    const { missing } = await evaluateChecklist('obObm', leadId, checklist);
+    const { items: checklistItems, missing } = await evaluateChecklist('obObm', leadId, checklist);
     // The client's email can never be waived — there is nobody to send to.
     if (!lead.email) {
       res.status(400).json({ error: 'Cannot send OBM mail — missing requirements', missing: ["Client's email address", ...missing] });
@@ -305,7 +309,11 @@ obObmChecklistRouter.post('/send-obm-mail', verifyToken, async (req, res) => {
     // once the draft is actually delivered, via completeObObmMailSent()
     // below (registered as the onSentAction), never at draft-creation time.
     const draftKey = `${leadId}::OB_OBM_WELCOME`;
-    const attachments = await downloadMasterMailAttachments(await getWelcomeMailAttachments());
+    // Standard welcome documents, plus the documents of every checklist item that is ticked.
+    const attachments = [
+      ...await downloadMasterMailAttachments(await getWelcomeMailAttachments()),
+      ...await obmDocumentAttachments(checklistItems.filter((i) => i.met).map((i) => i.key)),
+    ];
     await saveDraft(draftKey, emailPayload.subject, emailPayload.html, {
       leadId, type: 'OB_OBM_WELCOME', onSentAction: 'OB_OBM_WELCOME',
     }, attachments);

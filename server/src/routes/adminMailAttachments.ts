@@ -25,3 +25,19 @@ adminMailAttachmentsRouter.post('/:code/attachments/upload', (req, res, next) =>
     res.status(400).json({ error: error.message });
   }
 });
+
+// Documents for the Onboarding → OBM checklist items (lib/obmDocuments.ts); the list itself is saved through /admin/obm-documents.
+export const adminObmDocumentUploadRouter = Router();
+adminObmDocumentUploadRouter.post('/upload', (req, res, next) => {
+  uploadFile(req, res, (error: any) => {
+    if (error) { res.status(400).json({ error: error.message }); return; }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.file) { res.status(400).json({ error: 'A document is required' }); return; }
+    res.json({ attachment: await uploadMasterMailAttachment(req.file) });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});

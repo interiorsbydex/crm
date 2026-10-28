@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, Target, Megaphone, Route, FileText, SlidersHorizontal, Zap, LayoutDashboard, ShieldCheck, ListChecks, BarChart3, Shuffle, CalendarClock, Bell, Calculator, Type, LayoutGrid, type LucideIcon } from 'lucide-react';
+import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, Target, Megaphone, Route, FileText, SlidersHorizontal, Zap, LayoutDashboard, ShieldCheck, ListChecks, BarChart3, Shuffle, CalendarClock, Bell, Calculator, Type, LayoutGrid, Paperclip, type LucideIcon } from 'lucide-react';
 import { api, uploadFile } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
 import { DateInput } from '../components/ui/DateTimeInputs';
@@ -18,6 +18,7 @@ import ReportsNpsAdmin from '../components/admin/ReportsNpsAdmin';
 import LeadRoutingAdmin from '../components/admin/LeadRoutingAdmin';
 import MeetingsAdmin from '../components/admin/MeetingsAdmin';
 import CustomBoxesAdmin from '../components/admin/CustomBoxesAdmin';
+import ChecklistDocumentsAdmin from '../components/admin/ChecklistDocumentsAdmin';
 import AlertsAdmin from '../components/admin/AlertsAdmin';
 import FormulasAdmin from '../components/admin/FormulasAdmin';
 import WordingAdmin from '../components/admin/WordingAdmin';
@@ -57,7 +58,7 @@ const ROLE_COLORS: Record<string, string> = {
   BRANCH_HEAD: 'bg-green-100 text-green-700',
 };
 
-type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers' | 'import' | 'targets' | 'credits' | 'content' | 'stageRules' | 'docTypes' | 'crmSettings' | 'automations' | 'dashboards' | 'permissions' | 'checklists' | 'reportsNps' | 'leadRouting' | 'meetings' | 'alerts' | 'formulas' | 'wording' | 'customBoxes';
+type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers' | 'import' | 'targets' | 'credits' | 'content' | 'stageRules' | 'docTypes' | 'crmSettings' | 'automations' | 'dashboards' | 'permissions' | 'checklists' | 'reportsNps' | 'leadRouting' | 'meetings' | 'alerts' | 'formulas' | 'wording' | 'customBoxes' | 'checklistDocs';
 
 interface ImportPreviewRow {
   row: number; status: 'WILL_IMPORT' | 'DUPLICATE' | 'INVALID';
@@ -479,6 +480,7 @@ export default function Admin() {
     { id: 'formulas', label: 'Formulas', Icon: Calculator },
     { id: 'wording', label: 'Wording', Icon: Type },
     { id: 'customBoxes', label: 'Custom Boxes', Icon: LayoutGrid },
+    { id: 'checklistDocs', label: 'Checklist Documents', Icon: Paperclip },
   ];
 
   const hasLeads = (deactivatePreview?.activeLeads ?? 0) > 0;
@@ -1241,6 +1243,7 @@ export default function Admin() {
         {tab === 'formulas' && <FormulasAdmin />}
         {tab === 'wording' && <WordingAdmin />}
         {tab === 'customBoxes' && <CustomBoxesAdmin />}
+        {tab === 'checklistDocs' && <ChecklistDocumentsAdmin />}
       </div>
     </div>
   );

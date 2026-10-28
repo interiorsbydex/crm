@@ -2795,6 +2795,7 @@ export default function LeadDetail() {
 
       {pendingMail && (
         <EmailPreviewModal
+          leadId={leadId}
           title="Review Client Email"
           defaultSubject={pendingMail.subject}
           defaultHtml={pendingMail.html}

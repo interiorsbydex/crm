@@ -1,3 +1,4 @@
+import { takeExtras, clearExtras } from './draftExtras.js';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -122,8 +123,12 @@ export async function sendDraft(key: string, to: string, sentByUserId?: string):
 
   // Who is copied follows Admin → Automations for this kind of email.
   const cc = draft.meta ? (await automationCc(eventForDraftType(draft.meta.type), draft.meta.leadId)).filter((e) => e !== to) : [];
-  await sendEmail({ to, cc, subject: draft.subject, html: draft.html, attachments: draft.attachments });
+  // Files the sender added on the review screen go along with the mail.
+  const extras = draft.meta && sentByUserId ? await takeExtras(draft.meta.leadId, sentByUserId) : [];
+  const attachments = [...(draft.attachments ?? []), ...extras];
+  await sendEmail({ to, cc, subject: draft.subject, html: draft.html, attachments: attachments.length ? attachments : undefined });
   await prisma.emailDraft.deleteMany({ where: { key } });
+  if (extras.length && draft.meta && sentByUserId) await clearExtras(draft.meta.leadId, sentByUserId);
 
   if (draft.meta?.onSentAction) {
     const handler = onSentHandlers.get(draft.meta.onSentAction);

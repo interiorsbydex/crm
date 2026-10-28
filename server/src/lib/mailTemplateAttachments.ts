@@ -31,7 +31,8 @@ export function validateMasterMailAttachments(value: unknown): MasterMailAttachm
   });
 }
 
-export async function uploadMasterMailAttachment(file: Express.Multer.File): Promise<MasterMailAttachment> {
+/** Check an uploaded mail document (PDF, DOCX, PNG, JPG: real file contents, up to 4 MB) and give back its safe name and type. */
+export function checkMailDocument(file: Express.Multer.File): { name: string; mime: string } {
   if (!file.size || file.size > MAX_FILE) throw new Error('Each document must be 4 MB or less');
   const ext = file.originalname.split('.').pop()?.toLowerCase();
   const bytes = file.buffer;
@@ -44,11 +45,15 @@ export async function uploadMasterMailAttachment(file: Express.Multer.File): Pro
   };
   const format = formats[ext ?? ''];
   if (!format?.valid) throw new Error('Upload a valid PDF, DOCX, PNG or JPG document');
-  const name = file.originalname.replace(/[^\p{L}\p{N}._ -]/gu, '_').slice(-180);
+  return { name: file.originalname.replace(/[^\p{L}\p{N}._ -]/gu, '_').slice(-180), mime: format.mime };
+}
+
+export async function uploadMasterMailAttachment(file: Express.Multer.File): Promise<MasterMailAttachment> {
+  const { name, mime } = checkMailDocument(file);
   const storagePath = `${PREFIX}${randomUUID()}/${name}`;
   if (!supabaseAdmin) throw new Error('Document storage is not configured');
-  const { error } = await supabaseAdmin.storage.from(BUCKET).upload(storagePath, bytes, {
-    contentType: format.mime, upsert: false,
+  const { error } = await supabaseAdmin.storage.from(BUCKET).upload(storagePath, file.buffer, {
+    contentType: mime, upsert: false,
   });
   if (error) throw new Error(`Could not upload welcome document: ${error.message}`);
   return { storagePath, name, size: file.size };

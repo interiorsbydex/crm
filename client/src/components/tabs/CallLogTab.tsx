@@ -1176,6 +1176,7 @@ export default function CallLogTab({ leadId, isLocked, onCallLogged }: Props) {
 
       {pendingMail && (
         <EmailPreviewModal
+          leadId={leadId}
           title={pendingMail.type === 'CALL_SCHEDULED'
             ? 'Review Scheduled Call Email'
             : pendingMail.type === 'CALL_RESCHEDULED'

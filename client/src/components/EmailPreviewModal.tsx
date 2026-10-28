@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { X, Send } from 'lucide-react';
 import { prepareEmailDraft, renderEditedEmail } from '../lib/emailDraftFormatting';
+import MailAttachments from './MailAttachments';
 
 interface Props {
   title: string;
+  /** The lead the mail is about; with it the screen offers "Attach files". */
+  leadId?: string;
   defaultSubject: string;
   defaultHtml: string;
   attachmentNames?: string[];
@@ -21,7 +24,7 @@ interface Props {
  * HTML template itself supplies the default styling.
  */
 export default function EmailPreviewModal({
-  title, defaultSubject, defaultHtml, attachmentNames, recipientLabel, sending, onSend, onClose, requireSend = false,
+  title, leadId, defaultSubject, defaultHtml, attachmentNames, recipientLabel, sending, onSend, onClose, requireSend = false,
 }: Props) {
   const [subject, setSubject] = useState(defaultSubject);
   const prepared = prepareEmailDraft(defaultHtml);
@@ -52,9 +55,10 @@ export default function EmailPreviewModal({
           {attachmentNames !== undefined && (
             <div className="text-xs text-gray-600">
               <span className="font-semibold">Attachments: </span>
-              {attachmentNames.length ? attachmentNames.join(', ') : 'No automatic welcome documents configured. Add approved files in Admin Settings.'}
+              {attachmentNames.length ? attachmentNames.join(', ') : 'No standard documents for this mail (tick checklist items that have documents, or set them in Admin → Checklist Documents).'}
             </div>
           )}
+          {leadId && <MailAttachments leadId={leadId} />}
           <p className="text-xs text-gray-500">To: {recipientLabel}</p>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Subject</label>

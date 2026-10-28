@@ -12,7 +12,9 @@ import { refreshCreditSnapshots } from '../lib/creditSnapshots.js';
 import { SALES_STAGE_SLA, type StageSlaThreshold } from '../config/slaConfig.js';
 import { getEffectiveStageSla } from '../lib/stageSla.js';
 import { getEffectiveMailTemplates, setMailTemplateOverride, resetMailTemplateOverride, MAIL_TEMPLATES } from '../lib/mailTemplates.js';
-import { adminMailAttachmentsRouter } from './adminMailAttachments.js';
+import { adminMailAttachmentsRouter, adminObmDocumentUploadRouter } from './adminMailAttachments.js';
+import { obmDocumentsConfig } from '../lib/obmDocuments.js';
+import { OBM_DOC_ITEMS, OBM_DOC_LABELS } from '../lib/checklists.js';
 import { validateMasterMailAttachments, downloadMasterMailAttachments, type MasterMailAttachment } from '../lib/mailTemplateAttachments.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
@@ -50,6 +52,7 @@ export const adminRouter = Router();
 
 adminRouter.use(verifyToken, requireRole('BRANCH_HEAD'));
 adminRouter.use('/mail-templates', adminMailAttachmentsRouter);
+adminRouter.use('/obm-documents', adminObmDocumentUploadRouter);
 
 // ── GET /api/admin/users ───────────────────────────────────────────────────────
 adminRouter.get('/users', async (_req, res) => {
@@ -1099,6 +1102,12 @@ mountVersionedConfig(adminRouter, '/dashboards', dashboardLayoutsConfig);
 // Boxes the Branch Head builds from a menu and puts on a role's dashboard (lib/customBoxes.ts).
 mountVersionedConfig(adminRouter, '/custom-boxes', customBoxesConfig, async () => ({
   catalog: { measures: BOX_MEASURES, splits: BOX_SPLITS, roles: BOX_ROLES, stages: BOX_STAGES, statuses: BOX_STATUSES },
+}));
+
+// ── Checklist documents (Admin → Checklist Documents) ─────────────────────────
+// Standard files sent with the OBM mail for each ticked Onboarding → OBM checklist item (lib/obmDocuments.ts).
+mountVersionedConfig(adminRouter, '/obm-documents', obmDocumentsConfig, async () => ({
+  catalog: { items: OBM_DOC_ITEMS.map((key) => ({ key, label: OBM_DOC_LABELS[key] })) },
 }));
 
 // ── Permissions (Admin → Permissions) ─────────────────────────────────────────

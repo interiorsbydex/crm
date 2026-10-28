@@ -725,6 +725,7 @@ export default function FollowUpTab({ leadId, isLocked, onTasksChanged }: Props)
 
       {pendingMail && (
         <EmailPreviewModal
+          leadId={leadId}
           title="Review Follow-up Email"
           defaultSubject={pendingMail.subject}
           defaultHtml={pendingMail.html}

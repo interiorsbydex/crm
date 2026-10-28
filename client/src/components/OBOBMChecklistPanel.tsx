@@ -502,6 +502,7 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
 
       {showMailModal && (
         <EmailPreviewModal
+          leadId={leadId}
           title="Share OBM mail"
           defaultSubject={template.subject}
           defaultHtml={template.html}
@@ -515,6 +516,7 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
 
       {npsPendingMail && (
         <EmailPreviewModal
+          leadId={leadId}
           title="Review NPS Survey Email"
           defaultSubject={npsPendingMail.subject}
           defaultHtml={npsPendingMail.html}

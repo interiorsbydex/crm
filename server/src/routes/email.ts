@@ -3,6 +3,9 @@ import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
 import { previewEmail, saveDraft, getDraft, sendDraft } from '../lib/emailService.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
+import multer from 'multer';
+import { isAuthorizedForLead } from '../lib/leadAuth.js';
+import { addExtra, clearExtras, listExtras, removeExtra } from '../lib/draftExtras.js';
 
 export const emailRouter = Router();
 
@@ -120,4 +123,50 @@ emailRouter.post('/send-draft', verifyToken, async (req, res) => {
   }
 
   res.json({ message: `Email sent to ${to}` });
+});
+
+// ── Files added to a mail on its review screen (lib/draftExtras.ts) ──────────
+// They go out with the next mail this person sends for the lead.
+const extrasUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 1 } });
+
+async function extrasLead(req: any, res: any) {
+  const lead = await prisma.lead.findUnique({
+    where: { id: req.params.leadId },
+    select: { id: true, assignedDesignerId: true, assignedBLId: true, status: true },
+  });
+  if (!lead) { res.status(404).json({ error: 'Lead not found' }); return null; }
+  if (!(await isAuthorizedForLead(lead, req.user!))) { res.status(403).json({ error: 'Not authorised for this lead' }); return null; }
+  return lead;
+}
+
+emailRouter.get('/extras/:leadId', verifyToken, async (req, res) => {
+  try {
+    if (!(await extrasLead(req, res))) return;
+    res.json({ files: await listExtras(req.params.leadId, req.user!.id) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+emailRouter.post('/extras/:leadId', verifyToken, (req, res, next) => {
+  (extrasUpload.single('file') as any)(req, res, (error: any) => {
+    if (error) { res.status(400).json({ error: error.code === 'LIMIT_FILE_SIZE' ? 'Each document must be 4 MB or less' : error.message }); return; }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const lead = await extrasLead(req, res);
+    if (!lead) return;
+    if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
+    if (!req.file) { res.status(400).json({ error: 'A document is required' }); return; }
+    res.json({ files: await addExtra(req.params.leadId, req.user!.id, req.file) });
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
+// DELETE /extras/:leadId?filename=… removes one file; without filename it clears them all (review screen closed).
+emailRouter.delete('/extras/:leadId', verifyToken, async (req, res) => {
+  try {
+    if (!(await extrasLead(req, res))) return;
+    const filename = typeof req.query.filename === 'string' ? req.query.filename : '';
+    if (filename) res.json({ files: await removeExtra(req.params.leadId, req.user!.id, filename) });
+    else { await clearExtras(req.params.leadId, req.user!.id); res.json({ files: [] }); }
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
