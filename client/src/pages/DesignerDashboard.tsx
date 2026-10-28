@@ -7,6 +7,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useLiveRefresh } from '../lib/liveRefresh';
 import { getStoredUser } from '../lib/auth';
 import { DateInput } from '../components/ui/DateTimeInputs';
 import DashboardContent from '../components/dashboard/DashboardContent';
@@ -304,19 +305,7 @@ export default function DesignerDashboard({ designerId, designerName }: { design
   const dateToRef = useRef(dateTo);
   useEffect(() => { dateFromRef.current = dateFrom; dateToRef.current = dateTo; }, [dateFrom, dateTo]);
 
-  useEffect(() => {
-    const poll = () => load(dateFromRef.current || undefined, dateToRef.current || undefined, true);
-    const interval = setInterval(poll, 30000);
-    const onFocus = () => poll();
-    const onVisibility = () => { if (document.visibilityState === 'visible') poll(); };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [load]);
+  useLiveRefresh(() => { void load(dateFromRef.current || undefined, dateToRef.current || undefined, true); void loadWorkItems(); });
 
   const handleApply = () => load(dateFrom || undefined, dateTo || undefined);
   const handleReset = () => { setDateFrom(''); setDateTo(''); load(); };

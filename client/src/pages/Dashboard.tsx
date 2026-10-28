@@ -6,6 +6,7 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { api } from '../lib/api';
+import { LIVE_REFRESH_SECONDS, useLiveRefresh } from '../lib/liveRefresh';
 import { getStoredUser } from '../lib/auth';
 import DesignerDashboard from './DesignerDashboard';
 import BLTeamDashboard from './BLTeamDashboard';
@@ -709,22 +710,8 @@ function BHBLDashboard() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Keep dashboard numbers live without a manual reload: re-poll periodically
-  // and whenever the tab regains focus/visibility, so a stage move or new
-  // lead made elsewhere shows up here shortly after, not just on remount.
-  useEffect(() => {
-    const poll = () => load(true);
-    const interval = setInterval(poll, 30000);
-    const onFocus = () => poll();
-    const onVisibility = () => { if (document.visibilityState === 'visible') poll(); };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [load]);
+  // Live numbers: right after any change in this browser, every few seconds, and on return to the tab.
+  useLiveRefresh(() => load(true));
 
   return (
     <div className="px-6 py-6 max-w-7xl mx-auto">
@@ -736,7 +723,7 @@ function BHBLDashboard() {
             {isBH ? 'Branch overview — all teams' : `Your scope · ${user?.name ?? ''}`}
           </p>
           <p className="text-[11px] text-stone-400 mt-0.5" data-testid="dashboard-updated">
-            {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })} · refreshes every 30 seconds` : 'Loading…'}
+            {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })} · updates by itself every ${LIVE_REFRESH_SECONDS} seconds and right after any change` : 'Loading…'}
             {' '}<button type="button" onClick={() => { void load(true); }} className="text-brand-600 hover:underline">Refresh now</button>
           </p>
         </div>

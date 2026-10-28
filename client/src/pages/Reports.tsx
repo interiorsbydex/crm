@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
+import { LIVE_REFRESH_SECONDS, useLiveRefresh } from '../lib/liveRefresh';
 import { getStoredUser } from '../lib/auth';
 import { DateInput } from '../components/ui/DateTimeInputs';
 import DesignerReports from '../components/reports/DesignerReports';
@@ -376,21 +377,9 @@ export default function Reports() {
     if (preset !== 'custom') fetchAll();
   }, [preset, fetchAll]);
 
-  // Keep the reports current as leads move, like the Dashboard: re-check every
-  // 30 seconds and whenever this tab is brought back to the front.
-  useEffect(() => {
-    if (preset === 'custom' && !(customStart && customEnd)) return;
-    const poll = () => { void fetchAll(true); };
-    const interval = setInterval(poll, 30000);
-    const onVisibility = () => { if (document.visibilityState === 'visible') poll(); };
-    window.addEventListener('focus', poll);
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', poll);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [fetchAll, preset, customStart, customEnd]);
+  // Keep the reports current as leads move, like the Dashboard: right after any change,
+  // every few seconds, and whenever this tab is brought back to the front.
+  useLiveRefresh(() => { if (!(preset === 'custom' && !(customStart && customEnd))) void fetchAll(true); });
   // With a custom date range, changing a filter reloads straight away once both dates are set.
   useEffect(() => {
     if (preset === 'custom' && customStart && customEnd) fetchAll();
@@ -472,7 +461,7 @@ export default function Reports() {
         <div>
           <p className="text-base font-semibold text-gray-900">Reports</p>
           <p className="text-[11px] text-gray-400" data-testid="reports-updated">
-            {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })} · refreshes every 30 seconds` : 'Loading…'}
+            {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })} · updates by itself every ${LIVE_REFRESH_SECONDS} seconds and right after any change` : 'Loading…'}
             {' '}<button type="button" onClick={() => { void fetchAll(); }} className="text-brand-600 hover:underline">Refresh now</button>
           </p>
         </div>

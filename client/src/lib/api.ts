@@ -1,4 +1,5 @@
 import toast from 'react-hot-toast';
+import { notifyDataChanged } from './liveRefresh';
 const BASE = '/api';
 
 function getToken() {
@@ -113,6 +114,8 @@ async function request<T>(
   }
 
   const data = await res.json();
+  // A save, move or upload went through: screens showing numbers refresh straight away.
+  if ((options.method ?? 'GET').toUpperCase() !== 'GET' && path !== '/auth/refresh' && !path.startsWith('/auth/')) notifyDataChanged();
   // Emails set to "send straight away" (Admin → Automations) went out without a review screen.
   if (Array.isArray(data?.autoSent) && data.autoSent.length) {
     toast.success(`Email sent to ${Array.from(new Set(data.autoSent.map((m: { to: string }) => m.to))).join(', ')}`);

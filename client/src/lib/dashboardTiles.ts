@@ -47,7 +47,16 @@ export const DASHBOARD_TILES: DashboardTileDef[] = [
   { id: 'bl.collectionsDue', dashboard: 'bl', section: 'Delivery', label: 'Collections Due' },
   // Business Lead — team panel
   { id: 'blTeam.announcements', dashboard: 'blTeam', section: 'Top', label: 'Announcements & design inspiration' },
-  { id: 'blTeam.teamTable', dashboard: 'blTeam', section: 'Team', label: 'Team by designer' },
+  { id: 'blTeam.booking', dashboard: 'blTeam', section: 'Team key numbers', label: 'Booking Achievement' },
+  { id: 'blTeam.pipeline', dashboard: 'blTeam', section: 'Team key numbers', label: 'Active Leads (Entire Pipeline)' },
+  { id: 'blTeam.credits', dashboard: 'blTeam', section: 'Team key numbers', label: 'Team Credits' },
+  { id: 'blTeam.nps', dashboard: 'blTeam', section: 'Team key numbers', label: 'NPS (OBM Clients)' },
+  { id: 'blTeam.funnel', dashboard: 'blTeam', section: 'Funnel and potential', label: 'Sales Funnel (team)' },
+  { id: 'blTeam.potential', dashboard: 'blTeam', section: 'Funnel and potential', label: 'Pipeline Potential (PP to DIP)' },
+  { id: 'blTeam.teamTable', dashboard: 'blTeam', section: 'Team', label: 'Team Performance' },
+  { id: 'blTeam.allocation', dashboard: 'blTeam', section: 'Allocation and focus', label: 'Lead Allocation Summary' },
+  { id: 'blTeam.flagged', dashboard: 'blTeam', section: 'Allocation and focus', label: 'Flagged Leads' },
+  { id: 'blTeam.dueToday', dashboard: 'blTeam', section: 'Allocation and focus', label: "Today's Focus (team)" },
   // Designer dashboard
   { id: 'designer.announcements', dashboard: 'designer', section: 'Top', label: 'Announcements & design inspiration' },
   { id: 'designer.activeLeads', dashboard: 'designer', section: 'Key numbers', label: 'Active Leads' },

@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Search, SlidersHorizontal, X, ChevronRight, Activity, AlertCircle, ClipboardList, Check } from 'lucide-react';
 import { api } from '../lib/api';
+import { notifyDataChanged } from '../lib/liveRefresh';
 import StatusBadge from '../components/StatusBadge';
 import PDOBChecklistPanel from '../components/PDOBChecklistPanel';
 import DIPChecklistPanel from '../components/DIPChecklistPanel';
@@ -914,6 +915,7 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
         body: JSON.stringify({ stage: targetStage, ...extraFields }),
       });
       if (res.ok) {
+        notifyDataChanged();
         toast.success(`${lead.name} → ${stageLabel(targetStage)}`);
         const okBody = await res.json().catch(() => ({}));
         if (okBody.gateWarnings?.length) {
