@@ -100,6 +100,10 @@ export function describeActivity(action: string, meta?: Record<string, any>): st
       return `Flagged for attention${m.reason ? ` — ${m.reason}` : ''}`;
     case 'ATTENTION_FLAG_RESOLVED':
       return 'Resolved the attention flag';
+    case 'LEAD_ATTENTION_FLAG_ADDED':
+      return `Flagged this lead${m.category ? ` (${m.category})` : ''}${m.description ? ` — ${m.description}` : ''}`;
+    case 'LEAD_ATTENTION_FLAG_RESOLVED':
+      return 'Resolved a flag on this lead';
     case 'SLA_BREACH':
       return 'Response time limit breached';
     case 'PROJECT_CREATED':
