@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { supabaseAdmin } from '../lib/supabase.js';
+import { recordTeamChange } from '../lib/blTeamHistory.js';
 import jwt from 'jsonwebtoken';
 
 export const acceptInviteRouter = Router();
@@ -108,6 +109,8 @@ acceptInviteRouter.post('/:token', async (req, res) => {
             isActive: true,
           },
         });
+
+    if (existingUser) await recordTeamChange(user.id, existingUser, user);
 
     // Mark invite as accepted
     await prisma.userInvite.update({

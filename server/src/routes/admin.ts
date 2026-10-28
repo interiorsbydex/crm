@@ -17,6 +17,7 @@ import { obmDocumentsConfig } from '../lib/obmDocuments.js';
 import { OBM_DOC_ITEMS, OBM_DOC_LABELS } from '../lib/checklists.js';
 import { validateMasterMailAttachments, downloadMasterMailAttachments, type MasterMailAttachment } from '../lib/mailTemplateAttachments.js';
 import { logActivity } from '../lib/activityLog.js';
+import { recordTeamChange } from '../lib/blTeamHistory.js';
 import { createNotification } from '../lib/notifications.js';
 import { resolveBaseUrl } from '../lib/baseUrl.js';
 import { sendViaResend } from '../lib/resendEmail.js';
@@ -203,6 +204,7 @@ adminRouter.patch('/users/:id/deactivate', async (req, res) => {
 
     // Step 3 — deactivate
     await prisma.user.update({ where: { id }, data: { isActive: false } });
+    await recordTeamChange(req.user!.id, user, { ...user, isActive: false });
 
     const affected = (reassignDesignerId || reassignBLId)
       ? await prisma.lead.count({ where: { assignedDesignerId: reassignDesignerId ?? undefined } })
@@ -231,6 +233,9 @@ adminRouter.patch('/users/:id', async (req, res) => {
         return;
       }
     }
+    const before = await prisma.user.findUnique({
+      where: { id: req.params.id }, select: { id: true, role: true, blId: true, isActive: true },
+    });
     const user = await prisma.user.update({
       where: { id: req.params.id },
       data: {
@@ -242,6 +247,8 @@ adminRouter.patch('/users/:id', async (req, res) => {
         ...(designation !== undefined && { designation: designation ? (designation as any) : null }),
       },
     });
+    // BL credits keep history with the team a designer was in at the time (Annie, item 7B).
+    if (before) await recordTeamChange(req.user!.id, before, user);
     res.json({ user });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

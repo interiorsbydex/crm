@@ -18,6 +18,7 @@ import { Tile, TileGroup, useDashboardLayout } from '../lib/dashboardLayout';
 import { useLiveRefresh } from '../lib/liveRefresh';
 import { formatLeadProgressionTat, type LeadProgressionRow } from '../lib/leadProgression';
 import { formulas } from '../lib/formulas';
+import BlCreditsPanel from '../components/reports/BlCreditsPanel';
 
 interface Designer { id: string; name: string }
 interface Tier { count: number; value: number }
@@ -326,6 +327,16 @@ export default function BLTeamDashboard({ teamExtras, blId, title }: { teamExtra
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+          </Tile></TileGroup>
+
+          {/* The Business Lead's own credits (Branch Head sees the BL they opened) */}
+          <TileGroup dashboard="blTeam"><Tile id="blTeam.blCredits">
+          <div className="px-6 pt-4 max-w-7xl mx-auto">
+            <div className={`${card} p-4`} style={cardStyle} data-testid="bl-team-bl-credits">
+              <p className="mb-3 text-sm font-bold text-stone-800">{L('blTeam.blCredits', 'Business Lead Credits')}</p>
+              <BlCreditsPanel blId={blId} />
             </div>
           </div>
           </Tile></TileGroup>

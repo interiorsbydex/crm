@@ -6,6 +6,7 @@ import { api, uploadFile } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
 import { DateInput } from '../components/ui/DateTimeInputs';
 import IncentiveRulesAdmin from '../components/admin/IncentiveRulesAdmin';
+import BlCreditRulesAdmin, { BlTargetsAdmin } from '../components/admin/BlCreditsAdmin';
 import DashboardContentAdmin from '../components/admin/DashboardContentAdmin';
 import StageRulesAdmin from '../components/admin/StageRulesAdmin';
 import DocumentTypesAdmin from '../components/admin/DocumentTypesAdmin';
@@ -1122,7 +1123,7 @@ export default function Admin() {
         )}
 
         {/* ── SALES PERFORMANCE TARGETS TAB ───────────────────────────────────── */}
-        {tab === 'credits' && <IncentiveRulesAdmin />}
+        {tab === 'credits' && <><IncentiveRulesAdmin /><div className="mt-4"><BlCreditRulesAdmin /></div></>}
         {!loading && tab === 'content' && <DashboardContentAdmin />}
 
         {tab === 'targets' && (
@@ -1231,6 +1232,7 @@ export default function Admin() {
             )}
           </div>
         )}
+        {tab === 'targets' && <BlTargetsAdmin />}
 
         {tab === 'stageRules' && <StageRulesAdmin />}
         {tab === 'docTypes' && <DocumentTypesAdmin />}

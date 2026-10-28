@@ -54,6 +54,7 @@ export const DASHBOARD_TILES: DashboardTileDef[] = [
   { id: 'blTeam.funnel', dashboard: 'blTeam', section: 'Funnel and potential', label: 'Sales Funnel (team)' },
   { id: 'blTeam.potential', dashboard: 'blTeam', section: 'Funnel and potential', label: 'Pipeline Potential (PP to DIP)' },
   { id: 'blTeam.teamTable', dashboard: 'blTeam', section: 'Team', label: 'Team Performance' },
+  { id: 'blTeam.blCredits', dashboard: 'blTeam', section: 'Team', label: 'Business Lead Credits' },
   { id: 'blTeam.allocation', dashboard: 'blTeam', section: 'Allocation and focus', label: 'Lead Allocation Summary' },
   { id: 'blTeam.flagged', dashboard: 'blTeam', section: 'Allocation and focus', label: 'Flagged Leads' },
   { id: 'blTeam.dueToday', dashboard: 'blTeam', section: 'Allocation and focus', label: "Today's Focus (team)" },

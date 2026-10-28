@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { cycleDescription } from '../../lib/crmSettings';
 import { usePermissions } from '../../lib/permissions';
 import { downloadCsv } from '../../lib/csv';
+import BlCreditsPanel from './BlCreditsPanel';
 
 type Designer = { id: string; name: string };
 type Validation = { leadId: string; name: string; bookingValue: number; rating: number | null; status: string; releasePct: number | null };
@@ -250,17 +251,15 @@ export default function CreditsPanel({ showTitle = true }: { showTitle?: boolean
     </div>
   );
 
-  if (role !== 'BL') return body;
+  if (role !== 'BL' && role !== 'BRANCH_HEAD') return body;
   return (
     <div className="space-y-6">
       <div className="space-y-2" data-testid="bl-own-credits">
-        <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">My BL Credits</p>
-        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
-          Not yet available. A separate BL credit calculation is on hold, so no BL credit totals are shown here. The figures below are your team designers' credits, not your own.
-        </div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">{role === 'BL' ? 'My BL Credits' : 'Business Lead Credits'}</p>
+        <BlCreditsPanel />
       </div>
       <div className="space-y-2" data-testid="team-designer-credits">
-        <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Team Designer Credits</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">{role === 'BL' ? 'Team Designer Credits' : 'Designer Credits'}</p>
         {body}
       </div>
     </div>
