@@ -10,6 +10,7 @@ import { getStoredUser } from '../lib/auth';
 import DesignerDashboard from './DesignerDashboard';
 import BLTeamDashboard from './BLTeamDashboard';
 import CREDashboard from './CREDashboard';
+import CustomBoxes from '../components/dashboard/CustomBoxes';
 import { stageShortLabel, sourceLabel } from '../lib/crmSettings';
 import { Tile, TileGroup, useDashboardLayout } from '../lib/dashboardLayout';
 
@@ -767,8 +768,10 @@ function BHBLDashboard() {
 // ── Main export — routes by role ───────────────────────────────────────────────
 export default function Dashboard() {
   const user = getStoredUser();
-  if (user?.role === 'CRE') return <CREDashboard />;
   const isDesigner = user?.role === 'DESIGNER';
-  if (user?.role === 'BL') return <BLTeamDashboard teamExtras={<BHBLDashboard />} />;
-  return isDesigner ? <DesignerDashboard /> : <BHBLDashboard />;
+  const main = user?.role === 'CRE' ? <CREDashboard />
+    : user?.role === 'BL' ? <BLTeamDashboard teamExtras={<BHBLDashboard />} />
+    : isDesigner ? <DesignerDashboard /> : <BHBLDashboard />;
+  // Boxes built in Admin → Custom Boxes sit under every role's dashboard.
+  return <>{main}<CustomBoxes /></>;
 }

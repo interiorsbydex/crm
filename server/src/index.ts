@@ -51,6 +51,7 @@ import { scheduleClientTuesdayDigest, clientTuesdayDigestWorker } from './jobs/c
 import { projectsRouter } from './routes/projects.js';
 import { filesRouter } from './routes/files.js';
 import { configRouter } from './routes/config.js';
+import { customBoxesRouter } from './routes/customBoxes.js';
 import { collectionsRouter } from './routes/collections.js';
 import { npsRouter } from './routes/nps.js';
 import { dataQualityRouter } from './routes/dataQuality.js';
@@ -143,6 +144,7 @@ app.use('/api/accept-invite', acceptInviteRouter);
 app.use('/api/calls', callsStandaloneRouter);
 app.use('/api/quotes', quotesRouter);
 app.use('/api/config', configRouter);
+app.use('/api/custom-boxes', customBoxesRouter);
 
 // Leads CRUD
 app.use('/api/leads', leadsRouter);

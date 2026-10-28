@@ -31,6 +31,7 @@ import {
 import { mountVersionedConfig, plainMessage } from '../lib/versionedConfig.js';
 import { automationsConfig, AUTOMATION_EVENTS, CC_ROLES } from '../lib/automations.js';
 import { dashboardLayoutsConfig } from '../lib/dashboardLayouts.js';
+import { customBoxesConfig, BOX_MEASURES, BOX_SPLITS, BOX_ROLES, BOX_STAGES, BOX_STATUSES } from '../lib/customBoxes.js';
 import { permissionsConfig, PERMISSIONS } from '../lib/permissions.js';
 import { checklistsConfig, CHECKLIST_NAMES, BUILT_IN_ITEMS } from '../lib/checklists.js';
 import { leadRoutingConfig } from '../lib/leadRouting.js';
@@ -1093,6 +1094,12 @@ mountVersionedConfig(adminRouter, '/automations', automationsConfig, async () =>
 // ── Dashboards (Admin → Dashboards) ───────────────────────────────────────────
 // Hidden tiles, tile order within sections and tile names, per role's dashboard.
 mountVersionedConfig(adminRouter, '/dashboards', dashboardLayoutsConfig);
+
+// ── Custom boxes (Admin → Custom Boxes) ───────────────────────────────────────
+// Boxes the Branch Head builds from a menu and puts on a role's dashboard (lib/customBoxes.ts).
+mountVersionedConfig(adminRouter, '/custom-boxes', customBoxesConfig, async () => ({
+  catalog: { measures: BOX_MEASURES, splits: BOX_SPLITS, roles: BOX_ROLES, stages: BOX_STAGES, statuses: BOX_STATUSES },
+}));
 
 // ── Permissions (Admin → Permissions) ─────────────────────────────────────────
 // Which roles may do each action; roles can only be switched off/on among those
