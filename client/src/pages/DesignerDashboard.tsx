@@ -394,7 +394,7 @@ export default function DesignerDashboard({ designerId, designerName }: { design
       </div>
 
       {/* BL's selected-designer view already has the shared feed in its parent. */}
-      {!designerId && <TileGroup dashboard="designer"><Tile id="designer.announcements"><DashboardContent embedded /></Tile></TileGroup>}
+      {!designerId && <TileGroup dashboard="designer"><Tile id="designer.announcements"><DashboardContent embedded title={L('designer.announcements', 'Announcements and inspiration')} /></Tile></TileGroup>}
 
       {loading && (
         <div className="space-y-6">

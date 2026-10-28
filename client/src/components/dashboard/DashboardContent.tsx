@@ -74,7 +74,7 @@ function ContentCard({ item }: { item: DashboardContentItem }) {
   );
 }
 
-export default function DashboardContent({ embedded = false }: { embedded?: boolean } = {}) {
+export default function DashboardContent({ embedded = false, title = 'Announcements and inspiration' }: { embedded?: boolean; title?: string } = {}) {
   const [items, setItems] = useState<DashboardContentItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -117,7 +117,7 @@ export default function DashboardContent({ embedded = false }: { embedded?: bool
     <section className={`${embedded ? '' : 'px-3 sm:px-6 pt-4'} min-w-0 max-w-7xl mx-auto [overflow-wrap:anywhere]`} data-testid="dashboard-content" aria-labelledby="dashboard-content-heading">
       <div className="flex min-w-0 items-end justify-between gap-3 mb-3">
         <div className="min-w-0">
-          <h3 id="dashboard-content-heading" className="font-bold text-stone-900">Announcements and inspiration</h3>
+          <h3 id="dashboard-content-heading" className="font-bold text-stone-900">{title}</h3>
           <p className="text-xs text-stone-400 mt-0.5">Shared by the admin team</p>
         </div>
       </div>

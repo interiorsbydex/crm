@@ -117,6 +117,8 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       // DESIGN_IN_PROGRESS/HANDED_OVER stages) without a separate endpoint.
       excludeStages,
       hasUnresolvedSlaBreach,
+      // flagged=true: only leads with an open (not yet resolved) attention flag.
+      flagged,
       // Dashboard drill-through: the ownership scope the dashboard counted,
       // not the wider "which leads may I open" scope.
       mine,
@@ -174,6 +176,7 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       where.stage = { ...(where.stage ?? {}), notIn: ['HANDED_OVER', 'DESIGN_IN_PROGRESS', 'ONBOARDING'] };
       where.slaBreaches = { some: { resolvedAt: null } };
     }
+    if (flagged === 'true') where.attentionFlags = { some: { resolvedAt: null } };
     // G2: new filter params
     if (projectType) where.projectType = projectType;
     if (location) where.location = { contains: location, mode: 'insensitive' };

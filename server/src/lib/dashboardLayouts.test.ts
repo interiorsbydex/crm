@@ -14,7 +14,7 @@ describe('dashboard layouts', () => {
     for (const layout of Object.values(defaultDashboardLayouts())) expect(layout).toEqual({ order: [], hidden: [], labels: {} });
   });
   it('accepts a layout and fills in dashboards not mentioned', async () => {
-    const v = await dashboardLayoutsConfig.spec.validate({ bh: { order: ['bh.npsScore'], hidden: ['bh.poProgress'], labels: { 'bh.salesPipeline': 'Total Pipeline' } } });
+    const v = await dashboardLayoutsConfig.spec.validate({ bh: { order: ['bh.npsScore'], hidden: ['bh.obProgress'], labels: { 'bh.salesPipeline': 'Total Pipeline' } } });
     expect(v.bh.labels['bh.salesPipeline']).toBe('Total Pipeline');
     expect(v.designer).toEqual({ order: [], hidden: [], labels: {} });
   });

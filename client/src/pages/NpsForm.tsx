@@ -27,17 +27,13 @@ export default function NpsForm() {
         setStage(data.stage ?? '');
         if (data.alreadySubmitted) { setState('already_done'); return; }
 
-        // Auto-submit if ?score=N is in the URL
+        // A score in the link (?score=N) is only pre-selected: nothing is saved
+        // until the client presses "Confirm my rating", so a mail scanner or an
+        // accidental click on the email cannot record a score.
         const scoreParam = searchParams.get('score');
         const preScore = scoreParam !== null ? parseInt(scoreParam, 10) : null;
-        if (preScore !== null && preScore >= 0 && preScore <= 10) {
-          setSelected(preScore);
-          setState('form');
-          // Small delay so user sees their selection before submitting
-          setTimeout(() => submitScore(preScore), 600);
-        } else {
-          setState('form');
-        }
+        if (preScore !== null && preScore >= 0 && preScore <= 10) setSelected(preScore);
+        setState('form');
       })
       .catch(() => setState('error'));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -145,7 +141,7 @@ export default function NpsForm() {
                 {Array.from({ length: 11 }, (_, i) => (
                   <button
                     key={i}
-                    onClick={() => { setSelected(i); submitScore(i); }}
+                    onClick={() => setSelected(i)}
                     disabled={state === 'submitting'}
                     className={`w-9 h-9 rounded-xl text-sm font-bold transition-all duration-150 ${scoreColor(i, selected)} ${state === 'submitting' ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
                   >
@@ -158,6 +154,14 @@ export default function NpsForm() {
                 <span>Very likely</span>
               </div>
             </div>
+
+            <button
+              onClick={() => selected !== null && submitScore(selected)}
+              disabled={selected === null || state === 'submitting'}
+              className="mt-5 w-full rounded-xl bg-brand-500 text-white font-semibold py-2.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {selected === null ? 'Pick a number to rate us' : `Confirm my rating (${selected})`}
+            </button>
 
             {state === 'submitting' && (
               <p className="text-center text-sm text-gray-400 mt-4 animate-pulse">Saving your rating…</p>

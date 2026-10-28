@@ -27,8 +27,6 @@ export const DASHBOARD_TILES: DashboardTileDef[] = [
   { id: 'bh.npsScore', dashboard: 'bh', section: 'Key numbers', label: 'NPS Score' },
   { id: 'bh.obProgress', dashboard: 'bh', section: 'Progress', label: 'OB Progress' },
   { id: 'bh.revenueGenerated', dashboard: 'bh', section: 'Progress', label: 'Revenue Generated' },
-  { id: 'bh.poProgress', dashboard: 'bh', section: 'Progress', label: 'PO Progress' },
-  { id: 'bh.estimatedIncentive', dashboard: 'bh', section: 'Progress', label: 'Estimated Incentive' },
   { id: 'bh.npsByStage', dashboard: 'bh', section: 'Client satisfaction', label: 'Client Satisfaction by Stage' },
   { id: 'bh.pipelineFunnel', dashboard: 'bh', section: 'Charts', label: 'Pipeline Funnel' },
   { id: 'bh.leadSources', dashboard: 'bh', section: 'Charts', label: 'Lead Sources' },
@@ -47,7 +45,6 @@ export const DASHBOARD_TILES: DashboardTileDef[] = [
   { id: 'bl.phaseLoad', dashboard: 'bl', section: 'Delivery', label: 'Phase Load' },
   { id: 'bl.needsAttentionList', dashboard: 'bl', section: 'Delivery', label: 'Needs Attention (projects list)' },
   { id: 'bl.collectionsDue', dashboard: 'bl', section: 'Delivery', label: 'Collections Due' },
-  { id: 'bl.sitePulse', dashboard: 'bl', section: 'Delivery', label: 'Site & Service Pulse' },
   // Business Lead — team panel
   { id: 'blTeam.announcements', dashboard: 'blTeam', section: 'Top', label: 'Announcements & design inspiration' },
   { id: 'blTeam.teamTable', dashboard: 'blTeam', section: 'Team', label: 'Team by designer' },

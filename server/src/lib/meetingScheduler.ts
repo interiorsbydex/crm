@@ -17,7 +17,7 @@ import { supabaseAdmin } from './supabase.js';
 import type { EmailAttachment } from './email.js';
 import { recalculateMilestones } from './milestones.js';
 import { computeAutoRatingFromMode } from '../services/intentScoring.js';
-import { getModeRatings } from './meetingSettings.js';
+import { getModeRatings, getMeetingSettings } from './meetingSettings.js';
 import { sendSms } from '../services/smsService.js';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { isAutomationOn } from './automations.js';
@@ -194,10 +194,12 @@ export async function runMeetingScheduledSideEffects(params: MeetingScheduledSid
     const attachmentsHtml = emailAttachments.length
       ? `<p><strong>Attachments:</strong> ${emailAttachments.length} file(s) attached to this email.</p>`
       : '';
+    // Show the name Admin → Meetings gives the type ("Virtual"), not its code.
+    const modeLabel = (await getMeetingSettings()).modes[mode as keyof Awaited<ReturnType<typeof getMeetingSettings>>['modes']]?.label ?? mode;
     const rendered = await renderMailTemplate('MEETING_CONFIRMATION', {
       clientName: lead.name,
       type: ppNumber ? `PP${ppNumber}` : type,
-      mode,
+      mode: modeLabel,
       scheduledAt: meetingDateStr,
       designerName: designer?.name ?? 'Your Designer',
       attachmentsHtml,

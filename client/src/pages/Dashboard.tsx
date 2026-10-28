@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Phone, RefreshCw, CheckCircle2, Wrench } from 'lucide-react';
+import { Phone, RefreshCw, CheckCircle2 } from 'lucide-react';
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -253,8 +253,8 @@ function BHDashboard({ data }: { data: DashboardData }) {
         </Tile>
       </TileGroup>
 
-      {/* Row 1b – OB Progress + Revenue Generated (live data) + PO Progress + Incentive (pending) */}
-      <TileGroup dashboard="bh" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Row 1b – OB Progress + Revenue Generated (live data) */}
+      <TileGroup dashboard="bh" className="grid grid-cols-2 gap-4">
         {/* OB Progress: leads that completed OBM and are now in Design */}
         <Tile id="bh.obProgress">
         <div className="rounded-2xl p-5 shadow-warm-sm" style={{ background: 'white', border: '1px solid #EDE8E3' }}>
@@ -263,28 +263,12 @@ function BHDashboard({ data }: { data: DashboardData }) {
           <p className="text-[11px] text-stone-500 mt-0.5">{fmt(data.obProgress?.value ?? 0)} · leads in Design</p>
         </div>
         </Tile>
-        {/* PO Progress – Coming Soon */}
-        <Tile id="bh.poProgress">
-        <div className="rounded-2xl p-5 shadow-warm-sm flex flex-col items-center justify-center text-center min-h-[112px]" style={{ background: '#FAF6F2', border: '1px dashed #EDE8E3' }}>
-          <Wrench size={20} strokeWidth={1.5} className="text-stone-300 mb-1.5" />
-          <p className="text-sm font-semibold text-stone-400">{L('bh.poProgress', 'PO Progress')}</p>
-          <p className="text-[10px] text-stone-400 mt-0.5">Coming Soon</p>
-        </div>
-        </Tile>
         {/* Revenue Generated: total collected across all projects */}
         <Tile id="bh.revenueGenerated">
         <div className="rounded-2xl p-5 shadow-warm-sm" style={{ background: 'white', border: '1px solid #EDE8E3' }}>
           <p className="text-[10px] font-semibold text-stone-500 uppercase tracking-wide mb-1">{L('bh.revenueGenerated', 'Revenue Generated')}</p>
           <p className="text-2xl font-bold text-stone-900">{fmt(data.revenueGenerated ?? 0)}</p>
           <p className="text-[11px] text-stone-500 mt-0.5">Total collected</p>
-        </div>
-        </Tile>
-        {/* Estimated Incentive – Coming Soon */}
-        <Tile id="bh.estimatedIncentive">
-        <div className="rounded-2xl p-5 shadow-warm-sm flex flex-col items-center justify-center text-center min-h-[112px]" style={{ background: '#FAF6F2', border: '1px dashed #EDE8E3' }}>
-          <Wrench size={20} strokeWidth={1.5} className="text-stone-300 mb-1.5" />
-          <p className="text-sm font-semibold text-stone-400">{L('bh.estimatedIncentive', 'Estimated Incentive')}</p>
-          <p className="text-[10px] text-stone-400 mt-0.5">Coming Soon</p>
         </div>
         </Tile>
       </TileGroup>
@@ -696,17 +680,6 @@ function BLDashboard({ data }: { data: DashboardData }) {
               ))}
             </div>
           )}
-        </div>
-        </Tile>
-
-        {/* Site & service pulse — coming soon */}
-        <Tile id="bl.sitePulse">
-        <div className="bg-white rounded-2xl p-5 shadow-warm-sm flex flex-col items-center justify-center text-center min-h-[180px]" style={{ border: '1px solid #EDE8E3' }}>
-          <Wrench size={28} strokeWidth={1.5} className="text-stone-300 mb-2" />
-          <h3 className="font-semibold text-stone-700 mb-1">{L('bl.sitePulse', 'Site & Service Pulse')}</h3>
-          <p className="text-xs text-stone-400 max-w-[180px] leading-relaxed">
-            Service & Warranty module is coming in a future release.
-          </p>
         </div>
         </Tile>
       </TileGroup>

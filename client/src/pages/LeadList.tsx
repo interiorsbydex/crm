@@ -220,6 +220,7 @@ export default function LeadList() {
     slaBreached: searchParams.get('slaBreached') ?? '',
     excludeStages: searchParams.get('excludeStages') ?? '',
     hasUnresolvedSlaBreach: searchParams.get('hasUnresolvedSlaBreach') ?? '',
+    flagged: searchParams.get('flagged') ?? '',
     // From a dashboard number: only the leads that number counted (yours /
     // your team's), even when Lead Routing & Access lets you see more.
     mine: searchParams.get('mine') ?? '',
@@ -277,6 +278,7 @@ export default function LeadList() {
       if (filters.slaBreached) params.set('isSLABreached', filters.slaBreached);
       if (filters.excludeStages) params.set('excludeStages', filters.excludeStages);
       if (filters.hasUnresolvedSlaBreach) params.set('hasUnresolvedSlaBreach', filters.hasUnresolvedSlaBreach);
+      if (filters.flagged) params.set('flagged', filters.flagged);
       if (filters.mine) params.set('mine', filters.mine);
       if (sort) { params.set('sort', sort.by); params.set('dir', sort.dir); }
       const data = await api.get<{ leads: Lead[]; total: number; pages: number }>(`/leads?${params}`);
@@ -383,7 +385,7 @@ export default function LeadList() {
       originDateFrom: '', originDateTo: '', budgetMin: '', budgetMax: '',
       possessionDateFrom: '', possessionDateTo: '', intent: '',
       intentMin: '', intentMax: '', projectedObFrom: '', projectedObTo: '', slaBreached: '', excludeStages: '',
-      hasUnresolvedSlaBreach: '', mine: '',
+      hasUnresolvedSlaBreach: '', flagged: '', mine: '',
     });
     setPage(1);
   };
@@ -489,6 +491,13 @@ export default function LeadList() {
             <option value="ACTIVE">Active</option>
             <option value="ON_HOLD">On Hold</option>
             <option value="INACTIVE">Inactive</option>
+          </select>
+          {/* Flagged for attention */}
+          <select value={filters.flagged} onChange={(e) => setFilter('flagged', e.target.value)}
+            className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+            style={{ border: '1px solid #EDE8E3', background: filters.flagged ? '#FDF4EF' : '#FDFAF7' }}>
+            <option value="">All (flagged or not)</option>
+            <option value="true">Flagged only</option>
           </select>
           {/* Source */}
           <select value={filters.source} onChange={(e) => setFilter('source', e.target.value)}

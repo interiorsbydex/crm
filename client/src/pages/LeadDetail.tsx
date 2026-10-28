@@ -1799,9 +1799,10 @@ export default function LeadDetail() {
             <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
               <button
                 onClick={openFlagModal}
-                className="flex items-center gap-1.5 text-red-600 px-3 py-1.5 rounded-xl text-xs hover:bg-red-50 transition-colors font-medium"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs transition-colors font-medium ${(lead.attentionFlags?.length ?? 0) > 0 ? 'bg-red-600 text-white hover:bg-red-700' : 'text-red-600 hover:bg-red-50'}`}
                 style={{ border: '1px solid #fca5a5' }}
-              ><AlertTriangle size={13} strokeWidth={2} /> Flag</button>
+                title={(lead.attentionFlags?.length ?? 0) > 0 ? 'This lead has open flags — see them on the Overview tab' : 'Flag this lead for attention'}
+              ><AlertTriangle size={13} strokeWidth={2} /> {(lead.attentionFlags?.length ?? 0) > 0 ? `Flagged (${lead.attentionFlags!.length})` : 'Flag'}</button>
               <button
                 onClick={() => handleTabChange('activity')}
                 className="flex items-center gap-1.5 text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"
