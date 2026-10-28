@@ -171,6 +171,13 @@ export const MAIL_TEMPLATES: MailTemplateDef[] = [
 <p>We'd love to know: on a scale of <strong>0–10</strong>, how likely are you to recommend us to a friend or family?</p>
 <p style="text-align:center;margin:24px 0;">{{scoreLinksHtml}}</p>
 <p style="text-align:center;font-size:12px;color:#9ca3af;">0 = Not at all likely &nbsp;&nbsp;&nbsp; 10 = Extremely likely</p>
+<div style="margin:20px 0;padding:14px 16px;background:#faf7f4;border-radius:8px;font-size:13px;line-height:1.5;color:#374151;">
+<p style="margin:0 0 10px;"><strong>What the scores mean</strong></p>
+<p style="margin:0 0 10px;"><strong>10 – Excellent</strong><br/>All requirements were clearly understood, communication was seamless, and the proposal aligned perfectly with my expectations.</p>
+<p style="margin:0 0 10px;"><strong>9 – Very Good</strong><br/>My requirements were well understood, and the communication and proposal were clear, with only minor gaps.</p>
+<p style="margin:0 0 10px;"><strong>8 – Good</strong><br/>The overall experience was satisfactory, but there is some room for improvement in requirement understanding, communication, or coordination.</p>
+<p style="margin:0;"><strong>Below 8 – Needs Improvement</strong><br/>The experience did not fully meet my expectations, and improvements are needed in understanding my requirements, communication, or coordination.</p>
+</div>
 <p>Or tap here to open the survey: <a href="{{ratingUrl}}" style="color:#d95f32">{{ratingUrl}}</a></p>
 <p>Thank you for trusting us with your space!<br/><em>Team Interiors by DeX</em></p>`,
   },
