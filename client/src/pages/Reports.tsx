@@ -328,7 +328,8 @@ export default function Reports() {
   const setLoading = (key: string) =>
     setR((prev) => ({ ...prev, [key]: { data: prev[key]?.data ?? null, loading: true } }));
 
-  const fetchAll = useCallback(async () => {
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const fetchAll = useCallback(async (background = false) => {
     const qs = buildQS();
     const qsStr = qs ? '?' + qs : '';
     const endpoints = [
@@ -337,8 +338,11 @@ export default function Reports() {
       'meeting_performance', 'conversion', 'bl_performance', 'sales_cycle',
       'lead_aging', 'timeline_performance',
     ].filter((ep) => !((isDesigner || isBL) && (ep === 'bl_performance' || ep === 'conversion')));
-    endpoints.forEach((ep) => setLoading(ep));
-    if (isDesigner) setLoading('designer_incentive');
+    // A quiet refresh keeps the numbers on screen instead of flashing the loading state.
+    if (!background) {
+      endpoints.forEach((ep) => setLoading(ep));
+      if (isDesigner) setLoading('designer_incentive');
+    }
     const requests: Promise<void>[] = endpoints.map(async (ep) => {
         try {
           const res = await api.get<{ data: any }>(`/reports/${ep}${qsStr}`);
@@ -365,11 +369,28 @@ export default function Reports() {
       })());
     }
     await Promise.allSettled(requests);
+    setLastUpdated(new Date());
   }, [buildQS, isDesigner, isBL]);
 
   useEffect(() => {
     if (preset !== 'custom') fetchAll();
   }, [preset, fetchAll]);
+
+  // Keep the reports current as leads move, like the Dashboard: re-check every
+  // 30 seconds and whenever this tab is brought back to the front.
+  useEffect(() => {
+    if (preset === 'custom' && !(customStart && customEnd)) return;
+    const poll = () => { void fetchAll(true); };
+    const interval = setInterval(poll, 30000);
+    const onVisibility = () => { if (document.visibilityState === 'visible') poll(); };
+    window.addEventListener('focus', poll);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', poll);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [fetchAll, preset, customStart, customEnd]);
   // With a custom date range, changing a filter reloads straight away once both dates are set.
   useEffect(() => {
     if (preset === 'custom' && customStart && customEnd) fetchAll();
@@ -450,6 +471,10 @@ export default function Reports() {
       <div className="shrink-0 bg-white border-b border-gray-100 px-5 py-2.5 flex items-center gap-3 flex-wrap">
         <div>
           <p className="text-base font-semibold text-gray-900">Reports</p>
+          <p className="text-[11px] text-gray-400" data-testid="reports-updated">
+            {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })} · refreshes every 30 seconds` : 'Loading…'}
+            {' '}<button type="button" onClick={() => { void fetchAll(); }} className="text-brand-600 hover:underline">Refresh now</button>
+          </p>
         </div>
         <div className="flex items-center gap-1 ml-3">
           {([['month', 'This Month'], ['quarter', 'This Quarter'], ['lfy', 'Last Financial Year']] as [Preset, string][]).map(([p, label]) => (
@@ -472,6 +497,12 @@ export default function Reports() {
             Custom Range
           </button>
         </div>
+        <p className="basis-full text-[11px] text-gray-500" data-testid="reports-range-note">
+          Most reports here count leads <strong>created</strong> {(() => {
+            const r = preset === 'custom' ? { startDate: customStart, endDate: customEnd } : getPresetRange(preset);
+            return r.startDate && r.endDate ? `between ${r.startDate} and ${r.endDate}` : 'in the period you choose';
+          })()}. A lead created earlier will not appear here even if you move it today. Choose a wider period or a Custom Range to include it. Leads marked as Test Leads are never counted.
+        </p>
         {preset === 'custom' && (
           <div className="flex items-center gap-2">
             <DateInput value={customStart}
@@ -482,7 +513,7 @@ export default function Reports() {
               onChange={setCustomEnd}
               className="border border-gray-200 rounded-lg px-2 py-1 text-xs" />
             <button
-              onClick={fetchAll}
+              onClick={() => { void fetchAll(); }}
               disabled={!customStart || !customEnd}
               className="text-xs font-medium bg-brand-500 text-white px-3 py-1.5 rounded-lg hover:bg-brand-600 disabled:opacity-40 transition-colors"
             >

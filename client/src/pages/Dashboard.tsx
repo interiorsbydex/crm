@@ -695,13 +695,14 @@ function BHBLDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const user = getStoredUser();
   const isBH = user?.role === 'BRANCH_HEAD' || user?.role === 'ADMIN';
 
   const load = useCallback((background = false) => {
     if (!background) setLoading(true);
     return api.get<DashboardData>('/dashboard')
-      .then((d) => { setData(d); setError(null); })
+      .then((d) => { setData(d); setError(null); setLastUpdated(new Date()); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
@@ -733,6 +734,10 @@ function BHBLDashboard() {
           <h1 className="text-2xl font-extrabold text-stone-900 tracking-tight">Dashboard</h1>
           <p className="text-sm text-stone-400 mt-0.5">
             {isBH ? 'Branch overview — all teams' : `Your scope · ${user?.name ?? ''}`}
+          </p>
+          <p className="text-[11px] text-stone-400 mt-0.5" data-testid="dashboard-updated">
+            {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })} · refreshes every 30 seconds` : 'Loading…'}
+            {' '}<button type="button" onClick={() => { void load(true); }} className="text-brand-600 hover:underline">Refresh now</button>
           </p>
         </div>
         <Link
