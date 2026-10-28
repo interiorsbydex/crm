@@ -38,7 +38,7 @@ describe.skipIf(!safeDb)('welcome mail wording and checklist placement', () => {
     const { html } = await pdObWelcomeMailTemplate('Priya Sharma', {
       paymentValue: 150000, projectValue: 1800000,
       obMeetingScheduledAt: new Date('2026-11-14T06:00:00Z'), // 11:30 am IST
-      obMeetingLocation: "Client's Site", notes: 'Keep the balcony plan ready.\nBring <ID>.',
+      obMeetingLocation: "Client's Site", notes: 'Keep the balcony plan ready.\nBring <ID>.', furnitureValue: 250000,
     });
     expect(html).toContain('Priya Sharma');
     expect(html).toContain('₹1,50,000');

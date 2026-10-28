@@ -30,7 +30,7 @@ export const MAIL_TEMPLATES: MailTemplateDef[] = [
     code: 'PD_OB_WELCOME',
     label: 'Welcome mail (PD (Pitch Discussion) → Onboarding)',
     description: 'Sent when the PD→OB checklist is completed and the lead moves to Onboarding.',
-    placeholders: ['clientName', 'paymentValue', 'projectValue', 'obMeetingAt', 'obMeetingLocation', 'notesHtml'],
+    placeholders: ['clientName', 'paymentValue', 'projectValue', 'furnitureValue', 'designerName', 'leadRef', 'obMeetingAt', 'obMeetingLocation', 'notesHtml'],
     defaultSubject: 'Welcome Onboard — Interiors by DeX',
     defaultHtml: `<p>Dear {{clientName}},</p>
 <p>Congratulations and welcome aboard! We're thrilled to begin your interior design journey with <strong>Interiors by DeX</strong>.</p>
@@ -274,6 +274,7 @@ const PLACEHOLDER_HELP: Record<string, { meaning: string; example: string }> = {
   clientName: { meaning: "The client's name, as saved on the lead.", example: 'Priya Sharma' },
   paymentValue: { meaning: 'The payment amount received, from the "Payment value" box on the PD→OB checklist. Shown in rupees.', example: '₹1,50,000' },
   projectValue: { meaning: 'The total project value, from the "Project value" box on the PD→OB checklist. Shown in rupees.', example: '₹18,00,000' },
+  furnitureValue: { meaning: 'The furniture value, from the "Furniture value" box on the PD→OB checklist. Shown in rupees.', example: '₹2,50,000' },
   obMeetingAt: { meaning: 'The date and time of the onboarding meeting, from the "OB meeting date/time" box on the PD→OB checklist.', example: '14 Nov 2026, 11:30 am' },
   obMeetingLocation: { meaning: 'Where the onboarding meeting takes place, from the "OB meeting location" box on the PD→OB checklist.', example: "Client's Site" },
   notesHtml: { meaning: 'The notes typed when the lead was reactivated, shown as their own paragraph. If there are none, nothing appears.', example: 'Note: We are ready to restart.' },

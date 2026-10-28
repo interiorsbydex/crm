@@ -1132,7 +1132,7 @@ mountVersionedConfig(adminRouter, '/meetings', meetingSettingsConfig);
 
 // ── Welcome Mail (Admin → Welcome Mail) ───────────────────────────────────────
 // Which of the lead's files go out with the PD→OB welcome mail (lib/welcomeMailFiles.ts).
-mountVersionedConfig(adminRouter, '/welcome-mail-files', welcomeMailFilesConfig, async () => ({ catalog: { kinds: WELCOME_FILE_KINDS.map(({ key, label }) => ({ key, label })) } }));
+mountVersionedConfig(adminRouter, '/welcome-mail-files', welcomeMailFilesConfig, async () => ({ catalog: { kinds: WELCOME_FILE_KINDS.map(({ key, label }) => ({ key, label })), documentTypes: (await getDocumentTypes()).filter((t) => t.active).map(({ key, label }) => ({ key, label })) } }));
 
 // ── In-app alerts (Admin → In-app Alerts) ────────────────────────────────────
 // Which roles see each type of in-app alert (lib/notifications.ts).

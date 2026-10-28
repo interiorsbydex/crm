@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { prisma } from './prisma.js';
 import { supabaseAdmin } from './supabase.js';
 import { ConfigError, describeIssues, versionedConfig } from './versionedConfig.js';
+import { getDocumentTypes, toStoredFileType } from './documentTypes.js';
 import type { EmailAttachment } from './email.js';
 
 export const WELCOME_FILE_KINDS = [
@@ -16,17 +17,25 @@ export const WELCOME_FILE_KINDS = [
   { key: 'pitch', label: 'Pitch presentation', fileTypes: ['PITCH_PRESENTATION', 'FINAL_PITCH_PRESENTATION'] },
 ] as const;
 export type WelcomeFileKey = (typeof WELCOME_FILE_KINDS)[number]['key'];
-export interface WelcomeMailFiles { attach: Record<WelcomeFileKey, boolean> }
+export interface WelcomeMailFiles {
+  attach: Record<WelcomeFileKey, boolean>;
+  /** Any other document types (Admin → Document Types, including her own) to attach too. */
+  extraTypes: string[];
+  /** What to do when a ticked kind has no file on the lead: leave it out, or stop and tell the sender. */
+  whenMissing: 'skip' | 'block';
+}
 
 const LEAD_FILES_BUCKET = 'crm-lead-files';
 const MAX_TOTAL = 20 * 1024 * 1024;
 
 export function defaultWelcomeMailFiles(): WelcomeMailFiles {
-  return { attach: { payment: true, obQuote: true, pitch: true } };
+  return { attach: { payment: true, obQuote: true, pitch: true }, extraTypes: [], whenMissing: 'skip' };
 }
 
 const schema = z.object({
   attach: z.object({ payment: z.boolean(), obQuote: z.boolean(), pitch: z.boolean() }).strict(),
+  extraTypes: z.array(z.string()).max(30),
+  whenMissing: z.enum(['skip', 'block']),
 }).strict();
 
 export const welcomeMailFilesConfig = versionedConfig<WelcomeMailFiles>({
@@ -34,11 +43,14 @@ export const welcomeMailFilesConfig = versionedConfig<WelcomeMailFiles>({
   action: 'WELCOME_MAIL_FILES',
   noun: 'the welcome mail files',
   defaults: defaultWelcomeMailFiles,
-  merge: (saved) => ({ attach: { ...defaultWelcomeMailFiles().attach, ...(saved?.attach ?? {}) } }),
-  validate: (raw) => {
+  merge: (saved) => ({ ...defaultWelcomeMailFiles(), ...(saved ?? {}), attach: { ...defaultWelcomeMailFiles().attach, ...(saved?.attach ?? {}) } }),
+  validate: async (raw) => {
     const parsed = schema.safeParse(raw);
     if (!parsed.success) throw new ConfigError(400, 'The welcome mail files could not be saved', describeIssues(parsed.error.issues, {}));
-    return parsed.data;
+    const inUse = new Set((await getDocumentTypes()).filter((t) => t.active).map((t) => t.key));
+    const bad = parsed.data.extraTypes.filter((k) => !inUse.has(k));
+    if (bad.length) throw new ConfigError(400, 'The welcome mail files could not be saved', bad.map((k) => `"${k}" is not a document type that is in use`));
+    return { ...parsed.data, extraTypes: [...new Set(parsed.data.extraTypes)] };
   },
 });
 
@@ -47,10 +59,11 @@ const MIME: Record<string, string> = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 };
 
-/** The newest file of each ticked kind, with the file's own name. */
+/** The newest file of each ticked kind, with the file's own name, and the kinds with no file. */
 export async function welcomeMailFileRefs(leadId: string) {
-  const { attach } = await welcomeMailFilesConfig.get();
+  const { attach, extraTypes } = await welcomeMailFilesConfig.get();
   const refs: { kind: string; fileName: string; storagePath: string }[] = [];
+  const missing: string[] = [];
   for (const kind of WELCOME_FILE_KINDS) {
     if (!attach[kind.key]) continue;
     const file = await prisma.leadFile.findFirst({
@@ -58,14 +71,30 @@ export async function welcomeMailFileRefs(leadId: string) {
       orderBy: { createdAt: 'desc' },
       select: { fileName: true, storagePath: true },
     });
-    if (file) refs.push({ kind: kind.label, ...file });
+    if (file) refs.push({ kind: kind.label, ...file }); else missing.push(kind.label);
   }
-  return refs;
+  if (extraTypes.length) {
+    const labels = new Map((await getDocumentTypes()).map((t) => [t.key, t.label]));
+    for (const key of extraTypes) {
+      const stored = toStoredFileType(key);
+      const file = await prisma.leadFile.findFirst({
+        where: { leadId, fileType: stored.fileType as any, ...(stored.customType ? { customType: stored.customType } : {}) },
+        orderBy: { createdAt: 'desc' },
+        select: { fileName: true, storagePath: true },
+      });
+      const label = labels.get(key) ?? key;
+      if (file) refs.push({ kind: label, ...file }); else missing.push(label);
+    }
+  }
+  return { refs, missing };
 }
 
 /** The same files, downloaded and ready to attach. Refuses if they total more than 20 MB. */
 export async function welcomeMailFileAttachments(leadId: string): Promise<EmailAttachment[]> {
-  const refs = await welcomeMailFileRefs(leadId);
+  const { refs, missing } = await welcomeMailFileRefs(leadId);
+  if (missing.length && (await welcomeMailFilesConfig.get()).whenMissing === 'block') {
+    throw new ConfigError(400, `Cannot send welcome mail — upload on the Files tab: ${missing.join(', ')}. (Admin → Welcome Mail can change this rule.)`);
+  }
   if (!refs.length) return [];
   if (!supabaseAdmin) throw new ConfigError(500, 'Document storage is not configured');
   const out: EmailAttachment[] = [];

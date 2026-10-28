@@ -50,13 +50,20 @@ const istDateTime = (d: Date | null | undefined) => (d
  */
 export async function pdObWelcomeMailTemplate(
   clientName: string,
-  checklist?: { paymentValue: number | null; projectValue: number | null; obMeetingScheduledAt: Date | null; obMeetingLocation: string | null; notes: string | null } | null,
+  checklist?: { paymentValue: number | null; projectValue: number | null; furnitureValue?: number | null; obMeetingScheduledAt: Date | null; obMeetingLocation: string | null; notes: string | null } | null,
+  lead?: { leadId: string; assignedDesignerId: string | null } | null,
 ): Promise<{ subject: string; html: string }> {
+  const designer = lead?.assignedDesignerId
+    ? await prisma.user.findUnique({ where: { id: lead.assignedDesignerId }, select: { name: true } })
+    : null;
   const notes = checklist?.notes?.trim();
   return renderMailTemplate('PD_OB_WELCOME', {
     clientName,
     paymentValue: rupees(checklist?.paymentValue),
     projectValue: rupees(checklist?.projectValue),
+    furnitureValue: rupees(checklist?.furnitureValue),
+    designerName: escapeHtml(designer?.name ?? ''),
+    leadRef: escapeHtml(lead?.leadId ?? ''),
     obMeetingAt: istDateTime(checklist?.obMeetingScheduledAt),
     obMeetingLocation: escapeHtml(checklist?.obMeetingLocation ?? ''),
     notesHtml: notes ? `<p><strong>Notes:</strong> ${escapeHtml(notes).replace(/\r?\n/g, '<br/>')}</p>` : '',
@@ -202,8 +209,8 @@ pdObChecklistRouter.get('/', verifyToken, async (req, res) => {
       hasFinalPitchPresentationFile: !!finalPitchPresentationFile,
       hasGeneratedQuotationFile: !!generatedQuoteRecord || !!generatedQuotationFile,
       welcomeMailTemplate: {
-        ...await pdObWelcomeMailTemplate(lead.name, checklist),
-        attachmentNames: (await welcomeMailFileRefs(leadId)).map((f) => f.fileName),
+        ...await pdObWelcomeMailTemplate(lead.name, checklist, lead),
+        attachmentNames: (await welcomeMailFileRefs(leadId)).refs.map((f) => f.fileName),
       },
     });
   } catch (err: any) {
@@ -382,7 +389,7 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
     }
 
     const { subject, html } = req.body as { subject?: string; html?: string };
-    const template = await pdObWelcomeMailTemplate(lead.name, checklist);
+    const template = await pdObWelcomeMailTemplate(lead.name, checklist, lead);
     const emailPayload = { to: lead.email!, subject: subject?.trim() || template.subject, html: html?.trim() || template.html };
 
     // Batch 12c: no more auto-send here — this now only saves a persisted,
@@ -405,7 +412,7 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
     });
   } catch (err: any) {
     console.error('[pd-ob-checklist:send-welcome-mail]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err instanceof ConfigError ? err.status : 500).json({ error: err.message });
   }
 });
 

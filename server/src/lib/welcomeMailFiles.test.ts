@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
-  config: undefined as any,
+  configs: {} as Record<string, any>,
   files: {} as Record<string, { fileName: string; storagePath: string }>,
   blobs: {} as Record<string, Buffer>,
 }));
@@ -19,9 +19,10 @@ vi.mock('./supabase.js', () => ({
 }));
 vi.mock('./prisma.js', () => ({
   prisma: {
-    assignmentConfig: { findUnique: async () => (state.config ? { value: state.config } : null) },
+    assignmentConfig: { findUnique: async ({ where }: any) => (state.configs[where.key] ? { value: state.configs[where.key] } : null) },
     leadFile: {
       findFirst: async ({ where }: any) => {
+        if (typeof where.fileType === 'string') return state.files[where.customType ? `custom:${where.customType}` : where.fileType] ?? null;
         const types: string[] = where.fileType.in;
         const hit = types.find((t) => state.files[t]);
         return hit ? state.files[hit] : null;
@@ -32,7 +33,7 @@ vi.mock('./prisma.js', () => ({
 import { welcomeMailFileAttachments, welcomeMailFileRefs, welcomeMailFilesConfig } from './welcomeMailFiles.js';
 
 beforeEach(() => {
-  state.config = undefined;
+  state.configs = {};
   state.files = {
     PAYMENT_SCREENSHOT: { fileName: 'payment.png', storagePath: 'lead1/MQL/1_payment.png' },
     OB_QUOTE: { fileName: 'quote.pdf', storagePath: 'lead1/MQL/2_quote.pdf' },
@@ -54,8 +55,8 @@ describe('welcome mail files', () => {
   });
 
   it('leaves out a kind Annie switched off', async () => {
-    state.config = { value: { attach: { payment: true, obQuote: false, pitch: true } }, revision: 1, updatedAt: '', updatedById: 'x' };
-    expect((await welcomeMailFileRefs('lead1')).map((f) => f.fileName)).toEqual(['payment.png', 'pitch.pdf']);
+    state.configs.welcome_mail_files_v1 = { value: { attach: { payment: true, obQuote: false, pitch: true }, extraTypes: [], whenMissing: 'skip' }, revision: 1, updatedAt: '', updatedById: 'x' };
+    expect((await welcomeMailFileRefs('lead1')).refs.map((f) => f.fileName)).toEqual(['payment.png', 'pitch.pdf']);
   });
 
   it('leaves out a kind the lead has no file for, without failing', async () => {
@@ -72,5 +73,20 @@ describe('welcome mail files', () => {
 
   it('refuses a settings value that is not three on/off choices', async () => {
     await expect(Promise.resolve().then(() => welcomeMailFilesConfig.spec.validate({ attach: { payment: true } }))).rejects.toThrow(/could not be saved/);
+    await expect(Promise.resolve().then(() => welcomeMailFilesConfig.spec.validate({ attach: { payment: true, obQuote: true, pitch: true }, extraTypes: ['NOT_A_TYPE'], whenMissing: 'skip' }))).rejects.toThrow(/could not be saved/);
+  });
+
+  it('attaches any other document type she ticks, including her own custom ones', async () => {
+    state.configs.document_types_v1 = { overrides: { builtIn: {}, custom: [{ key: 'site_photos', label: 'Site photos', pdfOnly: false, active: true }] }, revision: 1 };
+    state.configs.welcome_mail_files_v1 = { value: { attach: { payment: false, obQuote: false, pitch: false }, extraTypes: ['custom:site_photos'], whenMissing: 'skip' }, revision: 1, updatedAt: '', updatedById: 'x' };
+    state.files['custom:site_photos'] = { fileName: 'site.jpg', storagePath: 'lead1/MQL/4_site.jpg' };
+    state.blobs['crm-lead-files/lead1/MQL/4_site.jpg'] = Buffer.from('jpg');
+    expect((await welcomeMailFileAttachments('lead1')).map((f) => f.filename)).toEqual(['site.jpg']);
+  });
+
+  it('stops and names the missing file when she chose to be strict', async () => {
+    state.configs.welcome_mail_files_v1 = { value: { attach: { payment: true, obQuote: true, pitch: true }, extraTypes: [], whenMissing: 'block' }, revision: 1, updatedAt: '', updatedById: 'x' };
+    delete state.files.PITCH_PRESENTATION;
+    await expect(welcomeMailFileAttachments('lead1')).rejects.toThrow(/upload on the Files tab: Pitch presentation/);
   });
 });
