@@ -20,6 +20,7 @@ import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
+import { welcomeMailFileAttachments, welcomeMailFileRefs } from '../lib/welcomeMailFiles.js';
 import { saveDraft, registerOnSentHandler } from '../lib/emailService.js';
 import { assignLeadToDesigner, incrementAssigned } from '../services/assignmentService.js';
 import {
@@ -35,9 +36,31 @@ import { recalculateMilestones } from '../lib/milestones.js';
 
 export const pdObChecklistRouter = Router({ mergeParams: true });
 
-/** Admin-configurable default (see lib/mailTemplates.ts, code PD_OB_WELCOME). */
-export async function pdObWelcomeMailTemplate(clientName: string): Promise<{ subject: string; html: string }> {
-  return renderMailTemplate('PD_OB_WELCOME', { clientName });
+const escapeHtml = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const rupees = (n: number | null | undefined) => (n == null ? '' : `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`);
+const istDateTime = (d: Date | null | undefined) => (d
+  ? d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+  : '');
+
+/**
+ * Admin-configurable default (see lib/mailTemplates.ts, code PD_OB_WELCOME),
+ * filled with the client's name and what is on the checklist so far. Anything
+ * not entered yet is left blank; the sender sees the result on the review
+ * screen before it goes out.
+ */
+export async function pdObWelcomeMailTemplate(
+  clientName: string,
+  checklist?: { paymentValue: number | null; projectValue: number | null; obMeetingScheduledAt: Date | null; obMeetingLocation: string | null; notes: string | null } | null,
+): Promise<{ subject: string; html: string }> {
+  const notes = checklist?.notes?.trim();
+  return renderMailTemplate('PD_OB_WELCOME', {
+    clientName,
+    paymentValue: rupees(checklist?.paymentValue),
+    projectValue: rupees(checklist?.projectValue),
+    obMeetingAt: istDateTime(checklist?.obMeetingScheduledAt),
+    obMeetingLocation: escapeHtml(checklist?.obMeetingLocation ?? ''),
+    notesHtml: notes ? `<p><strong>Notes:</strong> ${escapeHtml(notes).replace(/\r?\n/g, '<br/>')}</p>` : '',
+  });
 }
 
 /**
@@ -178,7 +201,10 @@ pdObChecklistRouter.get('/', verifyToken, async (req, res) => {
       hasWelcomeMailScreenshot: !!welcomeMailScreenshot,
       hasFinalPitchPresentationFile: !!finalPitchPresentationFile,
       hasGeneratedQuotationFile: !!generatedQuoteRecord || !!generatedQuotationFile,
-      welcomeMailTemplate: await pdObWelcomeMailTemplate(lead.name),
+      welcomeMailTemplate: {
+        ...await pdObWelcomeMailTemplate(lead.name, checklist),
+        attachmentNames: (await welcomeMailFileRefs(leadId)).map((f) => f.fileName),
+      },
     });
   } catch (err: any) {
     console.error('[pd-ob-checklist:get]', err.message);
@@ -356,7 +382,7 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
     }
 
     const { subject, html } = req.body as { subject?: string; html?: string };
-    const template = await pdObWelcomeMailTemplate(lead.name);
+    const template = await pdObWelcomeMailTemplate(lead.name, checklist);
     const emailPayload = { to: lead.email!, subject: subject?.trim() || template.subject, html: html?.trim() || template.html };
 
     // Batch 12c: no more auto-send here — this now only saves a persisted,
@@ -367,9 +393,12 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
     // completePdObWelcomeSent() below (registered as the onSentAction) —
     // never at draft-creation time.
     const draftKey = `${leadId}::PD_OB_WELCOME`;
+    // The payment screenshot, OB quotation and pitch presentation from the Files
+    // tab go along, as chosen in Admin → Welcome Mail.
+    const attachments = await welcomeMailFileAttachments(leadId);
     await saveDraft(draftKey, emailPayload.subject, emailPayload.html, {
       leadId, type: 'PD_OB_WELCOME', onSentAction: 'PD_OB_WELCOME',
-    });
+    }, attachments);
 
     res.json({
       pendingMail: { draftKey, type: 'PD_OB_WELCOME', to: emailPayload.to, subject: emailPayload.subject, html: emailPayload.html },

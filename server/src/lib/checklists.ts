@@ -73,6 +73,7 @@ export const BUILT_IN_ITEMS: Record<ChecklistKind, BuiltInItem[]> = {
     ...OBM_DOC_ITEMS.map((k) => ({ key: k, label: OBM_DOC_LABELS[k] })),
     ...OBM_TIMELINE_FIELDS.map((k) => ({ key: k, label: OBM_TIMELINE_LABELS[k] })),
     { key: 'nps', label: 'NPS survey email sent or customer response received', lockedReason: 'NPS at onboarding is mandatory (client decision).' },
+    { key: 'welcomeMailScreenshot', label: 'Welcome mail approval screenshot (Files tab)' },
     { key: 'clientConfirmed', label: 'Client confirmed' },
   ],
   dip: [
@@ -88,8 +89,14 @@ export interface CustomItem { key: string; label: string; kind: CustomKind; docT
 export interface ChecklistSettings { optional: string[]; custom: CustomItem[]; labels?: Record<string, string> }
 export type ChecklistsConfig = Record<ChecklistKind, ChecklistSettings>;
 
+/**
+ * The client's approval of the welcome mail can only be uploaded once they have
+ * agreed, which happens after the PD→OB welcome mail goes out. So it is asked
+ * for on the OB→OBM checklist by default, and is optional on PD→OB. Both can be
+ * changed in Admin → Checklists.
+ */
 export function defaultChecklists(): ChecklistsConfig {
-  return Object.fromEntries(CHECKLIST_KINDS.map((k) => [k, { optional: [], custom: [] }])) as unknown as ChecklistsConfig;
+  return Object.fromEntries(CHECKLIST_KINDS.map((k) => [k, { optional: k === 'pdOb' ? ['welcomeMailScreenshot'] : [], custom: [] }])) as unknown as ChecklistsConfig;
 }
 
 const customSchema = z.object({
@@ -196,6 +203,7 @@ async function builtInMet(kind: ChecklistKind, leadId: string, row: Record<strin
       ...Object.fromEntries(OBM_DOC_ITEMS.map((k) => [k, !!row[`${k}Done`]])),
       ...Object.fromEntries(OBM_TIMELINE_FIELDS.map((k) => [k, !!row[k]])),
       nps,
+      welcomeMailScreenshot: await fileExists(leadId, ['WELCOME_MAIL_SCREENSHOT']),
       clientConfirmed: !!row.clientConfirmed,
     };
   }

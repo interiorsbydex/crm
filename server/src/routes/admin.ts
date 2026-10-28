@@ -31,6 +31,7 @@ import {
   DOCUMENT_TYPES_CONFIG_KEY, documentTypeOverridesSchema, loadDocumentTypeOverrides, resolveDocumentTypes,
 } from '../lib/documentTypes.js';
 import { mountVersionedConfig, plainMessage } from '../lib/versionedConfig.js';
+import { welcomeMailFilesConfig, WELCOME_FILE_KINDS } from '../lib/welcomeMailFiles.js';
 import { automationsConfig, AUTOMATION_EVENTS, CC_ROLES } from '../lib/automations.js';
 import { dashboardLayoutsConfig } from '../lib/dashboardLayouts.js';
 import { customBoxesConfig, BOX_MEASURES, BOX_SPLITS, BOX_ROLES, BOX_STAGES, BOX_STATUSES } from '../lib/customBoxes.js';
@@ -1128,6 +1129,10 @@ mountVersionedConfig(adminRouter, '/lead-routing', leadRoutingConfig);
 // ── Meetings (Admin → Meetings) ───────────────────────────────────────────────
 // Meeting type names, availability, intent stars and mandatory details (lib/meetingSettings.ts).
 mountVersionedConfig(adminRouter, '/meetings', meetingSettingsConfig);
+
+// ── Welcome Mail (Admin → Welcome Mail) ───────────────────────────────────────
+// Which of the lead's files go out with the PD→OB welcome mail (lib/welcomeMailFiles.ts).
+mountVersionedConfig(adminRouter, '/welcome-mail-files', welcomeMailFilesConfig, async () => ({ catalog: { kinds: WELCOME_FILE_KINDS.map(({ key, label }) => ({ key, label })) } }));
 
 // ── In-app alerts (Admin → In-app Alerts) ────────────────────────────────────
 // Which roles see each type of in-app alert (lib/notifications.ts).

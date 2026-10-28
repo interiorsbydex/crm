@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { Gift, MessageCircle } from 'lucide-react';
 import { api } from '../lib/api';
 import MailTemplateAttachmentEditor, { type MailTemplateAttachment } from '../components/MailTemplateAttachmentEditor';
+import MailTemplateEditor from '../components/MailTemplateEditor';
 import { getStoredUser } from '../lib/auth';
 
 interface SLAConfig {
@@ -41,6 +42,7 @@ interface MailTemplate {
   label: string;
   description: string;
   placeholders: string[];
+  placeholderHelp?: { name: string; meaning: string; example: string }[];
   subject: string;
   html: string;
   attachments?: MailTemplateAttachment[];
@@ -537,7 +539,7 @@ export default function Settings() {
             <div>
               <h2 className="text-sm font-semibold text-gray-900">Mail templates</h2>
               <p className="text-xs text-gray-400 mt-0.5">
-                Default subject &amp; body for every system-triggered email. Editable per-send in the modal too — this sets what shows up pre-filled.
+                The wording of every email the CRM sends by itself. This is what shows up pre-filled; the person sending can still change it for one email. Open <strong>Show the blanks you can use</strong> under any email to see what each blank means and add it with one click.
               </p>
             </div>
           </div>
@@ -557,27 +559,14 @@ export default function Settings() {
                     </span>
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5">{t.description}</p>
-                  <p className="text-[10px] text-gray-400 mt-1">
-                    Placeholders: {t.placeholders.map((p) => `{{${p}}}`).join(', ')}
-                  </p>
                 </div>
-                <div>
-                  <label className="block text-[11px] font-medium text-gray-500 mb-1">Subject</label>
-                  <input
-                    value={edit.subject}
-                    onChange={(e) => setMailEdit((m) => ({ ...m, [t.code]: { ...edit, subject: e.target.value } }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-medium text-gray-500 mb-1">Body (HTML)</label>
-                  <textarea
-                    value={edit.html}
-                    onChange={(e) => setMailEdit((m) => ({ ...m, [t.code]: { ...edit, html: e.target.value } }))}
-                    rows={5}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-300"
-                  />
-                </div>
+                <MailTemplateEditor
+                  subject={edit.subject}
+                  html={edit.html}
+                  help={t.placeholderHelp ?? t.placeholders.map((name) => ({ name, meaning: 'Filled in automatically when the mail is sent.', example: '' }))}
+                  disabled={savingMail === t.code}
+                  onChange={(next) => setMailEdit((m) => ({ ...m, [t.code]: { ...edit, ...next } }))}
+                />
                 {t.code === 'OB_OBM_WELCOME' && (
                   <MailTemplateAttachmentEditor
                     attachments={edit.attachments ?? t.attachments ?? []}

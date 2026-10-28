@@ -7,6 +7,7 @@ import { logActivity } from '../lib/activityLog.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 import { getDocumentTypes, toStoredFileType, documentTypeKey } from '../lib/documentTypes.js';
+import { checklistsConfig } from '../lib/checklists.js';
 import {
   FUNNEL_ORDER, fileRequirementsForFolder, getEffectiveStageRules, isRequirementMet, type StageRequirement,
 } from '../config/stageRequirements.js';
@@ -224,13 +225,17 @@ filesRouter.get('/requirements', verifyToken, async (req, res) => {
       return;
     }
     const rules = await getEffectiveStageRules();
+    const checklists = await checklistsConfig.get();
     const folders: Record<string, { label: string; satisfied: boolean; source: 'stageRule' | 'checklist' }[]> = {};
     for (const stage of FUNNEL_ORDER.slice(0, -1)) {
       const items: { label: string; satisfied: boolean; source: 'stageRule' | 'checklist'; req: StageRequirement }[] = [];
       for (const r of fileRequirementsForFolder(stage, rules)) items.push({ label: r.label, satisfied: false, source: 'stageRule', req: r });
-      // The PD→OB checklist's "Share welcome mail" needs the client's approval screenshot.
-      if (stage === 'PROPOSAL_DISCUSSION') {
-        items.push({ label: 'Welcome Mail Approval Screenshot (PD→OB checklist)', satisfied: false, source: 'checklist', req: { type: 'file', fileType: 'WELCOME_MAIL_SCREENSHOT', stages: [], label: '' } });
+      // The client's approval screenshot belongs to whichever checklist Admin → Checklists
+      // asks for it on: the OB→OBM checklist by default, or PD→OB if made required there.
+      for (const [kind, folder, name] of [['pdOb', 'PROPOSAL_DISCUSSION', 'PD→OB'], ['obObm', 'ONBOARDING', 'OB→OBM']] as const) {
+        if (stage === folder && !checklists[kind].optional.includes('welcomeMailScreenshot')) {
+          items.push({ label: `Welcome Mail Approval Screenshot (${name} checklist)`, satisfied: false, source: 'checklist', req: { type: 'file', fileType: 'WELCOME_MAIL_SCREENSHOT', stages: [], label: '' } });
+        }
       }
       folders[stage] = await Promise.all(items.map(async ({ req: r, ...item }) => ({ ...item, satisfied: await isRequirementMet(r, lead) })));
     }

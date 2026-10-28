@@ -47,7 +47,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
   const [hasWelcomeMailScreenshot, setHasWelcomeMailScreenshot] = useState(false);
   const [hasFinalPitchPresentationFile, setHasFinalPitchPresentationFile] = useState(false);
   const [hasGeneratedQuotationFile, setHasGeneratedQuotationFile] = useState(false);
-  const [template, setTemplate] = useState({ subject: '', html: '' });
+  const [template, setTemplate] = useState<{ subject: string; html: string; attachmentNames?: string[] }>({ subject: '', html: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
@@ -75,7 +75,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
         hasWelcomeMailScreenshot: boolean;
         hasFinalPitchPresentationFile: boolean;
         hasGeneratedQuotationFile: boolean;
-        welcomeMailTemplate: { subject: string; html: string };
+        welcomeMailTemplate: { subject: string; html: string; attachmentNames?: string[] };
       }>(`/leads/${leadId}/pd-ob-checklist`);
       setChecklist(data.checklist);
       setHasPaymentScreenshot(data.hasPaymentScreenshot);
@@ -379,7 +379,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
             {saving ? 'Saving…' : 'Save details'}
           </button>
           <button
-            onClick={() => setShowMailModal(true)}
+            onClick={() => { void load().then(() => setShowMailModal(true)); }}
             disabled={saving || blockingMissing.length > 0 || !welcomeNotifyClient}
             title={
               !welcomeNotifyClient
@@ -410,6 +410,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           title="Share welcome mail"
           defaultSubject={template.subject}
           defaultHtml={template.html}
+          attachmentNames={template.attachmentNames ?? []}
           recipientLabel={clientEmail ?? '(no email on file)'}
           sending={sending}
           onSend={sendWelcomeMail}

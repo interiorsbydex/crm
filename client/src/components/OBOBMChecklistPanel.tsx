@@ -443,6 +443,17 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
         )}
       </div>
 
+      {/* The client's approval of the welcome mail (uploaded on the Files tab) */}
+      {(() => {
+        const shot = status?.items.find((i) => i.key === 'welcomeMailScreenshot');
+        if (!shot) return null;
+        return (
+          <div className={`mb-4 text-xs px-3 py-2 rounded-lg ${shot.met ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+            {shot.met ? '✓' : '⚠'} {itemLabel(status, 'welcomeMailScreenshot', 'Welcome mail approval screenshot')} {shot.met ? 'uploaded' : '— upload in Files tab'} {optionalTag('welcomeMailScreenshot')}
+          </div>
+        );
+      })()}
+
       {/* Client confirmation — required before the OBM mail can be sent */}
       <div className="flex items-center justify-between mb-4 px-3 py-2 rounded-lg bg-gray-50">
         <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">

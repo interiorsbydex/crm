@@ -30,11 +30,13 @@ export const MAIL_TEMPLATES: MailTemplateDef[] = [
     code: 'PD_OB_WELCOME',
     label: 'Welcome mail (PD (Pitch Discussion) → Onboarding)',
     description: 'Sent when the PD→OB checklist is completed and the lead moves to Onboarding.',
-    placeholders: ['clientName'],
+    placeholders: ['clientName', 'paymentValue', 'projectValue', 'obMeetingAt', 'obMeetingLocation', 'notesHtml'],
     defaultSubject: 'Welcome Onboard — Interiors by DeX',
     defaultHtml: `<p>Dear {{clientName}},</p>
 <p>Congratulations and welcome aboard! We're thrilled to begin your interior design journey with <strong>Interiors by DeX</strong>.</p>
-<p>Our onboarding team will be in touch shortly with the next steps, including your onboarding meeting.</p>
+<p>We have received your payment of <strong>{{paymentValue}}</strong> towards your project value of <strong>{{projectValue}}</strong>.</p>
+{{notesHtml}}
+<p>Our team will be in touch with you for your onboarding meeting on <strong>{{obMeetingAt}}</strong> at <strong>{{obMeetingLocation}}</strong>.</p>
 <p>Thank you for choosing us — we can't wait to bring your space to life!<br/><em>Team Interiors by DeX</em></p>`,
   },
   {
@@ -262,6 +264,56 @@ export const MAIL_TEMPLATES: MailTemplateDef[] = [
   },
 ];
 
+/**
+ * Plain-English help for every placeholder, shown beside each mail template in
+ * Settings so nobody has to read the code. `example` is what a client would see.
+ * A placeholder missing here still works; it just shows no help.
+ */
+export interface PlaceholderHelp { name: string; meaning: string; example: string }
+const PLACEHOLDER_HELP: Record<string, { meaning: string; example: string }> = {
+  clientName: { meaning: "The client's name, as saved on the lead.", example: 'Priya Sharma' },
+  paymentValue: { meaning: 'The payment amount received, from the "Payment value" box on the PD→OB checklist. Shown in rupees.', example: '₹1,50,000' },
+  projectValue: { meaning: 'The total project value, from the "Project value" box on the PD→OB checklist. Shown in rupees.', example: '₹18,00,000' },
+  obMeetingAt: { meaning: 'The date and time of the onboarding meeting, from the "OB meeting date/time" box on the PD→OB checklist.', example: '14 Nov 2026, 11:30 am' },
+  obMeetingLocation: { meaning: 'Where the onboarding meeting takes place, from the "OB meeting location" box on the PD→OB checklist.', example: "Client's Site" },
+  notesHtml: { meaning: 'The notes typed when the lead was reactivated, shown as their own paragraph. If there are none, nothing appears.', example: 'Note: We are ready to restart.' },
+  'PD_OB_WELCOME.notesHtml': { meaning: 'The notes typed in the "Notes" box on the PD→OB checklist, shown as their own paragraph. If there are no notes, nothing appears (not even a gap).', example: 'Notes: Please keep the balcony measurements ready.' },
+  stageName: { meaning: 'The name of the milestone the survey is about.', example: 'Design Freeze' },
+  ratingUrl: { meaning: 'The web address of the survey page. Use it inside a link.', example: 'https://…' },
+  scoreLinksHtml: { meaning: 'The row of clickable 0 to 10 score buttons.', example: '0 1 2 3 … 10 as buttons' },
+  stageType: { meaning: 'What the call is about.', example: 'Design Discussion' },
+  scheduledDate: { meaning: 'The date of the call.', example: '14 Nov 2026' },
+  scheduledTime: { meaning: 'The time of the call.', example: '11:30 am' },
+  dueDate: { meaning: 'The date of the follow-up.', example: '14 Nov 2026' },
+  dueTime: { meaning: 'The time of the follow-up.', example: '11:30 am' },
+  agendaHtml: { meaning: 'The agenda or notes for the call or follow-up, shown as their own paragraph. Empty when there are none.', example: 'Agenda: Review the quotation.' },
+  itemsHtml: { meaning: "The list of the client's meetings and tasks for the week.", example: 'A list of dates, times and meeting names' },
+  timeline: { meaning: 'A table of the project milestones and their dates.', example: 'A small table: Milestone / Date' },
+  type: { meaning: 'The kind of meeting.', example: 'Site Visit' },
+  meetingType: { meaning: 'The kind of meeting.', example: 'Site Visit' },
+  mode: { meaning: 'How the meeting happens (visit, virtual, and so on).', example: 'Virtual' },
+  scheduledAt: { meaning: 'The date and time of the meeting.', example: '14 Nov 2026, 11:30 am' },
+  designerName: { meaning: "The name of the lead's designer.", example: 'Rahul Menon' },
+  attachmentsHtml: { meaning: 'A short list of the files attached to the mail. Empty when nothing is attached.', example: 'Attached: Floor plan.pdf' },
+  mom: { meaning: 'The minutes of the meeting, as typed when the meeting was marked Completed.', example: 'We agreed on the layout and the next steps.' },
+  externalNotes: { meaning: 'The notes meant for the client, typed when the call was logged. Internal notes are never included.', example: 'Discussed the kitchen layout.' },
+  followUpDate: { meaning: 'The date and time of the next follow-up.', example: '16 Nov 2026, 4:00 pm' },
+  kind: { meaning: 'What kind of next step it is (call, meeting or task).', example: 'call' },
+  details: { meaning: 'The details of the next step, as typed by the team.', example: 'Share the revised quotation.' },
+  reason: { meaning: 'The reason entered by the team.', example: 'Client travelling' },
+  revivalDate: { meaning: 'The date the project is expected to restart.', example: '10 Jan 2027' },
+  externalNotesHtml: { meaning: 'The notes meant for the client, shown as their own paragraph. Empty when there are none.', example: 'Note: We will call you after the festival.' },
+  feedbackUrl: { meaning: 'The web address of the feedback form. Use it inside a link.', example: 'https://…' },
+  reasonHtml: { meaning: 'The reason for closing the lead, shown as its own paragraph. Empty when none was given.', example: 'Reason: Budget' },
+  leadRef: { meaning: "The lead's reference number.", example: 'IBD-1042' },
+};
+export function placeholderHelp(names: string[], code?: string): PlaceholderHelp[] {
+  return names.map((name) => {
+    const h = PLACEHOLDER_HELP[`${code}.${name}`] ?? PLACEHOLDER_HELP[name];
+    return { name, meaning: h?.meaning ?? 'Filled in automatically when the mail is sent.', example: h?.example ?? '' };
+  });
+}
+
 const MAIL_TEMPLATE_CONFIG_KEY = 'mail_template_overrides';
 
 type Overrides = Record<string, { subject?: string; html?: string; attachments?: MasterMailAttachment[] }>;
@@ -272,13 +324,14 @@ export async function getMailTemplateOverrides(): Promise<Overrides> {
 }
 
 /** Full list with each template's effective (override-aware) default subject/html, unfilled placeholders intact. */
-export async function getEffectiveMailTemplates(): Promise<(MailTemplateDef & { subject: string; html: string; attachments: MasterMailAttachment[] })[]> {
+export async function getEffectiveMailTemplates(): Promise<(MailTemplateDef & { subject: string; html: string; attachments: MasterMailAttachment[]; placeholderHelp: PlaceholderHelp[] })[]> {
   const overrides = await getMailTemplateOverrides();
   return MAIL_TEMPLATES.map((t) => ({
     ...t,
     subject: overrides[t.code]?.subject?.trim() || t.defaultSubject,
     html: overrides[t.code]?.html?.trim() || t.defaultHtml,
     attachments: overrides[t.code]?.attachments ?? [],
+    placeholderHelp: placeholderHelp(t.placeholders, t.code),
   }));
 }
 
