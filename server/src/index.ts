@@ -52,6 +52,7 @@ import { projectsRouter } from './routes/projects.js';
 import { filesRouter } from './routes/files.js';
 import { configRouter } from './routes/config.js';
 import { customBoxesRouter } from './routes/customBoxes.js';
+import { ensureAdditiveSchema } from './lib/ensureSchema.js';
 import { collectionsRouter } from './routes/collections.js';
 import { npsRouter } from './routes/nps.js';
 import { dataQualityRouter } from './routes/dataQuality.js';
@@ -239,6 +240,8 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
+// Make sure the additive columns/table this version needs exist before taking requests.
+await ensureAdditiveSchema();
 app.listen(PORT, async () => {
   // Cycle maths (targets, credits) follow the start day in CRM Settings.
   startCycleScheduleRefresh();
