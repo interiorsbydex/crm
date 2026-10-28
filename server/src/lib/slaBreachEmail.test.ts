@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from './prisma.js';
 import { emailSlaBreach } from './slaBreachEmail.js';
 import { automationsConfig, defaultAutomations } from './automations.js';
+import { slaBreachEmail } from './email.js';
 
 const safeDb = /@localhost:\d+\//.test(process.env.DATABASE_URL ?? '');
 
@@ -34,6 +35,11 @@ describe.skipIf(!safeDb)('SLA breach email', () => {
     expect(new Set(sent).size).toBe(sent.length);
     const logs = await prisma.emailLog.findMany({ where: { leadId: lead, type: 'SLA_BREACH' } });
     expect(logs.length).toBe(sent.length);
+  });
+  it('links to the lead when the app address is known, and still reads fine without it', () => {
+    const base = { recipientName: 'A', leadId: 'X1', leadName: 'Lead', ruleLabel: 'Rule' };
+    expect(slaBreachEmail({ ...base, link: 'https://crm.example/leads/abc' }).html).toContain('<a href="https://crm.example/leads/abc">Open lead X1</a>');
+    expect(slaBreachEmail(base).html).not.toContain('<a href');
   });
   it('sends nothing when switched off in Admin → Automations', async () => {
     const value = { ...defaultAutomations(), TEAM_SLA_BREACH: { enabled: false, channels: { email: true }, cc: [] } };

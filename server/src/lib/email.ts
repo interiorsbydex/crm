@@ -160,6 +160,8 @@ export function slaBreachEmail(opts: {
   leadId: string;
   leadName: string;
   ruleLabel: string;
+  /** Address of the lead in the CRM (left out when the app's public address is not configured). */
+  link?: string;
 }): EmailPayload {
   return {
     to: '',
@@ -167,7 +169,7 @@ export function slaBreachEmail(opts: {
     html: `<p>Hi ${opts.recipientName},</p>
 <p>Lead <strong>${opts.leadId} — ${opts.leadName}</strong> has missed a response-time target:</p>
 <p><strong>${opts.ruleLabel}</strong></p>
-<p>Please open the lead and take action. You will not be emailed about this breach again.</p>
+${opts.link ? `<p><a href="${opts.link}">Open lead ${opts.leadId}</a></p>` : ''}<p>Please open the lead and take action. You will not be emailed about this breach again.</p>
 <p><em>Team Interiors by DeX CRM</em></p>`,
   };
 }

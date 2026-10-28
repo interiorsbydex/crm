@@ -1,5 +1,6 @@
 import { prisma } from './prisma.js';
 import { sendEmail, slaBreachEmail } from './email.js';
+import { resolveBaseUrl } from './baseUrl.js';
 import { isAutomationOn } from './automations.js';
 
 /**
@@ -17,7 +18,8 @@ export async function emailSlaBreach(lead: { id: string; leadId: string; assigne
   const sent: string[] = [];
   for (const r of new Map(recipients.map((x) => [x.email, x])).values()) {
     if (!r.email) continue;
-    const payload = slaBreachEmail({ recipientName: r.name, leadId: lead.leadId, leadName: full?.name ?? '', ruleLabel });
+    const base = resolveBaseUrl();
+    const payload = slaBreachEmail({ recipientName: r.name, leadId: lead.leadId, leadName: full?.name ?? '', ruleLabel, link: base ? `${base}/leads/${lead.id}` : undefined });
     payload.to = r.email;
     try {
       await sendEmail(payload);
