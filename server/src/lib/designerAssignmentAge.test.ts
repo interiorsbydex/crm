@@ -19,6 +19,13 @@ describe('Designer age uses reliable assignment events, not lead origin', () => 
     ], 'one');
     expect(dates.get('lead')).toEqual(at(20));
   });
+  it('counts a direct assignment from the Business Lead (it records the designer id)', () => {
+    const dates = designerAssignmentDates([
+      { leadId: 'lead', createdAt: at(10), meta: { assignedDesignerId: 'cre' } },
+      { leadId: 'lead', createdAt: at(12), meta: { designerName: 'Test Designer 1', assignedById: 'bl', assignedDesignerId: 'one' } },
+    ], 'one');
+    expect(dates.get('lead')).toEqual(at(12));
+  });
   it('does not reuse an old date across a later unidentifiable assignment', () => {
     const dates = designerAssignmentDates([
       { leadId: 'lead', createdAt: at(10), meta: { assignedDesignerId: 'one' } },

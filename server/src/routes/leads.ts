@@ -301,7 +301,7 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
           orderBy: { createdAt: 'asc' },
         }),
         user.role === 'DESIGNER' ? prisma.activityLog.findMany({
-          where: { leadId: { in: leadIds }, action: { in: ['LEAD_CREATED', 'DESIGNER_ASSIGNED'] } },
+          where: { leadId: { in: leadIds }, action: { in: ['LEAD_CREATED', 'DESIGNER_ASSIGNED', 'DIRECT_ASSIGNMENT'] } },
           select: { leadId: true, createdAt: true, meta: true },
           orderBy: { createdAt: 'asc' },
         }) : Promise.resolve([]),
@@ -1789,6 +1789,8 @@ leadsRouter.patch('/:id/assign-direct', verifyToken, requirePermission('LEAD_ASS
     await logActivity(user.id, 'DIRECT_ASSIGNMENT', id, {
       designerName: designer.name,
       assignedById: user.id,
+      // Ageing for the designer starts here.
+      assignedDesignerId: designerId,
     });
 
     res.json({ lead: updated });
