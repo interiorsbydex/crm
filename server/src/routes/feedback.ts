@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { createNotification } from '../lib/notifications.js';
+import { getNpsSurveyWording } from '../lib/mailTemplates.js';
 
 export const feedbackRouter = Router();
 
@@ -24,7 +25,9 @@ feedbackRouter.get('/nps/:token', async (req, res) => {
       res.json({ alreadySubmitted: true, clientName: nps.lead.name });
       return;
     }
-    res.json({ alreadySubmitted: false, clientName: nps.lead.name, stage: nps.stage });
+    // The page asks the same question, with the same score meanings, as the email (Admin → Mail Templates).
+    const wording = await getNpsSurveyWording();
+    res.json({ alreadySubmitted: false, clientName: nps.lead.name, stage: nps.stage, ...wording });
   } catch (err: any) {
     console.error('[feedback:nps:get]', err.message);
     res.status(500).json({ error: err.message });

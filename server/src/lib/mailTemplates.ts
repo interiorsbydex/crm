@@ -375,6 +375,46 @@ function fillPlaceholders(template: string, vars: Record<string, string>): strin
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '');
 }
 
+function htmlToText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
+    .replace(/,(?=[A-Za-z])/g, ', ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export interface NpsSurveyWording { question: string | null; scoreMeanings: { title: string; text: string }[] }
+
+/**
+ * The question and "What the scores mean" lines from an NPS email body, so the
+ * survey page asks exactly what the email asked (Admin → Mail Templates).
+ * Question: the paragraph that mentions the 0–10 scale. Meanings: the
+ * "<strong>title</strong><br/>text" paragraphs after "What the scores mean".
+ */
+export function extractNpsSurveyWording(html: string): NpsSurveyWording {
+  const paragraphs = [...html.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)].map((m) => m[1].trim());
+  const questionHtml = paragraphs.find((p) => /0\s*(?:–|—|-|&ndash;|&mdash;|to)\s*10/i.test(htmlToText(p)) && !/^0\s*=/.test(htmlToText(p)));
+  const scoreMeanings: { title: string; text: string }[] = [];
+  const start = paragraphs.findIndex((p) => /^what the scores mean$/i.test(htmlToText(p)));
+  if (start >= 0) {
+    for (const p of paragraphs.slice(start + 1)) {
+      const m = p.match(/^<strong>([\s\S]*?)<\/strong>\s*<br\s*\/?>([\s\S]*)$/i);
+      if (!m) break;
+      scoreMeanings.push({ title: htmlToText(m[1]), text: htmlToText(m[2]) });
+    }
+  }
+  return { question: questionHtml ? htmlToText(questionHtml) || null : null, scoreMeanings };
+}
+
+export async function getNpsSurveyWording(): Promise<NpsSurveyWording> {
+  const overrides = await getMailTemplateOverrides();
+  const def = MAIL_TEMPLATES.find((t) => t.code === 'NPS_SURVEY')!;
+  return extractNpsSurveyWording(overrides.NPS_SURVEY?.html?.trim() || def.defaultHtml);
+}
+
 /** Effective (override-aware) subject+html for one template, with `{{placeholders}}` filled from `vars`. */
 export async function renderMailTemplate(code: string, vars: Record<string, string>): Promise<{ subject: string; html: string }> {
   const def = MAIL_TEMPLATES.find((t) => t.code === code);

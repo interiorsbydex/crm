@@ -16,6 +16,9 @@ export default function NpsForm() {
   const [clientName, setClientName] = useState('');
   const [stage, setStage] = useState('');
   const [selected, setSelected] = useState<number | null>(null);
+  // Same question and score meanings as the email (Admin → Mail Templates); old wording if the template has none.
+  const [question, setQuestion] = useState<string | null>(null);
+  const [scoreMeanings, setScoreMeanings] = useState<{ title: string; text: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -25,6 +28,8 @@ export default function NpsForm() {
         if (data.error) { setState('error'); return; }
         setClientName(data.clientName ?? '');
         setStage(data.stage ?? '');
+        setQuestion(typeof data.question === 'string' && data.question ? data.question : null);
+        setScoreMeanings(Array.isArray(data.scoreMeanings) ? data.scoreMeanings : []);
         if (data.alreadySubmitted) { setState('already_done'); return; }
 
         // A score in the link (?score=N) is only pre-selected: nothing is saved
@@ -132,7 +137,7 @@ export default function NpsForm() {
                 </p>
               )}
               <p className="text-sm text-gray-600 leading-relaxed">
-                How likely are you to recommend <strong>Interiors by DeX</strong> to a friend or family member?
+                {question ?? <>How likely are you to recommend <strong>Interiors by DeX</strong> to a friend or family member?</>}
               </p>
             </div>
 
@@ -154,6 +159,17 @@ export default function NpsForm() {
                 <span>Very likely</span>
               </div>
             </div>
+
+            {scoreMeanings.length > 0 && (
+              <div className="mt-5 rounded-xl bg-[#faf7f4] px-4 py-3 text-xs leading-relaxed text-gray-700">
+                <p className="font-semibold mb-2">What the scores mean</p>
+                {scoreMeanings.map((m) => (
+                  <p key={m.title} className="mb-2 last:mb-0">
+                    <strong>{m.title}</strong><br />{m.text}
+                  </p>
+                ))}
+              </div>
+            )}
 
             <button
               onClick={() => selected !== null && submitScore(selected)}
