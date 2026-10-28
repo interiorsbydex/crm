@@ -29,9 +29,9 @@ interface Props {
 
 // Google review is never required; whether the other two are follows Admin → Checklists.
 const ITEMS = [
-  { key: 'cxApprovalReceived', label: 'Client approval received by email' },
-  { key: 'internalMailThreadCompleted', label: 'Internal email thread created' },
   { key: 'googleReviewReceived', label: 'Google review received' },
+  { key: 'internalMailThreadCompleted', label: 'Internal mail trigger' },
+  { key: 'cxApprovalReceived', label: 'Client mail approval' },
 ] as const;
 
 type ChecklistKey = typeof ITEMS[number]['key'];

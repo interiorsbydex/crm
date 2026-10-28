@@ -62,7 +62,7 @@ export const BUILT_IN_ITEMS: Record<ChecklistKind, BuiltInItem[]> = {
     { key: 'finalPitchPresentation', label: 'Final Pitch Presentation file (Files → PD or PP if skipping PD)' },
     { key: 'generatedQuotation', label: 'Generated Quotation (Quote Builder or Files → PP/PD)' },
     { key: 'paymentValue', label: 'Payment value' },
-    { key: 'projectValue', label: 'Project value (excl. furniture)' },
+    { key: 'projectValue', label: 'Project value' },
     { key: 'furnitureValue', label: 'Furniture value' },
     { key: 'obMeetingScheduledAt', label: 'OB meeting date/time' },
     { key: 'obMeetingLocation', label: 'OB meeting location' },
@@ -76,8 +76,8 @@ export const BUILT_IN_ITEMS: Record<ChecklistKind, BuiltInItem[]> = {
     { key: 'clientConfirmed', label: 'Client confirmed' },
   ],
   dip: [
-    { key: 'cxApprovalReceived', label: 'Client approval received by email' },
-    { key: 'internalMailThreadCompleted', label: 'Internal email thread created' },
+    { key: 'internalMailThreadCompleted', label: 'Internal mail trigger' },
+    { key: 'cxApprovalReceived', label: 'Client mail approval' },
     { key: 'paymentScreenshot', label: 'Payment screenshot (Files tab)', lockedReason: PAYMENT_LOCK },
   ],
 };

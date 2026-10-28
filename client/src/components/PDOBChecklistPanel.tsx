@@ -254,26 +254,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">{wording('onboarding.targetValue', 'Target value — total after discount, excluding GST (₹)')}</label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            disabled={!canEditTarget || saving}
-            value={form.targetValue}
-            onChange={(e) => setForm((f) => ({ ...f, targetValue: e.target.value }))}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:bg-gray-50"
-          />
-          <p className="mt-1 text-xs text-gray-500">{wording('onboarding.targetValueHelp', 'Updates the recorded amount used by booking reports and credits. Include furniture in this total; record the furniture breakup separately below.')}</p>
-          {canEditTarget && !isEditable && (
-            <button type="button" onClick={saveTarget} disabled={saving}
-              className="mt-2 rounded bg-brand-500 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
-              Save target value
-            </button>
-          )}
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">{itemLabel(status, 'projectValue', 'Project value excluding furniture (₹)')}{optionalTag('projectValue')}</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">{itemLabel(status, 'projectValue', 'Project value (₹)')}{optionalTag('projectValue')}</label>
           <input
             type="number"
             disabled={!isEditable || saving}
@@ -328,6 +309,26 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
               placeholder="e.g. DeX Experience Centre, Whitefield"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:bg-gray-50"
             />
+          )}
+        </div>
+        <div>
+          <label htmlFor={`pd-ob-target-value-${leadId}`} className="block text-xs font-medium text-gray-600 mb-1">{wording('onboarding.targetValue', 'Target Value (₹)')}</label>
+          <input
+            id={`pd-ob-target-value-${leadId}`}
+            type="number"
+            min="0"
+            step="0.01"
+            disabled={!canEditTarget || saving}
+            value={form.targetValue}
+            onChange={(e) => setForm((f) => ({ ...f, targetValue: e.target.value }))}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:bg-gray-50"
+          />
+          <p className="mt-1 text-xs text-gray-500">{wording('onboarding.targetValueHelp', 'Used to calculate credit points. Enter the total after discount, excluding GST, including furniture.')}</p>
+          {canEditTarget && !isEditable && (
+            <button type="button" onClick={saveTarget} disabled={saving}
+              className="mt-2 rounded bg-brand-500 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+              Save target value
+            </button>
           )}
         </div>
       </div>

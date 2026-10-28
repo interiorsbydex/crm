@@ -11,9 +11,9 @@ export const WORDING_KEYS: { key: string; where: string; text: string; long?: bo
   { key: 'app.name', where: 'App name (sidebar)', text: 'FYX' },
   { key: 'app.fullName', where: 'App name (sign-in page and browser tab)', text: 'FYX — For Your Xperience' },
   { key: 'title.DESIGN_TEAM_LEAD', where: 'Job title shown for the Design Team Lead designation', text: 'Design Team Lead' },
-  { key: 'onboarding.targetValue', where: 'PD → OB checklist: the agreed value field', text: 'Target value — total after discount, excluding GST (₹)' },
+  { key: 'onboarding.targetValue', where: 'PD → OB checklist: the agreed value field', text: 'Target Value (₹)' },
   { key: 'onboarding.targetValueHelp', where: 'PD → OB checklist: help under the agreed value', long: true,
-    text: 'Updates the recorded amount used by booking reports and credits. Include furniture in this total; record the furniture breakup separately below.' },
+    text: 'Used to calculate credit points. Enter the total after discount, excluding GST, including furniture.' },
   { key: 'dip.threadUrl', where: 'OBM → DIP checklist: link field', text: 'Internal Mail Thread URL' },
 ];
 const KEYS = new Set(WORDING_KEYS.map((w) => w.key));

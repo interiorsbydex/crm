@@ -38,8 +38,8 @@ describe("Annie's reported issues stay fixed", () => {
 
   it("#5 the DIP checklist uses Annie's wording and keeps Google review optional", () => {
     const labels = Object.fromEntries(BUILT_IN_ITEMS.dip.map((i) => [i.key, i.label]));
-    expect(labels.cxApprovalReceived).toBe('Client approval received by email');
-    expect(labels.internalMailThreadCompleted).toBe('Internal email thread created');
+    expect(labels.cxApprovalReceived).toBe('Client mail approval');
+    expect(labels.internalMailThreadCompleted).toBe('Internal mail trigger');
     expect(Object.keys(labels)).not.toContain('googleReviewReceived'); // never required
     expect(clientFile('components/DIPChecklistPanel.tsx')).toContain("{ key: 'googleReviewReceived', label: 'Google review received' }");
   });
