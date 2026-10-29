@@ -801,7 +801,7 @@ export default function Reports() {
           <Tile id="reports.monthlyTrend">
           <SectionCard
             title={reportLabel('reports.monthlyTrend', 'Monthly trend')}
-            subtitle="New leads created each month."
+            subtitle="New leads each month, by origin date (the day the lead came in)."
             onExport={() => doExport('monthly_trend')}
           >
             {r.monthly_trend?.loading ? <Loader /> : monthlyRaw.length === 0 ? <EmptyState msg="No monthly data" /> : (
@@ -829,7 +829,7 @@ export default function Reports() {
                       <thead>
                         <tr className="border-b border-gray-100">
                           <th className="text-left py-2 px-2 text-[10px] font-semibold text-gray-400 uppercase">Month</th>
-                          <th className="text-right py-2 px-2 text-[10px] font-semibold text-gray-400 uppercase">Leads created</th>
+                          <th className="text-right py-2 px-2 text-[10px] font-semibold text-gray-400 uppercase">Leads received</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
