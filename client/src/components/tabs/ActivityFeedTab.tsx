@@ -127,7 +127,7 @@ type FeedItem =
 
 // ── Sub-view type (for creation forms) ───────────────────────────────────────
 
-type SubView = 'log-call' | 'book-meeting' | 'add-task';
+type SubView = 'log-call' | 'book-meeting' | 'log-meeting' | 'add-task';
 
 // ── Inline CallCard (display-only, mirrors CallLogTab.CallCard) ───────────────
 
@@ -709,8 +709,10 @@ export default function ActivityFeedTab({
             onTasksChanged?.();
           }} />
         )}
-        {subView === 'book-meeting' && (
+        {(subView === 'book-meeting' || subView === 'log-meeting') && (
           <MeetingsTab
+            key={subView}
+            startWithLog={subView === 'log-meeting'}
             leadId={leadId}
             clientEmail={clientEmail}
             isLocked={isLocked}
@@ -800,6 +802,14 @@ export default function ActivityFeedTab({
               className="bg-white border border-brand-300 text-brand-600 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-brand-50 transition-colors"
             >
               📅 Book Meeting
+            </button>
+            <button
+              onClick={() => setSubView('log-meeting')}
+              data-testid="activity-log-meeting"
+              title="Record a meeting that has already happened"
+              className="bg-white border border-brand-300 text-brand-600 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-brand-50 transition-colors"
+            >
+              📝 Log Meeting
             </button>
             <button
               onClick={() => setSubView('add-task')}

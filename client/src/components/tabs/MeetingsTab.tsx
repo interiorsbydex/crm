@@ -42,9 +42,11 @@ interface Props {
   onMeetingCreated?: () => void;
   onMeetingCompleted?: (meetingType: string) => void;
   isLocked?: boolean;
+  /** Open with the Log Meeting form showing (from the Activity tab's Log Meeting button). */
+  startWithLog?: boolean;
 }
 
-export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onMeetingCompleted, isLocked }: Props) {
+export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onMeetingCompleted, isLocked, startWithLog }: Props) {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
   const [notifyClient, setNotifyClient] = useState(crmSettings().notifyClientByDefault);
 
   // Log form — a meeting that already happened, saved as completed (like Log Call)
-  const [showLogForm, setShowLogForm] = useState(false);
+  const [showLogForm, setShowLogForm] = useState(!!startWithLog);
   const [logForm, setLogForm] = useState({ type: '', mode: '', heldAt: '', location: '', mom: '', internalNotes: '' });
   const [logging, setLogging] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
