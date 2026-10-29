@@ -206,6 +206,8 @@ export default function LeadList() {
     status: searchParams.get('status') ?? '',
     designerId: searchParams.get('designerId') ?? '',
     allocatedToId: searchParams.get('allocatedToId') ?? '',
+    // From a Business Lead's dashboard viewed by the Branch Head: only that BL's team.
+    blId: searchParams.get('blId') ?? '',
     projectType: '',
     location: '',
     originDateFrom: '',
@@ -268,6 +270,7 @@ export default function LeadList() {
       if (filters.status) params.set('status', filters.status);
       if (filters.designerId) params.set('designerId', filters.designerId);
       if (filters.allocatedToId) params.set('allocatedToId', filters.allocatedToId);
+      if (filters.blId) params.set('blId', filters.blId);
       if (filters.projectType) params.set('projectType', filters.projectType);
       if (filters.location) params.set('location', filters.location);
       if (filters.originDateFrom) params.set('originDateFrom', filters.originDateFrom);
@@ -348,6 +351,7 @@ export default function LeadList() {
        if (filters.status) exportParams.set('status', filters.status);
        if (filters.designerId) exportParams.set('designerId', filters.designerId);
         if (filters.allocatedToId) exportParams.set('allocatedToId', filters.allocatedToId);
+        if (filters.blId) exportParams.set('blId', filters.blId);
        if (filters.projectType) exportParams.set('projectType', filters.projectType);
        if (filters.unassigned) exportParams.set('unassigned', filters.unassigned);
        if (filters.location) exportParams.set('location', filters.location);
@@ -391,7 +395,7 @@ export default function LeadList() {
 
   const clearFilters = () => {
     setFilters({
-      search: '', stage: '', source: '', status: '', designerId: '', allocatedToId: '', projectType: '', location: '',
+      search: '', stage: '', source: '', status: '', designerId: '', allocatedToId: '', blId: '', projectType: '', location: '',
       originDateFrom: '', originDateTo: '', budgetMin: '', budgetMax: '',
       possession: '', possessionDateFrom: '', possessionDateTo: '', intent: '',
       intentMin: '', intentMax: '', projectedObFrom: '', projectedObTo: '', slaBreached: '', excludeStages: '',

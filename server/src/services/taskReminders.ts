@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { createNotification } from '../lib/notifications.js';
-import { IST_TZ as TZ, istDayBounds } from '../lib/istTime.js';
+import { IST_TZ as TZ, istDayBounds, time12 } from '../lib/istTime.js';
 
 /**
  * Sends an in-app reminder to the assignee for every incomplete follow-up task
@@ -25,7 +25,7 @@ export async function runTaskReminderSweep() {
 
     const dueToday = t.dueDate >= start;
      const message = dueToday
-       ? `Reminder: follow-up for lead ${t.lead.leadId} (${t.lead.name}) is due today${t.dueTime ? ` at ${t.dueTime}` : ''}`
+       ? `Reminder: follow-up for lead ${t.lead.leadId} (${t.lead.name}) is due today${t.dueTime ? ` at ${time12(t.dueTime)}` : ''}`
        : `Reminder: follow-up for lead ${t.lead.leadId} (${t.lead.name}) is overdue since ${t.dueDate.toLocaleDateString('en-IN', { timeZone: TZ })}`;
 
     // Dedupe: one TASK_DUE reminder per task per IST day. Keyed on the task's

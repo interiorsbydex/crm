@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { DateInput } from './ui/DateTimeInputs';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 
@@ -72,8 +73,10 @@ export function CustomChecklistItems({ basePath, status, disabled, onSaved }: {
                 onChange={(e) => save(i.key, e.target.checked)} className="ml-1" />
             )}
             {kind === 'date' && (
-              <input type="date" aria-label={i.label} value={typeof value === 'string' ? value.slice(0, 10) : ''} disabled={disabled || saving === i.key}
-                onChange={(e) => save(i.key, e.target.value || null)} className="rounded border border-gray-200 px-2 py-1 text-xs" />
+              <span className="w-36" aria-label={i.label}>
+                <DateInput value={typeof value === 'string' ? value.slice(0, 10) : ''} disabled={disabled || saving === i.key}
+                  onChange={(v) => save(i.key, v || null)} className="w-full rounded border border-gray-200 px-2 py-1 text-xs" />
+              </span>
             )}
             {kind === 'text' && (
               <input aria-label={i.label} value={drafts[i.key] ?? (typeof value === 'string' ? value : '')} disabled={disabled || saving === i.key}

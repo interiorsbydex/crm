@@ -230,6 +230,8 @@ const NOTIF_ICON: Record<string, string> = {
 // are not shown in that mode because they belong to the signed-in user.
 export default function DesignerDashboard({ designerId, designerName }: { designerId?: string; designerName?: string } = {}) {
   const L = useDashboardLayout('designer').label;
+  // Viewing a designer's dashboard: number links open that designer's leads, not the viewer's whole team.
+  const leadsScope = designerId ? `designerId=${encodeURIComponent(designerId)}&` : '';
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -402,7 +404,7 @@ export default function DesignerDashboard({ designerId, designerName }: { design
           <TileGroup dashboard="designer" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 items-start gap-4">
 
             <Tile id="designer.activeLeads">
-            <Panel className="p-4" to="/leads?mine=1&status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER" drillLabel="View active leads">
+            <Panel className="p-4" to={`/leads?${leadsScope}mine=1&status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER`} drillLabel="View active leads">
               <p className="text-2xl font-extrabold text-stone-900">{data.personalStats.activeLeads}</p>
               <p className="text-sm font-semibold text-stone-700 mt-1">{L('designer.activeLeads', 'Active Leads')}</p>
               <p className="text-xs text-stone-400 mt-1">Current sales pipeline</p>
@@ -445,7 +447,7 @@ export default function DesignerDashboard({ designerId, designerName }: { design
             </Tile>
 
             <Tile id="designer.bookingDone">
-            <Panel className="p-4" to="/leads?mine=1&stage=DESIGN_IN_PROGRESS" showDrillLabel={false} style={{ background: '#FFFFFF', border: '1px solid #E8E4DF' }}>
+            <Panel className="p-4" to={`/leads?${leadsScope}mine=1&stage=DESIGN_IN_PROGRESS`} showDrillLabel={false} style={{ background: '#FFFFFF', border: '1px solid #E8E4DF' }}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <BarChart3 size={29} strokeWidth={2.5} className="text-brand-600" />
@@ -569,7 +571,7 @@ export default function DesignerDashboard({ designerId, designerName }: { design
                     <Link to="/reports" className="mt-2 inline-block text-xs font-semibold text-brand-600">Full My Lead Funnel report →</Link>
                   </div>
                 )}
-                <Link to="/leads" className="mt-3 inline-block text-sm font-semibold text-brand-600">View leads →</Link>
+                <Link to={designerId ? `/leads?${leadsScope}mine=1` : '/leads'} className="mt-3 inline-block text-sm font-semibold text-brand-600">View leads →</Link>
               </Panel>
             );
           })()}</Tile>
@@ -605,6 +607,7 @@ export default function DesignerDashboard({ designerId, designerName }: { design
                     ].map((tier) => {
                       const tierData = dd.forecast[tier.key as 'highIntent' | 'mediumIntent' | 'lowIntent'];
                       const query = new URLSearchParams({
+                        ...(designerId ? { designerId } : {}),
                         mine: '1',
                         projectedObFrom: dd.forecast.from,
                         projectedObTo: dd.forecast.to,

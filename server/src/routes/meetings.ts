@@ -21,6 +21,7 @@ import { meetingIdsScheduledByCre } from '../lib/creMeetingScope.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 import { isAutomationOn, eventForDraftType } from '../lib/automations.js';
+import { istDateTimeLabel } from '../lib/istTime.js';
 
 // Selectable when scheduling a NEW meeting. DESIGN_FREEZE/SIGN_OFF remain valid
 // enum values (and stay readable/reportable) for historical rows only — they
@@ -268,6 +269,71 @@ meetingsRouter.get('/', verifyToken, async (req, res) => {
   );
 
   res.json({ meetings });
+});
+
+// ── POST /api/leads/:leadId/meetings/log ─────────────────────────────────────
+// "Log Meeting": record a meeting that has already happened (like Log Call),
+// saved straight as COMPLETED. Nothing is sent to the client.
+meetingsRouter.post('/log', verifyToken, async (req, res) => {
+  const { leadId } = req.params as { leadId: string };
+  const user = req.user!;
+  const { type, mode, heldAt, location, mom, internalNotes } = req.body as {
+    type?: string; mode?: string; heldAt?: string; location?: string; mom?: string; internalNotes?: string;
+  };
+
+  if (!type || !CREATABLE_MEETING_TYPES.includes(type)) {
+    res.status(400).json({ error: `Pick the meeting: one of ${CREATABLE_MEETING_TYPES.join(', ')}` });
+    return;
+  }
+  const meetingSettings = await getMeetingSettings();
+  if (!mode || !VALID_MEETING_MODES.includes(mode as typeof VALID_MEETING_MODES[number]) || !meetingSettings.modes[mode as typeof VALID_MEETING_MODES[number]].active) {
+    res.status(400).json({ error: `Pick where it happened: ${VALID_MEETING_MODES.filter((m) => meetingSettings.modes[m].active).map((m) => meetingSettings.modes[m].label).join(', ')}` });
+    return;
+  }
+  const held = heldAt ? new Date(heldAt) : null;
+  if (!held || isNaN(held.getTime())) {
+    res.status(400).json({ error: 'When did the meeting happen? Date and time are required' });
+    return;
+  }
+  if (held.getTime() > Date.now() + 5 * 60_000) {
+    res.status(400).json({ error: 'A logged meeting must already have happened. For a future meeting, use Schedule Meeting' });
+    return;
+  }
+  if (meetingSettings.requireMom && !mom?.trim()) {
+    res.status(400).json({ error: 'Minutes of Meeting are required' });
+    return;
+  }
+  let normalizedLocation: string | undefined;
+  try {
+    normalizedLocation = normalizeMeetingLocation(location);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+    return;
+  }
+
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: { id: true, assignedDesignerId: true, assignedBLId: true, status: true },
+  });
+  if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+  if (!(await isAuthorizedForLead(lead, user))) {
+    res.status(403).json({ error: 'Not authorised to log meetings for this lead' });
+    return;
+  }
+  if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
+
+  const { ppNumber } = await computeMeetingNumbering(leadId, type);
+  const created = await createMeetingRecord(prisma, { leadId, type, mode, scheduledAt: held.toISOString(), location: normalizedLocation, ppNumber, internalNotes });
+  const meeting = await prisma.meeting.update({
+    where: { id: created.id },
+    data: { status: 'COMPLETED', mom: mom?.trim() || null, momSent: false },
+    include: meetingInclude,
+  });
+
+  await logActivity(user.id, 'MEETING_LOGGED', leadId, { meetingId: meeting.id, type, mode, scheduledAt: held.toISOString(), mom: mom?.trim() || undefined });
+  await recalculateMilestones(leadId);
+
+  res.status(201).json({ meeting });
 });
 
 // ── PATCH /api/meetings/:id/status ───────────────────────────────────────────
@@ -611,7 +677,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
       const rendered = await renderMailTemplate('MOM', {
         clientName: lead.name,
         meetingType: meeting.ppNumber ? `PP${meeting.ppNumber}` : meeting.type,
-        scheduledAt: meeting.scheduledAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+        scheduledAt: istDateTimeLabel(meeting.scheduledAt, { weekday: true }),
         mom: mom!.replace(/\n/g, '<br/>'),
         attachmentsHtml,
       });

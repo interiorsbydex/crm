@@ -59,6 +59,12 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
   const [form, setForm] = useState({ type: '', mode: '', scheduledAt: '', location: '', internalNotes: '' });
   const [notifyClient, setNotifyClient] = useState(crmSettings().notifyClientByDefault);
 
+  // Log form — a meeting that already happened, saved as completed (like Log Call)
+  const [showLogForm, setShowLogForm] = useState(false);
+  const [logForm, setLogForm] = useState({ type: '', mode: '', heldAt: '', location: '', mom: '', internalNotes: '' });
+  const [logging, setLogging] = useState(false);
+  const [logError, setLogError] = useState<string | null>(null);
+
   // Status update modal
   const [statusModal, setStatusModal] = useState<{
     meetingId: string;
@@ -119,6 +125,33 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
       .then((d) => setQuestionnaire(d.questionnaire))
       .catch(() => {});
   }, [leadId]);
+
+  const handleLog = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!logForm.type || !logForm.mode || !logForm.heldAt) return;
+    setLogging(true);
+    setLogError(null);
+    try {
+      await api.post(`/leads/${leadId}/meetings/log`, {
+        type: logForm.type,
+        mode: logForm.mode,
+        heldAt: istInputToISO(logForm.heldAt),
+        location: logForm.location || undefined,
+        mom: logForm.mom.trim() || undefined,
+        internalNotes: logForm.internalNotes.trim() || undefined,
+      });
+      const loggedType = logForm.type;
+      setLogForm({ type: '', mode: '', heldAt: '', location: '', mom: '', internalNotes: '' });
+      setShowLogForm(false);
+      await loadMeetings();
+      onMeetingCreated?.();
+      onMeetingCompleted?.(loggedType);
+    } catch (e: any) {
+      setLogError(e.message ?? 'Could not log the meeting');
+    } finally {
+      setLogging(false);
+    }
+  };
 
   const handleSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -337,12 +370,22 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
           </p>
         </div>
         {!isLocked && (
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
-          >
-            {showForm ? 'Cancel' : '+ Schedule Meeting'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setShowLogForm(!showLogForm); setShowForm(false); }}
+              data-testid="log-meeting-button"
+              className="border border-brand-300 text-brand-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-50 transition-colors"
+              title="Record a meeting that has already happened"
+            >
+              {showLogForm ? 'Cancel' : '+ Log Meeting'}
+            </button>
+            <button
+              onClick={() => { setShowForm(!showForm); setShowLogForm(false); }}
+              className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
+            >
+              {showForm ? 'Cancel' : '+ Schedule Meeting'}
+            </button>
+          </div>
         )}
       </div>
 
@@ -350,6 +393,63 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
           This lead is Inactive — reactivate it to schedule meetings.
         </div>
+      )}
+
+      {/* Log Form — a meeting that already happened */}
+      {!isLocked && showLogForm && (
+        <form onSubmit={handleLog} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4" data-testid="log-meeting-form">
+          <div>
+            <h3 className="font-medium text-gray-900">Log a Meeting</h3>
+            <p className="text-xs text-gray-500 mt-0.5">For a meeting that has already happened. It is saved as completed, and nothing is sent to the client.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type <span className="text-red-500">*</span></label>
+              <select value={logForm.type} onChange={(e) => setLogForm({ ...logForm, type: e.target.value })} required
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                <option value="">Select type…</option>
+                {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Mode <span className="text-red-500">*</span></label>
+              <select value={logForm.mode} onChange={(e) => setLogForm({ ...logForm, mode: e.target.value })} required
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                <option value="">Select mode…</option>
+                {meetingModeOptions().map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">When it happened <span className="text-red-500">*</span></label>
+              <DateTimeInput value={logForm.heldAt} onChange={(v) => setLogForm({ ...logForm, heldAt: v })} required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+              <input type="text" value={logForm.location} onChange={(e) => setLogForm({ ...logForm, location: e.target.value })} maxLength={250}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Minutes of Meeting (MOM) {meetingRules().requireMom ? <span className="text-red-500">*</span> : <span className="text-gray-400 text-xs">(optional)</span>}
+            </label>
+            <textarea value={logForm.mom} onChange={(e) => setLogForm({ ...logForm, mom: e.target.value })} rows={3} required={meetingRules().requireMom}
+              placeholder="What was discussed and agreed…"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Internal Notes <span className="text-gray-400 font-normal">(staff only)</span></label>
+            <textarea value={logForm.internalNotes} onChange={(e) => setLogForm({ ...logForm, internalNotes: e.target.value })} rows={2}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none" />
+          </div>
+          {logError && <p className="text-sm text-red-500">{logError}</p>}
+          <button type="submit" disabled={logging}
+            className="w-full bg-brand-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors">
+            {logging ? 'Saving…' : 'Save as completed meeting'}
+          </button>
+        </form>
       )}
 
       {/* Schedule Form */}

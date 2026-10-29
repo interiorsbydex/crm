@@ -15,6 +15,7 @@ import { assertNoActiveMeeting, computeMeetingNumbering, createMeetingRecord, ru
 import { validateAttachmentPairing, validateGenericAttachments } from '../lib/attachmentValidation.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 import { isAutomationOn, automationCc } from '../lib/automations.js';
+import { time12 } from '../lib/istTime.js';
 
 export const callsRouter = Router({ mergeParams: true });
 
@@ -500,7 +501,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     await createNotification(
       task.assignedToId,
       'TASK_SCHEDULED',
-      `Follow-up task scheduled for ${lead.name} (${lead.leadId}) — due ${dueStr}${task.dueTime ? ` at ${task.dueTime}` : ''}`,
+      `Follow-up task scheduled for ${lead.name} (${lead.leadId}) — due ${dueStr}${task.dueTime ? ` at ${time12(task.dueTime)}` : ''}`,
       leadId,
       new Date(task.dueDate),
     );
@@ -519,7 +520,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
   let pendingMail: { draftKey: string; type: string; to: string; cc: string[]; subject: string; html: string } | null = null;
   if (outcome === 'ANSWERED' && notifyClient !== false && lead.email && await isAutomationOn('CALL_LOG_SUMMARY', 'email')) {
     const followUpDate = task
-      ? new Date(task.dueDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }) + (task.dueTime ? ` at ${task.dueTime}` : '')
+      ? new Date(task.dueDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }) + (task.dueTime ? ` at ${time12(task.dueTime)}` : '')
       : meeting
         ? new Date(meeting.scheduledAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' })
         : 'To be confirmed';
@@ -732,7 +733,7 @@ callsRouter.post('/schedule', verifyToken, async (req, res) => {
     await createNotification(
       task.assignedToId,
       'TASK_SCHEDULED',
-      `Call scheduled for ${lead.name} (${lead.leadId}) — ${stageType} call due ${dueStr} at ${dueTime}`,
+      `Call scheduled for ${lead.name} (${lead.leadId}) — ${stageType} call due ${dueStr} at ${time12(dueTime)}`,
       leadId,
       new Date(task.dueDate),
     );

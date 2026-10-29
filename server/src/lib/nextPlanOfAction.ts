@@ -18,6 +18,7 @@ import { sendEmail } from './email.js';
 import { assertNoActiveMeeting, computeMeetingNumbering, createMeetingRecord, runMeetingScheduledSideEffects, normalizeMeetingLocation, type ScheduleMeetingLead, type PendingMeetingMail } from './meetingScheduler.js';
 import { validateGenericAttachments } from './attachmentValidation.js';
 import { isAutomationOn, automationCc } from './automations.js';
+import { istDateLabel, time12 } from './istTime.js';
 
 export type NextPlanKind = 'CALL' | 'MEETING' | 'TASK';
 
@@ -153,17 +154,17 @@ export async function assertNextPlanMeetingSchedulable(items: NextPlanItem[], le
 export function summarizeNextPlanItems(items: NextPlanItem[]): string {
   return items
     .map((item) => {
-      if (item.kind === 'TASK') return `Task: ${item.agenda || 'Follow-up'} on ${item.dueDate}${item.dueTime ? ` ${item.dueTime}` : ''}`;
+      if (item.kind === 'TASK') return `Task: ${item.agenda || 'Follow-up'} on ${istDateLabel(item.dueDate)}${item.dueTime ? ` ${time12(item.dueTime)}` : ''}`;
       if (item.kind === 'MEETING') return `Meeting (${item.meetingType}): ${item.scheduledAt}`;
-      return `Call: ${item.dueDate}${item.dueTime ? ` ${item.dueTime}` : ''}${item.notes ? ` — ${item.notes}` : ''}`;
+      return `Call: ${istDateLabel(item.dueDate)}${item.dueTime ? ` ${time12(item.dueTime)}` : ''}${item.notes ? ` — ${item.notes}` : ''}`;
     })
     .join('; ');
 }
 
 function describeItem(item: NextPlanItem): string {
-  if (item.kind === 'TASK') return `A follow-up task${item.agenda ? ` (${item.agenda})` : ''} on ${item.dueDate}${item.dueTime ? ` at ${item.dueTime}` : ''}.`;
+  if (item.kind === 'TASK') return `A follow-up task${item.agenda ? ` (${item.agenda})` : ''} on ${istDateLabel(item.dueDate)}${item.dueTime ? ` at ${time12(item.dueTime)}` : ''}.`;
   if (item.kind === 'MEETING') return `A ${item.meetingType} meeting scheduled for ${item.scheduledAt}.`;
-  return `A follow-up call planned for ${item.dueDate}${item.dueTime ? ` at ${item.dueTime}` : ''}.`;
+  return `A follow-up call planned for ${istDateLabel(item.dueDate)}${item.dueTime ? ` at ${time12(item.dueTime)}` : ''}.`;
 }
 
 /**

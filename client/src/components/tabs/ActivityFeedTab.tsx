@@ -21,8 +21,8 @@ import MeetingLocationField from '../MeetingLocationField';
 import toast from 'react-hot-toast';
 import { ChevronLeft, Paperclip, RefreshCw, X } from 'lucide-react';
 import { api, type CallRecord, type Meeting, type FollowUpTask } from '../../lib/api';
-import { formatISTDate, formatISTDateTime, istInputToISO } from '../../lib/dateFormat';
-import { DateTimeInput, TimeInput } from '../ui/DateTimeInputs';
+import { formatISTDate, formatISTDateTime, formatTime12, istInputToISO } from '../../lib/dateFormat';
+import { DateInput, DateTimeInput, TimeInput } from '../ui/DateTimeInputs';
 import EmailPreviewModal from '../EmailPreviewModal';
 import CallLogTab from './CallLogTab';
 import MeetingsTab from './MeetingsTab';
@@ -333,7 +333,7 @@ function TaskCard({
               {formatISTDate(task.dueDate, { weekday: 'short' })}
               {(task.timeFrom || task.dueTime) && (
                 <span className="text-gray-500 ml-1">
-                  at {task.timeFrom ?? task.dueTime}{task.timeTo ? `–${task.timeTo}` : ''}
+                  at {formatTime12(task.timeFrom ?? task.dueTime)}{task.timeTo ? `–${formatTime12(task.timeTo)}` : ''}
                 </span>
               )}
               {task.taskType === 'EXTERNAL' && (
@@ -394,7 +394,7 @@ function TaskCard({
           {task.rescheduleHistory.map((h, i) => (
             <div key={i} className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
               <span className="font-medium">Reschedule {i + 1}:</span>{' '}
-              was {formatISTDate(h.dueDate)}{h.dueTime ? ` at ${h.dueTime}` : ''} — {h.reason}
+              was {formatISTDate(h.dueDate)}{h.dueTime ? ` at ${formatTime12(h.dueTime)}` : ''} — {h.reason}
             </div>
           ))}
         </div>
@@ -1125,9 +1125,8 @@ export default function ActivityFeedTab({
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Completed On</label>
-                    <input type="date" value={actionForm.completedAt}
-                      onChange={(e) => setActionForm({ ...actionForm, completedAt: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                    <DateInput value={actionForm.completedAt}
+                      onChange={(v) => setActionForm({ ...actionForm, completedAt: v })} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1197,10 +1196,9 @@ export default function ActivityFeedTab({
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       New Date <span className="text-red-500">*</span>
                     </label>
-                    <input type="date" value={actionForm.dueDate}
-                      onChange={(e) => setActionForm({ ...actionForm, dueDate: e.target.value })}
-                      required
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                    <DateInput value={actionForm.dueDate}
+                      onChange={(v) => setActionForm({ ...actionForm, dueDate: v })}
+                      required />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>

@@ -1,6 +1,15 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { createNotification } from '../lib/notifications.js';
+import { logActivity } from '../lib/activityLog.js';
+
+// The activity is logged under a real user (an active Branch Head) unless
+// SYSTEM_USER_ID is set — 'system' is not a user row, as in routes/quotes.ts.
+async function systemUserId(): Promise<string | null> {
+  if (process.env.SYSTEM_USER_ID) return process.env.SYSTEM_USER_ID;
+  const bh = await prisma.user.findFirst({ where: { role: 'BRANCH_HEAD', isActive: true }, select: { id: true } });
+  return bh?.id ?? null;
+}
 import { getNpsSurveyWording } from '../lib/mailTemplates.js';
 
 export const feedbackRouter = Router();
@@ -108,10 +117,20 @@ feedbackRouter.post('/:token', async (req, res) => {
     if (!feedback) { res.status(404).json({ error: 'Feedback form not found' }); return; }
     if (feedback.respondedAt) { res.status(409).json({ error: 'Already submitted' }); return; }
 
-    await prisma.inactivationFeedback.update({
+    const saved = await prisma.inactivationFeedback.update({
       where: { formToken: req.params.token },
       data: { clientResponse: response, respondedAt: new Date() },
+      include: { lead: { select: { id: true, leadId: true, name: true, assignedDesignerId: true, assignedBLId: true } } },
     });
+
+    // The answer shows on the lead (Overview + Activity) and the designer and BL are told.
+    const preview = response.trim().slice(0, 140);
+    const logBy = await systemUserId();
+    if (logBy) await logActivity(logBy, 'INACTIVE_FEEDBACK_RECEIVED', saved.lead.id, { response: preview, byClient: true }).catch(() => {});
+    const msg = `${saved.lead.name} (${saved.lead.leadId}) answered the inactive-lead feedback form: "${preview}"`;
+    for (const id of new Set([saved.lead.assignedDesignerId, saved.lead.assignedBLId].filter((v): v is string => !!v))) {
+      createNotification(id, 'INACTIVE_FEEDBACK_RECEIVED', msg, saved.lead.id).catch(() => {});
+    }
 
     res.json({ message: 'Thank you for your feedback!' });
   } catch (err: any) {

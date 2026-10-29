@@ -1,5 +1,6 @@
 // Lenient-launch visibility: what the team moved past (bypass log) and what is
 // still blank on each lead (data completeness), each with an owner.
+import { DateInput } from '../components/ui/DateTimeInputs';
 import { getStoredUser } from '../lib/auth';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -85,8 +86,8 @@ function BypassLog({ includeTest }: { includeTest: boolean }) {
           <option value="">All stages moved into</option>
           {STAGES.map((s) => <option key={s.value} value={s.value}>{stageLabel(s.value)}</option>)}
         </select>
-        <input type="date" className={selectCls} style={selectStyle} value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" />
-        <input type="date" className={selectCls} style={selectStyle} value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" />
+        <span className="w-36" aria-label="From date"><DateInput value={from} onChange={setFrom} placeholderText="From date" className={`${selectCls} w-full border border-[#EDE8E3]`} /></span>
+        <span className="w-36" aria-label="To date"><DateInput value={to} onChange={setTo} placeholderText="To date" className={`${selectCls} w-full border border-[#EDE8E3]`} /></span>
       </div>
       {error && <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-red-600 text-sm mb-4">{error}</div>}
       {loading ? <p className="text-sm text-stone-400">Loading…</p> : rows.length === 0 ? (

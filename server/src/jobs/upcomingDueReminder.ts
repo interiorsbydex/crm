@@ -6,6 +6,7 @@ import { sendEmail } from '../lib/email.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { getCrmSettings } from '../lib/crmSettings.js';
 import { isAutomationOn, automationCc } from '../lib/automations.js';
+import { time12 } from '../lib/istTime.js';
 
 /**
  * Batch 14 item 3 — "1 hour before" (Admin → CRM Settings → reminder timing) in-app reminder for follow-up tasks and
@@ -92,7 +93,7 @@ export async function runUpcomingDueReminder(): Promise<{ taskReminders: number;
         const { subject, html } = await renderMailTemplate('TASK_REMINDER', {
           clientName: t.lead.name,
           dueDate: dueStr,
-          dueTime: (t.timeFrom ?? t.dueTime) ? `${t.timeFrom ?? t.dueTime}` : 'the scheduled time',
+          dueTime: (t.timeFrom ?? t.dueTime) ? time12(t.timeFrom ?? t.dueTime) : 'the scheduled time',
           agendaHtml: t.agenda ? `<p>Agenda: ${t.agenda}</p>` : '',
         });
         const cc = (await automationCc('TASK_REMINDER', t.leadId)).filter((e) => e !== t.lead.email);
@@ -112,7 +113,7 @@ export async function runUpcomingDueReminder(): Promise<{ taskReminders: number;
     await createNotification(
       t.assignedToId,
       'TASK_DUE_SOON',
-      `Reminder: follow-up for lead ${t.lead.leadId} (${t.lead.name}) is due in about ${inAbout}${t.timeFrom ? ` at ${t.timeFrom}` : ''}`,
+      `Reminder: follow-up for lead ${t.lead.leadId} (${t.lead.name}) is due in about ${inAbout}${t.timeFrom ? ` at ${time12(t.timeFrom)}` : ''}`,
       t.leadId,
       dueAt,
       t.id,

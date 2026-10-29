@@ -6,6 +6,7 @@ import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 import multer from 'multer';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { addExtra, clearExtras, listExtras, removeExtra } from '../lib/draftExtras.js';
+import { istDateTimeLabel } from '../lib/istTime.js';
 
 export const emailRouter = Router();
 
@@ -33,7 +34,7 @@ emailRouter.get('/preview/:type/:leadId', verifyToken, async (req, res) => {
     meetingType: latestMeeting?.type ?? '',
     ppNumber: latestMeeting?.ppNumber ? `PP${latestMeeting.ppNumber}` : '',
     scheduledAt: latestMeeting
-      ? new Date(latestMeeting.scheduledAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+      ? istDateTimeLabel(latestMeeting.scheduledAt, { weekday: true })
       : '',
     mom: (latestMeeting as any)?.mom ?? '',
     rescheduledReason: (latestMeeting as any)?.rescheduledReason ?? '',

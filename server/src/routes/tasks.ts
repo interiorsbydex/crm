@@ -7,7 +7,7 @@ import { sendEmail } from '../lib/email.js';
 import { saveDraft } from '../lib/emailService.js';
 import { sendWhatsAppMessage, normalizePhoneE164 } from '../lib/whatsapp.js';
 import { isAuthorizedForLead, isAuthorizedToAssignTask } from '../lib/leadAuth.js';
-import { istDayBounds } from '../lib/istTime.js';
+import { istDayBounds, time12 } from '../lib/istTime.js';
 import { isLenientLaunch, logGateBypass } from '../lib/lenientMode.js';
 import { validateGenericAttachments, type AttachmentEntry } from '../lib/attachmentValidation.js';
 import { supabaseAdmin } from '../lib/supabase.js';
@@ -123,7 +123,7 @@ async function notifyExternalTask(
       : await renderMailTemplate(mailType, {
         clientName: lead.name,
         dueDate: dueStr,
-        dueTime: task.dueTime ? ` at ${task.dueTime}` : '',
+        dueTime: task.dueTime ? ` at ${time12(task.dueTime)}` : '',
         agendaHtml: task.agenda ? `<p>Agenda: ${task.agenda}</p>` : '',
       });
     const draftKey = `${lead.id}::${mailType}::${task.id}`;
@@ -132,8 +132,8 @@ async function notifyExternalTask(
   }
   if (lead.phone && await isAutomationOn(mailType, 'whatsapp')) {
     const waBody = isRescheduled
-      ? `Hi ${lead.name}, your call has been rescheduled to ${dueStr}${task.dueTime ? ` at ${task.dueTime}` : ''}. Reason: ${rescheduled!.reason}.${task.agenda ? ` Agenda: ${task.agenda}` : ''} — Team Interiors by DeX`
-      : `Hi ${lead.name}, we have a follow-up scheduled with you on ${dueStr}${task.dueTime ? ` at ${task.dueTime}` : ''}.${task.agenda ? ` Agenda: ${task.agenda}` : ''} — Team Interiors by DeX`;
+      ? `Hi ${lead.name}, your call has been rescheduled to ${dueStr}${task.dueTime ? ` at ${time12(task.dueTime)}` : ''}. Reason: ${rescheduled!.reason}.${task.agenda ? ` Agenda: ${task.agenda}` : ''} — Team Interiors by DeX`
+      : `Hi ${lead.name}, we have a follow-up scheduled with you on ${dueStr}${task.dueTime ? ` at ${time12(task.dueTime)}` : ''}.${task.agenda ? ` Agenda: ${task.agenda}` : ''} — Team Interiors by DeX`;
     try {
       const twilioSid = await sendWhatsAppMessage(normalizePhoneE164(lead.phone), waBody);
       if (twilioSid) {

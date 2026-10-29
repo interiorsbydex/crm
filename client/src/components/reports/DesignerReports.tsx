@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { DateInput } from '../ui/DateTimeInputs';
 import { useReportTabs } from '../../lib/dashboardLayout';
 import { reportTabId, REPORT_BLOCK_IDS } from '../../lib/dashboardTiles';
 import { Link } from 'react-router-dom';
@@ -805,17 +806,17 @@ export default function DesignerReports({ role }: { role: string }) {
           {sel === 'custom' && (
             <>
               <label className="text-xs text-gray-500">From
-                <input type="date" className="mt-1 block rounded-lg border border-gray-200 px-2 py-1.5 text-sm" value={from} onChange={(e) => setFrom(e.target.value)} />
+                <span className="mt-1 block w-36"><DateInput value={from} onChange={setFrom} className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm" /></span>
               </label>
               <label className="text-xs text-gray-500">To
-                <input type="date" className="mt-1 block rounded-lg border border-gray-200 px-2 py-1.5 text-sm" value={to} onChange={(e) => setTo(e.target.value)} />
+                <span className="mt-1 block w-36"><DateInput value={to} onChange={setTo} className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm" /></span>
               </label>
             </>
           )}
           {tab === 'my-lead-funnel' && (
             <label className="text-xs text-gray-500">View pipeline as of
               <div className="mt-1 flex items-center gap-1">
-                <input type="date" data-testid="funnel-asof" className="block rounded-lg border border-gray-200 px-2 py-1.5 text-sm" value={asOfDraft} min="2000-01-01" max={isoDay(new Date())} onChange={(e) => applyAsOf(e.target.value)} />
+                <span data-testid="funnel-asof" className="block w-36"><DateInput value={asOfDraft} min="2000-01-01" max={isoDay(new Date())} onChange={applyAsOf} className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm" /></span>
                 {asOfDraft && <button className="text-xs text-brand-600 underline" onClick={() => applyAsOf('')}>Today</button>}
               </div>
             </label>

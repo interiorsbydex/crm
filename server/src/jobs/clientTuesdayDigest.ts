@@ -4,7 +4,7 @@ import { queueOpts, workerOpts } from './index.js';
 import { prisma } from '../lib/prisma.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { saveDraft } from '../lib/emailService.js';
-import { istDayBounds } from '../lib/istTime.js';
+import { istDayBounds, time12 } from '../lib/istTime.js';
 import { isAutomationOn } from '../lib/automations.js';
 
 /**
@@ -107,7 +107,7 @@ export async function runClientTuesdayDigest(): Promise<{ digests: number }> {
         day: 'numeric',
         month: 'short',
       });
-      const time = t.dueTime ? ` at ${t.dueTime}` : '';
+      const time = t.dueTime ? ` at ${time12(t.dueTime)}` : '';
       const agenda = t.agenda ? ` — ${t.agenda}` : '';
       return `<li>Follow-up${time} on ${day}${agenda}</li>`;
     });

@@ -3,7 +3,7 @@ import { AlertTriangle, RefreshCw, Paperclip, X } from 'lucide-react';
 import { api, type CallRecord, type FollowUpTask, type NextPlanItem } from '../../lib/api';
 import NextPlanOfActionPicker from '../NextPlanOfActionPicker';
 import EmailPreviewModal from '../EmailPreviewModal';
-import { formatISTDate, formatISTDateTime, istDatetimeLocalValue, istInputToISO } from '../../lib/dateFormat';
+import { formatISTDate, formatISTDateTime, formatTime12, istDatetimeLocalValue, istInputToISO } from '../../lib/dateFormat';
 import { DateInput, TimeInput, DateTimeInput } from '../ui/DateTimeInputs';
 import { meetingModeOptions } from '../../lib/meetingSettings';
 import { crmSettings } from '../../lib/crmSettings';
@@ -1092,7 +1092,7 @@ export default function CallLogTab({ leadId, isLocked, onCallLogged }: Props) {
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {formatISTDate(task.dueDate)}{task.dueTime ? ` at ${task.dueTime}` : ''}
+                    {formatISTDate(task.dueDate)}{task.dueTime ? ` at ${formatTime12(task.dueTime)}` : ''}
                     {task.agenda ? ` · ${task.agenda}` : ''}
                   </p>
                 </div>

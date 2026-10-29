@@ -995,6 +995,7 @@ leadsRouter.get('/:id', verifyToken, async (req, res) => {
         emailLogs: { orderBy: { sentAt: 'desc' }, take: 50 },
         smsLogs: { orderBy: { createdAt: 'desc' }, take: 50 },
         project: { select: { id: true, projectCode: true } },
+        inactivationFeedback: { select: { reason: true, feedbackFormSentAt: true, clientResponse: true, respondedAt: true } },
         // ppMeetings removed — field not in live DB schema (schema drift); client already guards with ppMeetings?.length
       },
     });

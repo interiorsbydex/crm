@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { formatTime12 } from '../lib/dateFormat';
 import { Link } from 'react-router-dom';
 import { CalendarDays, Clock3, Phone, UserRound } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -184,7 +185,7 @@ export default function Calls() {
                       <div className="flex items-center gap-1.5 text-xs text-stone-500">
                         <CalendarDays size={13} strokeWidth={1.8} />
                         <span>{formatDate(call.dueDate)}</span>
-                        {dueTime && <><span className="text-stone-300">·</span><Clock3 size={12} /><span>{dueTime}</span></>}
+                        {dueTime && <><span className="text-stone-300">·</span><Clock3 size={12} /><span>{formatTime12(dueTime)}</span></>}
                       </div>
                       {call.agenda && <p className="text-xs text-stone-400 italic">{call.agenda}</p>}
                       <div className="flex items-center gap-1.5 text-xs text-stone-500 pt-1">

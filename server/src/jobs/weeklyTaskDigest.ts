@@ -3,7 +3,7 @@ import { scheduleDaily0800Ist, isWeeklyDigestDay } from './weeklyDigestDay.js';
 import { queueOpts, workerOpts } from './index.js';
 import { prisma } from '../lib/prisma.js';
 import { sendEmail } from '../lib/email.js';
-import { IST_TZ } from '../lib/istTime.js';
+import { IST_TZ, time12 } from '../lib/istTime.js';
 import { isAutomationOn } from '../lib/automations.js';
 
 /**
@@ -123,7 +123,7 @@ export async function runWeeklyTaskDigest(): Promise<{ emailsSent: number }> {
           ? ' <strong style="color:#b91c1c">(overdue)</strong>'
           : '';
         return `<li>${t.lead.leadId} — ${t.lead.name}: due ${dueStr}${
-          t.dueTime ? ` at ${t.dueTime}` : ''
+          t.dueTime ? ` at ${time12(t.dueTime)}` : ''
         }${overdueTag}${t.agenda ? ` — ${t.agenda}` : ''}</li>`;
       })
       .join('');

@@ -7,7 +7,7 @@ import type { FollowUpTask } from '../lib/api';
 import toast from 'react-hot-toast';
 import { getStoredUser } from '../lib/auth';
 import { usePermissions } from '../lib/permissions';
-import { formatISTDate, todayISTDateString } from '../lib/dateFormat';
+import { formatISTDate, formatTime12, todayISTDateString } from '../lib/dateFormat';
 import { DateInput, TimeInput } from '../components/ui/DateTimeInputs';
 
 type Filter = 'upcoming' | 'overdue' | 'completed' | 'not_done' | 'all';
@@ -88,7 +88,7 @@ function TaskCard({
         </div>
 
         <div className="flex items-center gap-3 mt-1 text-xs text-stone-500">
-          <span className="flex items-center gap-1"><Calendar size={12} strokeWidth={1.8} /> {formatDate(task.dueDate)}{(task.timeFrom ?? task.dueTime) ? ` at ${task.timeFrom ?? task.dueTime}` : ''}</span>
+          <span className="flex items-center gap-1"><Calendar size={12} strokeWidth={1.8} /> {formatDate(task.dueDate)}{(task.timeFrom ?? task.dueTime) ? ` at ${formatTime12(task.timeFrom ?? task.dueTime)}` : ''}</span>
           <span className="text-stone-300">·</span>
           <span className="flex items-center gap-1"><User size={12} strokeWidth={1.8} /> {task.assignedTo?.name}</span>
           {task.lead?.stage && (

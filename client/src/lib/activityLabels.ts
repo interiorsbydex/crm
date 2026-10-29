@@ -41,6 +41,10 @@ export function describeActivity(action: string, meta?: Record<string, any>): st
       return `Scheduled a meeting${m.type ? ` (${String(m.type).replace(/_/g, ' ').toLowerCase()})` : ''}${m.scheduledAt ? ` for ${fmtWhen(m.scheduledAt)}` : ''}`;
     case 'MEETING_COMPLETED':
       return 'Marked meeting as completed';
+    case 'INACTIVE_FEEDBACK_RECEIVED':
+      return `Client answered the inactive-lead feedback form${m.response ? `: "${m.response}"` : ''}`;
+    case 'MEETING_LOGGED':
+      return `Logged a meeting that already happened${m.type ? ` (${String(m.type).replace(/_/g, ' ')})` : ''}${m.scheduledAt ? ` on ${fmtWhen(m.scheduledAt)}` : ''}`;
     case 'MEETING_RESCHEDULED':
       return `Rescheduled meeting${m.newDate || m.scheduledAt ? ` to ${fmtWhen(m.newDate ?? m.scheduledAt)}` : ''}${m.rescheduledReason ? ` — ${m.rescheduledReason}` : ''}`;
     case 'MEETING_CANCELLED':

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Paperclip, X, AlertTriangle } from 'lucide-react';
 import { api, type FollowUpTask } from '../../lib/api';
-import { formatISTDate, todayISTDateString } from '../../lib/dateFormat';
+import { formatISTDate, formatTime12, todayISTDateString } from '../../lib/dateFormat';
 import { DateInput, TimeInput } from '../ui/DateTimeInputs';
 import EmailPreviewModal from '../EmailPreviewModal';
 import { crmSettings } from '../../lib/crmSettings';
@@ -508,8 +508,8 @@ export default function FollowUpTab({ leadId, isLocked, onTasksChanged }: Props)
                       {formatISTDate(actionModal.task.dueDate, { weekday: 'short' })}
                       {(actionModal.task.timeFrom || actionModal.task.dueTime) && (
                         <span className="text-gray-500">
-                          {' '}at {actionModal.task.timeFrom ?? actionModal.task.dueTime}
-                          {actionModal.task.timeTo ? `–${actionModal.task.timeTo}` : ''}
+                          {' '}at {formatTime12(actionModal.task.timeFrom ?? actionModal.task.dueTime)}
+                          {actionModal.task.timeTo ? `–${formatTime12(actionModal.task.timeTo)}` : ''}
                         </span>
                       )}
                     </p>
@@ -622,7 +622,7 @@ export default function FollowUpTab({ leadId, isLocked, onTasksChanged }: Props)
                       {formatISTDate(task.dueDate, { weekday: 'short' })}
                       {(task.timeFrom || task.dueTime) && (
                         <span className="text-gray-500 ml-1">
-                          at {task.timeFrom ?? task.dueTime}{task.timeTo ? `–${task.timeTo}` : ''}
+                          at {formatTime12(task.timeFrom ?? task.dueTime)}{task.timeTo ? `–${formatTime12(task.timeTo)}` : ''}
                         </span>
                       )}
                       {task.taskType === 'EXTERNAL' && (
@@ -707,7 +707,7 @@ export default function FollowUpTab({ leadId, isLocked, onTasksChanged }: Props)
                     <div key={i} className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
                       <span className="font-medium">Reschedule {i + 1}:</span>{' '}
                       was {formatISTDate(h.dueDate)}
-                      {h.dueTime ? ` at ${h.dueTime}` : ''} — {h.reason}
+                      {h.dueTime ? ` at ${formatTime12(h.dueTime)}` : ''} — {h.reason}
                     </div>
                   ))}
                 </div>

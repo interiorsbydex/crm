@@ -21,6 +21,15 @@ export function formatISTTime(iso: string | Date): string {
   });
 }
 
+/** "14:00" → "2:00 PM". Anything that isn't an HH:MM time is returned unchanged. */
+export function formatTime12(hhmm?: string | null): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm ?? '');
+  if (!m) return hhmm ?? '';
+  const h = Number(m[1]);
+  if (h > 23) return hhmm ?? '';
+  return `${h % 12 || 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
 /** e.g. "12 Aug" — pass opts to add/override fields (e.g. { year: 'numeric' }). */
 export function formatISTDate(iso: string | Date, opts?: Intl.DateTimeFormatOptions): string {
   return new Date(iso).toLocaleDateString('en-IN', {

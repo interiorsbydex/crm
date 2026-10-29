@@ -10,7 +10,7 @@ import { api, uploadFile } from '../lib/api';
 import { describeActivity } from '../lib/activityLabels';
 import { validateEmail, validatePhoneStrict } from '../lib/validation';
 import { useLenientLaunch } from '../lib/flags';
-import { formatISTDate, formatPossession, istDateOnly, istDatetimeLocalValue, istInputToISO } from '../lib/dateFormat';
+import { formatISTDate, formatPossession, formatTime12, istDateOnly, istDatetimeLocalValue, istInputToISO } from '../lib/dateFormat';
 import { DateInput } from '../components/ui/DateTimeInputs';
 import ActivityFeedTab from '../components/tabs/ActivityFeedTab';
 import WhatsAppTab from '../components/tabs/WhatsAppTab';
@@ -57,6 +57,7 @@ interface Lead {
   currentOffer?: { id: string; name: string } | null;
   project?: { id: string; projectCode?: string | null } | null;
   attentionFlags?: Array<{ id: string; category: string; description: string; createdAt: string }>;
+  inactivationFeedback?: { reason: string; feedbackFormSentAt: string | null; clientResponse: string | null; respondedAt: string | null } | null;
   _count: { calls: number; meetings: number; followUpTasks: number };
   _breakdown?: {
     calls:    { answered: number; rnr: number; callback: number; meetingScheduled: number; total: number };
@@ -368,6 +369,8 @@ export default function LeadDetail() {
   const [flagDescription, setFlagDescription] = useState('');
   const [savingFlag, setSavingFlag] = useState(false);
   const [resolvingFlagId, setResolvingFlagId] = useState<string | null>(null);
+  // With open flags, the Flag button lists them (to resolve); "Add another flag" switches to the form.
+  const [flagAdding, setFlagAdding] = useState(false);
 
   const [editDetailsModal, setEditDetailsModal] = useState(false);
   const [editDetails, setEditDetails] = useState<typeof EMPTY_EDIT>(EMPTY_EDIT);
@@ -948,6 +951,7 @@ export default function LeadDetail() {
   const openFlagModal = () => {
     setFlagCategory('');
     setFlagDescription('');
+    setFlagAdding(!(lead?.attentionFlags?.length));
     setFlagModal(true);
   };
 
@@ -971,6 +975,7 @@ export default function LeadDetail() {
     try {
       await api.patch(`/leads/${leadId}/attention-flag/${flagId}/resolve`, {});
       toast.success('Flag resolved');
+      if ((lead?.attentionFlags?.length ?? 0) <= 1) setFlagModal(false);
       loadLead(); loadActivities();
     } catch (e: any) {
       toast.error(e.message ?? 'Could not resolve flag');
@@ -1655,7 +1660,38 @@ export default function LeadDetail() {
       )}
 
       {/* ── Lead attention-flag modal ─────────────────────────────────────────── */}
-      {flagModal && (
+      {flagModal && !flagAdding && (
+        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-warm-lg w-full max-w-sm p-6" data-testid="open-flags">
+            <h3 className="font-bold text-stone-900 mb-1 tracking-tight">Open flags on this lead</h3>
+            <p className="text-xs text-stone-400 mb-4">When the issue is sorted, mark the flag as resolved. It then disappears for everyone.</p>
+            <div className="space-y-2 mb-4 max-h-80 overflow-y-auto">
+              {(lead?.attentionFlags ?? []).map((f) => (
+                <div key={f.id} className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-red-700">{f.category}</span>
+                    <span className="text-[10px] text-stone-400">Raised {fmtDateTime(f.createdAt)}</span>
+                  </div>
+                  <p className="text-xs text-red-600 mt-0.5">{f.description}</p>
+                  <button onClick={() => handleResolveFlag(f.id)} disabled={resolvingFlagId === f.id}
+                    className="mt-2 w-full bg-white text-red-700 border border-red-300 py-1.5 rounded-lg text-xs font-semibold hover:bg-red-100 disabled:opacity-50 transition-colors">
+                    {resolvingFlagId === f.id ? 'Resolving…' : '✓ Mark as resolved'}
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setFlagModal(false)}
+                className="flex-1 text-stone-600 py-2.5 rounded-xl text-sm hover:bg-stone-50 transition-colors"
+                style={{ border: '1px solid #EDE8E3' }}>Close</button>
+              <button onClick={() => setFlagAdding(true)}
+                className="flex-1 text-red-600 py-2.5 rounded-xl text-sm font-semibold hover:bg-red-50 transition-colors"
+                style={{ border: '1px solid #fca5a5' }}>+ Add another flag</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {flagModal && flagAdding && (
         <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-warm-lg w-full max-w-sm p-6">
             <h3 className="font-bold text-stone-900 mb-1 tracking-tight">Flag Lead for Attention</h3>
@@ -1802,7 +1838,7 @@ export default function LeadDetail() {
                 onClick={openFlagModal}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs transition-colors font-medium ${(lead.attentionFlags?.length ?? 0) > 0 ? 'bg-red-600 text-white hover:bg-red-700' : 'text-red-600 hover:bg-red-50'}`}
                 style={{ border: '1px solid #fca5a5' }}
-                title={(lead.attentionFlags?.length ?? 0) > 0 ? 'This lead has open flags — see them on the Overview tab' : 'Flag this lead for attention'}
+                title={(lead.attentionFlags?.length ?? 0) > 0 ? 'See and resolve the open flags on this lead' : 'Flag this lead for attention'}
               ><AlertTriangle size={13} strokeWidth={2} /> {(lead.attentionFlags?.length ?? 0) > 0 ? `Flagged (${lead.attentionFlags!.length})` : 'Flag'}</button>
               <button
                 onClick={() => handleTabChange('activity')}
@@ -1944,6 +1980,20 @@ export default function LeadDetail() {
           <div className="bg-white rounded-b-2xl p-5" style={{ border: '1px solid #EDE8E3' }}>
             {activeTab === 'overview' && lead && (
               <div className="space-y-6">
+                {/* ── Client's answer to the inactive-lead feedback form ─────── */}
+                {lead.inactivationFeedback?.feedbackFormSentAt && (
+                  <div className="rounded-xl px-3 py-2.5 border border-stone-200 bg-stone-50" data-testid="inactive-feedback">
+                    <p className="text-xs font-bold text-stone-700">Client feedback (inactive lead)</p>
+                    {lead.inactivationFeedback.respondedAt ? (
+                      <>
+                        <p className="text-sm text-stone-800 mt-1 whitespace-pre-wrap">{lead.inactivationFeedback.clientResponse}</p>
+                        <p className="text-[10px] text-stone-400 mt-1">Answered {fmtDateTime(lead.inactivationFeedback.respondedAt)}</p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-stone-500 mt-0.5">Form sent {fmtDateTime(lead.inactivationFeedback.feedbackFormSentAt)} — the client hasn't answered yet.</p>
+                    )}
+                  </div>
+                )}
                 {/* ── Attention flags ───────────────────────────────────────── */}
                 {lead.attentionFlags && lead.attentionFlags.length > 0 && (
                   <div className="space-y-2">
@@ -1959,9 +2009,9 @@ export default function LeadDetail() {
                         <button
                           onClick={() => handleResolveFlag(f.id)}
                           disabled={resolvingFlagId === f.id}
-                          className="text-xs font-semibold text-red-700 hover:text-red-900 shrink-0 disabled:opacity-50"
+                          className="text-xs font-semibold text-red-700 bg-white border border-red-300 px-2.5 py-1 rounded-lg hover:bg-red-100 shrink-0 disabled:opacity-50"
                         >
-                          {resolvingFlagId === f.id ? 'Resolving…' : 'Resolve'}
+                          {resolvingFlagId === f.id ? 'Resolving…' : '✓ Mark as resolved'}
                         </button>
                       </div>
                     ))}
@@ -2284,7 +2334,7 @@ export default function LeadDetail() {
                           ? 'bg-red-50 border-red-200 text-red-700'
                           : 'bg-green-50 border-green-200 text-green-700';
                         const label = t.isOverdue ? 'Overdue' : 'Upcoming';
-                        const dueStr = fmtDate(t.dueDate) + (t.dueTime ? ` ${t.dueTime}` : '');
+                        const dueStr = fmtDate(t.dueDate) + (t.dueTime ? ` ${formatTime12(t.dueTime)}` : '');
                         return (
                           <div key={t.id} className={`flex items-center justify-between px-3 py-1.5 rounded-lg border text-xs ${color}`}>
                             <span className="font-medium">{label}</span>

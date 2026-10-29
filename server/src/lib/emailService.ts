@@ -117,6 +117,15 @@ export async function getDraft(key: string): Promise<Draft | null> {
   };
 }
 
+/** The lead's designer and Business Lead email addresses (active users only). */
+async function leadTeamEmails(leadId: string): Promise<string[]> {
+  const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { assignedDesignerId: true, assignedBLId: true } });
+  const ids = [lead?.assignedDesignerId, lead?.assignedBLId].filter((v): v is string => !!v);
+  if (!ids.length) return [];
+  const users = await prisma.user.findMany({ where: { id: { in: ids }, isActive: true }, select: { email: true } });
+  return Array.from(new Set(users.map((u) => u.email).filter(Boolean)));
+}
+
 export async function sendDraft(key: string, to: string, sentByUserId?: string): Promise<void> {
   const draft = await getDraft(key);
   if (!draft) throw new Error('Draft not found');
@@ -126,7 +135,10 @@ export async function sendDraft(key: string, to: string, sentByUserId?: string):
   // Files the sender added on the review screen go along with the mail.
   const extras = draft.meta && sentByUserId ? await takeExtras(draft.meta.leadId, sentByUserId) : [];
   const attachments = [...(draft.attachments ?? []), ...extras];
-  await sendEmail({ to, cc, subject: draft.subject, html: draft.html, attachments: attachments.length ? attachments : undefined });
+  // Sent from the no-reply address, so the client's "Reply" goes to the people
+  // copied in (Admin → Automations), or else to the lead's designer and Business Lead.
+  const replyTo = cc.length ? cc : draft.meta ? (await leadTeamEmails(draft.meta.leadId)).filter((e) => e !== to) : [];
+  await sendEmail({ to, cc, replyTo, subject: draft.subject, html: draft.html, attachments: attachments.length ? attachments : undefined });
   await prisma.emailDraft.deleteMany({ where: { key } });
   if (extras.length && draft.meta && sentByUserId) await clearExtras(draft.meta.leadId, sentByUserId);
 
