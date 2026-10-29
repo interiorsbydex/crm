@@ -323,7 +323,9 @@ async function inactiveLeads(q: Record<string, string>, user: ReportUser) {
     name: l.name,
     designer: l.assignedDesigner?.name ?? 'Unassigned',
     source: l.source,
-    reason: l.inactivationFeedback?.reason ?? '',
+    // The stage the lead stopped at, and the reason the team gave when marking it inactive.
+    stage: l.stage,
+    reason: l.inactiveReason || l.inactivationFeedback?.reason || '',
     feedbackFormSentAt: l.inactivationFeedback?.feedbackFormSentAt?.toISOString() ?? null,
     clientResponded: !!(l.inactivationFeedback?.respondedAt),
     feedbackResponse: l.inactivationFeedback?.clientResponse ?? null,
