@@ -37,10 +37,10 @@ describe('Possession filter', () => {
 });
 
 describe('Export permission', () => {
-  it('is in Admin → Permissions, Branch Head only until Annie switches BLs on', () => {
+  it('is in Admin → Permissions, off for everyone (Branch Head too) until Annie switches it on', () => {
     const def = PERMISSIONS.find((p) => p.key === 'LEAD_EXPORT')!;
     expect(def.roles).toEqual(['BL', 'BRANCH_HEAD']);
-    expect(defaultPermissions().LEAD_EXPORT).toEqual(['BRANCH_HEAD']);
+    expect(defaultPermissions().LEAD_EXPORT).toEqual([]);
   });
   it('the Branch Head can switch it off for itself, and back on', async () => {
     expect((await permissionsConfig.spec.validate({ LEAD_EXPORT: [] })).LEAD_EXPORT).toEqual([]);
