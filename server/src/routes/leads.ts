@@ -249,7 +249,7 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
     }
 
     // Possession: "Possession Received" or a possession date range.
-    const possessionCond = possessionWhere(possession, possessionDateFrom, possessionDateTo);
+    const possessionCond = await possessionWhere(prisma, possession, possessionDateFrom, possessionDateTo);
     if (possessionCond) where.AND = [...(Array.isArray(where.AND) ? where.AND : []), possessionCond];
 
     // Projected OB date range — Task #83 added a dedicated expectedObDate
@@ -905,7 +905,7 @@ leadsRouter.get('/export', verifyToken, requirePermission('LEAD_EXPORT'), async 
       if (!isNaN(max)) estimatedValue.lte = max;
       where.estimatedValue = estimatedValue;
     }
-    const possessionCond = possessionWhere(possession, possessionDateFrom, possessionDateTo);
+    const possessionCond = await possessionWhere(prisma, possession, possessionDateFrom, possessionDateTo);
     if (possessionCond) where.AND = [...(Array.isArray(where.AND) ? where.AND : []), possessionCond];
     if (projectedObFrom || projectedObTo) {
       const expectedObDate: any = {};

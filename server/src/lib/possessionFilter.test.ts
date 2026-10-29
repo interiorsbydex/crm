@@ -1,38 +1,46 @@
 import { describe, it, expect } from 'vitest';
-import { possessionWhere } from './possessionFilter.js';
+import { possessionDate, possessionWhere } from './possessionFilter.js';
 import { PERMISSIONS, defaultPermissions, permissionsConfig } from './permissions.js';
 
-// Mirrors the text comparisons Postgres does for the conditions possessionWhere builds.
-function matches(cond: any, value: string | null): boolean {
-  if (!cond) return true;
-  if (cond.AND) return cond.AND.every((c: any) => matches(c, value));
-  const f = cond.possessionTimeline;
-  if (value == null) return false;
-  if (f.contains !== undefined) return f.mode === 'insensitive' ? value.toLowerCase().includes(f.contains.toLowerCase()) : value.includes(f.contains);
-  if (f.gte !== undefined) return value >= f.gte;
-  if (f.lte !== undefined) return value <= f.lte;
-  return false;
-}
-
-const values = ['Possession Received', '2026-11-15', '2027-03-01', '3 months', null];
+// Values as they appear on Annie's live leads.
+const leads = [
+  { id: 'rec', possessionTimeline: 'Possession Received' },
+  { id: 'iso', possessionTimeline: '2026-11-15' },
+  { id: 'dmy', possessionTimeline: '01-12-2026' },
+  { id: 'dmy27', possessionTimeline: '01-09-2027' },
+  { id: 'range', possessionTimeline: '3-6 months' },
+  { id: 'range2', possessionTimeline: '6-12 months' },
+  { id: 'text', possessionTimeline: 'Dec 2026' },
+  { id: 'year', possessionTimeline: '2027' },
+];
+const db = { lead: { findMany: async () => leads } };
+const run = async (p?: string, from?: string, to?: string) => {
+  const c = await possessionWhere(db, p, from, to);
+  if (!c) return null;
+  if (c.id) return c.id.in.sort();
+  return leads.filter((l) => l.possessionTimeline.toLowerCase().includes(c.possessionTimeline.contains)).map((l) => l.id);
+};
 
 describe('Possession filter', () => {
-  it('no filter → no condition', () => {
-    expect(possessionWhere('', '', '')).toBeNull();
+  it('reads both date styles, and nothing that is not a full date', () => {
+    expect(possessionDate('2026-11-15')).toBe('2026-11-15');
+    expect(possessionDate('01-12-2026')).toBe('2026-12-01');
+    expect(possessionDate('3-6 months')).toBeNull();
+    expect(possessionDate('Dec 2026')).toBeNull();
+    expect(possessionDate('2027')).toBeNull();
   });
-  it('"Possession Received" finds only received leads', () => {
-    const c = possessionWhere('received', '2026-01-01', '2026-12-31');
-    expect(values.filter((v) => matches(c, v))).toEqual(['Possession Received']);
+  it('no filter → no condition', async () => {
+    expect(await run('', '', '')).toBeNull();
   });
-  it('"Possession date given" finds only leads with a date', () => {
-    const c = possessionWhere('date');
-    expect(values.filter((v) => matches(c, v))).toEqual(['2026-11-15', '2027-03-01']);
+  it('"Possession Received" finds only received leads', async () => {
+    expect(await run('received', '2026-01-01', '2026-12-31')).toEqual(['rec']);
   });
-  it('a date range keeps both end days and leaves out received / free text', () => {
-    const c = possessionWhere('', '2026-11-15', '2026-12-31');
-    expect(values.filter((v) => matches(c, v))).toEqual(['2026-11-15']);
-    const c2 = possessionWhere('', '2026-01-01', '2027-03-01');
-    expect(values.filter((v) => matches(c2, v))).toEqual(['2026-11-15', '2027-03-01']);
+  it('"Possession date given" finds leads with a date in either style, not "3-6 months"', async () => {
+    expect(await run('date')).toEqual(['dmy', 'dmy27', 'iso']);
+  });
+  it('a date range keeps both end days and compares real dates', async () => {
+    expect(await run('', '2026-11-15', '2026-12-01')).toEqual(['dmy', 'iso']);
+    expect(await run('', '2027-01-01', '')).toEqual(['dmy27']);
   });
 });
 
