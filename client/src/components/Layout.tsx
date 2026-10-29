@@ -10,6 +10,7 @@ import {
 import { api } from '../lib/api';
 import NotificationList from './NotificationList';
 import { getStoredUser, logout } from '../lib/auth';
+import { useNewVersionAvailable, reloadToNewVersion } from '../lib/versionCheck';
 import { validateEmail, validatePhoneStrict } from '../lib/validation';
 import PhoneInput from './PhoneInput';
 import LeadLocationSelector from './LeadLocationSelector';
@@ -116,6 +117,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, []);
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // A Publish happened while this tab was open: offer a reload, and take it on the next page change.
+  const newVersion = useNewVersionAvailable();
+  const firstPath = useRef(location.pathname);
+  useEffect(() => {
+    if (newVersion && location.pathname !== firstPath.current) reloadToNewVersion();
+    firstPath.current = location.pathname;
+  }, [location.pathname, newVersion]);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchLead[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -418,6 +426,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        {newVersion && (
+          <div className="bg-brand-500 text-white text-sm px-4 py-2 flex items-center gap-3 shrink-0" data-testid="new-version-banner">
+            <span className="flex-1">A new version of the CRM is ready. Reload to see the latest screens (it also reloads when you open another page).</span>
+            <button onClick={reloadToNewVersion} className="bg-white text-brand-700 font-semibold rounded-lg px-3 py-1 text-xs">Reload now</button>
+          </div>
+        )}
         {/* Top bar */}
         <header className="bg-white px-4 py-2.5 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid #EDE8E3' }}>
           {/* Search */}
