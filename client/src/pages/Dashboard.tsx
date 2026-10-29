@@ -26,6 +26,8 @@ interface DashboardData {
   totalLeads: number;
   activeLeads: number;
   activeLeadsValue?: number;
+  activeLeadsInDesign?: number;
+  unassignedLeads?: number | null;
   activeProjectsDip?: { count: number; value: number };
   pipelineValue: number;
   avgNPS: number | null;
@@ -198,10 +200,20 @@ function BHDashboard({ data }: { data: DashboardData }) {
         <KPICard
           label={L('bh.activeLeads', 'Active Leads')}
           value={data.activeLeads}
-          sub={`${fmt(data.activeLeadsValue ?? 0)} estimated value`}
+          sub={`${fmt(data.activeLeadsValue ?? 0)} estimated value · before Design in Progress${data.activeLeadsInDesign ? ` (+${data.activeLeadsInDesign} in Design, shown under Active Projects)` : ''}`}
           to="/leads?mine=1&status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
         />
         </Tile>
+{data.unassignedLeads != null && (
+<Tile id="bh.unassignedLeads">
+        <KPICard
+          label={L('bh.unassignedLeads', 'Unassigned Leads')}
+          value={data.unassignedLeads}
+          sub="Active, past Effective Lead, with no designer or Business Lead"
+          to="/leads?status=ACTIVE&excludeStages=EFFECTIVE_LEAD&unassigned=1"
+        />
+        </Tile>
+)}
 <Tile id="bh.activeProjects">
         <KPICard
           label={L('bh.activeProjects', 'Active Projects')}
@@ -375,7 +387,7 @@ function BHDashboard({ data }: { data: DashboardData }) {
             )}
           </div>
           <p className="text-[10px] text-stone-400 mb-3">
-            % = reached this stage or later ÷ total received · TAT = average stage entry − MQL received
+            % = reached this stage or later ÷ total received (Effective Leads included). Imported leads have no stage history, so this counts each lead at the stage it is at now. TAT = average stage entry − MQL received
           </p>
           <div className="space-y-3">
             {(data.stageConversion ?? []).map((r) => (

@@ -36,6 +36,7 @@ import {
 } from '../lib/stageTimeline.js';
 import { isAutomationOn } from '../lib/automations.js';
 import { requirePermission, hasPermission } from '../lib/permissions.js';
+import { projectTypeWhere } from '../lib/projectTypeGroup.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -119,6 +120,8 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       hasUnresolvedSlaBreach,
       // flagged=true: only leads with an open (not yet resolved) attention flag.
       flagged,
+      // unassigned=1: only leads with no designer and no Business Lead (the Branch Head's "No owner" filter).
+      unassigned,
       // Dashboard drill-through: the ownership scope the dashboard counted,
       // not the wider "which leads may I open" scope.
       mine,
@@ -176,9 +179,10 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       where.stage = { ...(where.stage ?? {}), notIn: ['HANDED_OVER', 'DESIGN_IN_PROGRESS', 'ONBOARDING'] };
       where.slaBreaches = { some: { resolvedAt: null } };
     }
+    if (unassigned === '1') { where.assignedDesignerId = null; where.assignedBLId = null; }
     if (flagged === 'true') where.attentionFlags = { some: { resolvedAt: null } };
     // G2: new filter params
-    if (projectType) where.projectType = projectType;
+    if (projectType) where.AND = [...(Array.isArray(where.AND) ? where.AND : []), projectTypeWhere(projectType)];
     if (location) where.location = { contains: location, mode: 'insensitive' };
     if (intent) where.intentRating = parseInt(intent);
     if (intentMin || intentMax) {
@@ -217,7 +221,8 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
 
     // Origin date range.
     if (originDateFrom || originDateTo) {
-      const existingCat = where.createdAt ?? {};
+      // Lead origin date = the day the lead came in (the filter is labelled that way), not the day it was imported.
+      const existingCat = where.leadOriginDate ?? {};
       if (originDateFrom) (existingCat as any).gte = new Date(originDateFrom);
       if (originDateTo) {
         // include full end day
@@ -225,7 +230,7 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
         end.setHours(23, 59, 59, 999);
         (existingCat as any).lte = end;
       }
-      where.createdAt = existingCat;
+      where.leadOriginDate = existingCat;
     }
 
     // Budget / estimated value range.
@@ -804,7 +809,7 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
     const {
       stage, source, designerId, blId, allocatedToId, search,
       projectType, location, dateRange, intent,
-      status, format,
+      status, format, unassigned,
       originDateFrom, originDateTo,
       budgetMin, budgetMax,
       possessionDateFrom, possessionDateTo,
@@ -837,13 +842,14 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
       ];
     }
     if (blId) where.assignedBLId = blId;
+    if (unassigned === '1') { where.assignedDesignerId = null; where.assignedBLId = null; }
     if (allocatedToId) {
       where.AND = [
         ...(Array.isArray(where.AND) ? where.AND : []),
         { OR: [{ assignedDesignerId: allocatedToId }, { assignedBLId: allocatedToId }] },
       ];
     }
-    if (projectType) where.projectType = projectType;
+    if (projectType) where.AND = [...(Array.isArray(where.AND) ? where.AND : []), projectTypeWhere(projectType)];
     if (location) where.location = { contains: location, mode: 'insensitive' };
     if (search) {
       // Same AND-wrap as the list handler — never overwrite role-scope OR clauses.
@@ -868,14 +874,14 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
       }
     }
     if (originDateFrom || originDateTo) {
-      const createdAt: any = {};
-      if (originDateFrom) createdAt.gte = new Date(originDateFrom);
+      const originRange: any = {};
+      if (originDateFrom) originRange.gte = new Date(originDateFrom);
       if (originDateTo) {
         const end = new Date(originDateTo);
         end.setHours(23, 59, 59, 999);
-        createdAt.lte = end;
+        originRange.lte = end;
       }
-      where.createdAt = createdAt;
+      where.leadOriginDate = originRange;
     }
     if (budgetMin || budgetMax) {
       const estimatedValue: any = {};

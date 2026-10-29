@@ -153,6 +153,8 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     stagesMovedToday,
     tasksCompletedToday,
     activeLeads,
+    activeLeadsInDesign,
+    unassignedLeads,
     onboardingLeads,
     ppMeetingsForStats,
     pipelineValueRaw,
@@ -171,12 +173,13 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     // Revenue Generated: total collected payments (all-time, no date-range cap)
     revenueGeneratedRaw,
   ] = await Promise.all([
-    prisma.lead.count({ where: { ...receivedFunnelWhere, createdAt: { gte: rangeFrom, lte: rangeTo } } }),
-    prisma.lead.count({ where: { ...receivedFunnelWhere, createdAt: { gte: today } } }),
-    prisma.lead.count({ where: { ...receivedFunnelWhere, createdAt: { gte: week } } }),
-    prisma.lead.count({ where: { ...receivedFunnelWhere, createdAt: { gte: month } } }),
-    prisma.lead.groupBy({ by: ['stage'], where: { ...receivedFunnelWhere, createdAt: { gte: rangeFrom, lte: rangeTo } }, _count: { id: true } }),
-    prisma.lead.groupBy({ by: ['source'], where: { ...receivedFunnelWhere, createdAt: { gte: rangeFrom, lte: rangeTo } }, _count: { id: true } }),
+    // "Received" counts by the day the lead came in (leadOriginDate), not the day it was imported or typed in.
+    prisma.lead.count({ where: { ...receivedFunnelWhere, leadOriginDate: { gte: rangeFrom, lte: rangeTo } } }),
+    prisma.lead.count({ where: { ...receivedFunnelWhere, leadOriginDate: { gte: today } } }),
+    prisma.lead.count({ where: { ...receivedFunnelWhere, leadOriginDate: { gte: week } } }),
+    prisma.lead.count({ where: { ...receivedFunnelWhere, leadOriginDate: { gte: month } } }),
+    prisma.lead.groupBy({ by: ['stage'], where: { ...receivedFunnelWhere, leadOriginDate: { gte: rangeFrom, lte: rangeTo } }, _count: { id: true } }),
+    prisma.lead.groupBy({ by: ['source'], where: { ...receivedFunnelWhere, leadOriginDate: { gte: rangeFrom, lte: rangeTo } }, _count: { id: true } }),
     prisma.sLABreach.findMany({
       // ONBOARDING excluded (task #14): legacy breach rules never covered
       // OB→OBM, so any flag here would be stale/carried over from an earlier
@@ -215,6 +218,14 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     prisma.lead.count({
       where: { ...leadWhere, status: 'ACTIVE', stage: { notIn: ['HANDED_OVER', 'DESIGN_IN_PROGRESS'] } },
     }),
+    // Active leads that are in Design in Progress: shown as "+N in Design" next to Active Leads (they are the Active Projects tile).
+    prisma.lead.count({ where: { ...leadWhere, status: 'ACTIVE', stage: 'DESIGN_IN_PROGRESS' } }),
+    // Active leads past Effective Lead that nobody owns (no designer, no Business Lead). Branch Head only.
+    user.role === 'BRANCH_HEAD'
+      ? prisma.lead.count({
+        where: { ...leadWhere, isTestLead: false, status: 'ACTIVE', stage: { notIn: ['EFFECTIVE_LEAD'] }, assignedDesignerId: null, assignedBLId: null },
+      })
+      : Promise.resolve(null),
     // "Won" leads: both DESIGN_IN_PROGRESS (current funnel) and HANDED_OVER
     // (legacy) must have a completed DIP checklist to count as won.
     // The unconditional HANDED_OVER branch was a regression — legacy leads
@@ -321,7 +332,8 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
   // Unfiltered snapshot map (used for conversion rates only)
   const stageMapAll: Record<string, number> = {};
   for (const row of stageCountsAll) stageMapAll[row.stage] = row._count.id;
-  const totalAllStages = PIPELINE_STAGES.reduce((sum, s) => sum + (stageMapAll[s] ?? 0), 0);
+  // Base of the funnel = every non-test lead received, Effective Leads included (not only MQL and later).
+  const totalAllStages = Object.values(stageMapAll).reduce((sum, n) => sum + n, 0);
 
   const stageFunnel = PIPELINE_STAGES.map((s) => ({ stage: s, count: stageMap[s] ?? 0 }));
 
@@ -341,13 +353,15 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
   // A lead at a later stage has necessarily progressed through every earlier
   // funnel stage. Therefore: stage % = (leads at this stage OR any later active
   // funnel stage ÷ total leads received) × 100. MQL is the entry point (100%).
-  const reachedCountAt = (stage: PipelineStage) => {
+  const reachedCountAt = (stage: PipelineStage | 'EFFECTIVE_LEAD') => {
+    // Effective Lead is the first row: everything received has reached it.
+    if (stage === 'EFFECTIVE_LEAD') return totalAllStages;
     const index = PIPELINE_STAGES.indexOf(stage);
     return PIPELINE_STAGES
       .slice(index)
       .reduce((sum, laterStage) => sum + (stageMapAll[laterStage] ?? 0), 0);
   };
-  const rateAt = (stage: PipelineStage) => {
+  const rateAt = (stage: PipelineStage | 'EFFECTIVE_LEAD') => {
     const reached = reachedCountAt(stage);
     return totalAllStages > 0 ? Math.min(100, Math.round((reached / totalAllStages) * 100)) : 0;
   };
@@ -393,19 +407,23 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
   }
 
   // Per-stage count + cumulative percentage + TAT for the dashboard panel.
-  const stageConversion = PIPELINE_STAGES.map((s) => ({
-    stage: s,
-    count: stageMapAll[s] ?? 0,
-    reachedCount: reachedCountAt(s),
-    pct: rateAt(s),
-    tatSampleSize: tatDaysByStage.get(s)!.length,
-    avgTatDays: tatDaysByStage.get(s)!.length > 0
-      ? +(
-        tatDaysByStage.get(s)!.reduce((sum, days) => sum + days, 0)
-        / tatDaysByStage.get(s)!.length
-      ).toFixed(1)
-      : null,
-  }));
+  // Imported leads carry no stage history, so every figure is by the lead's current stage.
+  const stageConversion = [
+    { stage: 'EFFECTIVE_LEAD', count: stageMapAll.EFFECTIVE_LEAD ?? 0, reachedCount: reachedCountAt('EFFECTIVE_LEAD'), pct: rateAt('EFFECTIVE_LEAD'), tatSampleSize: 0, avgTatDays: null as number | null },
+    ...PIPELINE_STAGES.map((s) => ({
+      stage: s as string,
+      count: stageMapAll[s] ?? 0,
+      reachedCount: reachedCountAt(s),
+      pct: rateAt(s),
+      tatSampleSize: tatDaysByStage.get(s)!.length,
+      avgTatDays: tatDaysByStage.get(s)!.length > 0
+        ? +(
+          tatDaysByStage.get(s)!.reduce((sum, days) => sum + days, 0)
+          / tatDaysByStage.get(s)!.length
+        ).toFixed(1)
+        : null,
+    })),
+  ];
   const totalLeadsReceived = totalAllStages;
 
   // ── avgNPS: average of per-stage averages ────────────────────────────────────
@@ -1286,6 +1304,8 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     // this is NOT scoped to the createdAt date range, so it reflects the
     // real current pipeline even when no new leads were created this period.
     activeLeads,
+    activeLeadsInDesign,
+    unassignedLeads,
     activeLeadsValue,
     activeProjectsDip,
     obProgress,

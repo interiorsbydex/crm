@@ -334,7 +334,7 @@ export default function Reports() {
     const qs = buildQS();
     const qsStr = qs ? '?' + qs : '';
     const endpoints = [
-      'lead_summary', 'pipeline', 'source_performance', 'designer_performance',
+      'lead_summary', 'pipeline', 'project_type', 'source_performance', 'designer_performance',
       'monthly_trend', 'offer_performance', 'campaign_performance', 'inactive_leads',
       'meeting_performance', 'conversion', 'bl_performance', 'sales_cycle',
       'lead_aging', 'timeline_performance',
@@ -392,11 +392,13 @@ export default function Reports() {
   const totalLeads = leadSummaryRows.reduce((s, row) => s + ((row.count as number) || 0), 0);
 
   const pipelineRows: AnyRow[] = Array.isArray(r.pipeline?.data) ? r.pipeline.data : [];
-  // "Won"/converted: DESIGN_IN_PROGRESS is the funnel's terminal/incentive
-  // stage; HANDED_OVER kept for legacy leads (see funnel-restructure memory).
-  const onboardedCount = pipelineRows
-    .filter((row) => row.stage === 'DESIGN_IN_PROGRESS' || row.stage === 'HANDED_OVER')
+  // "Onboarded" = reached Onboarding or later, the same as the Dashboard funnel. "Booked" = Design in Progress
+  // (the funnel's terminal/incentive stage; HANDED_OVER kept for legacy leads, see funnel-restructure memory).
+  const countAt = (stages: string[]) => pipelineRows
+    .filter((row) => stages.includes(String(row.stage)))
     .reduce((s, row) => s + ((row.count as number) || 0), 0);
+  const onboardedCount = countAt(['ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER']);
+  const bookedCount = countAt(['DESIGN_IN_PROGRESS', 'HANDED_OVER']);
   const conversionPct = totalLeads > 0 ? ((onboardedCount / totalLeads) * 100).toFixed(1) + '%' : '0%';
   const activeDesigners = Array.isArray(r.designer_performance?.data)
     ? r.designer_performance.data.length : 0;
@@ -407,6 +409,9 @@ export default function Reports() {
     stageKey: row.stage as string,
     count: row.count as number,
   }));
+
+  const projectTypeRows: AnyRow[] = Array.isArray(r.project_type?.data) ? r.project_type.data : [];
+  const projectTypeTotal = projectTypeRows.reduce((s, row) => s + ((row.count as number) || 0), 0);
 
   // Source chart data
   const sourceRows: AnyRow[] = Array.isArray(r.source_performance?.data) ? r.source_performance.data : [];
@@ -487,10 +492,10 @@ export default function Reports() {
           </button>
         </div>
         <p className="basis-full text-[11px] text-gray-500" data-testid="reports-range-note">
-          Most reports here count leads <strong>created</strong> {(() => {
+          Most reports here count leads by their <strong>origin date</strong> (the day the lead came in) {(() => {
             const r = preset === 'custom' ? { startDate: customStart, endDate: customEnd } : getPresetRange(preset);
             return r.startDate && r.endDate ? `between ${r.startDate} and ${r.endDate}` : 'in the period you choose';
-          })()}. A lead created earlier will not appear here even if you move it today. Choose a wider period or a Custom Range to include it. Leads marked as Test Leads are never counted.
+          })()}. A lead that came in earlier will not appear here even if you move it today. Choose a wider period or a Custom Range to include it. Imported leads have no stage history, so stage figures are by the stage each lead is at now. Leads marked as Test Leads are never counted.
         </p>
         {preset === 'custom' && (
           <div className="flex items-center gap-2">
@@ -535,7 +540,7 @@ export default function Reports() {
                   {['MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS']
                     .filter((st) => !crm.hiddenStages.includes(st)).map((st) => <option key={st} value={st}>{stageLabel(st)}</option>)}
                 </select>
-                <input aria-label="Project type" placeholder="Project type (e.g. 2BHK)" className={`${sel} w-40`} value={filters.projectType} onChange={(e) => setFilter('projectType', e.target.value)} />
+                <input aria-label="Project type" placeholder="Project type (e.g. Apartment, or (blank))" className={`${sel} w-52`} value={filters.projectType} onChange={(e) => setFilter('projectType', e.target.value)} />
                 <select aria-label="Location" className={sel} value={filters.location} onChange={(e) => setFilter('location', e.target.value)}>
                   <option value="">All locations</option>
                   {crm.cities.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
@@ -630,9 +635,10 @@ export default function Reports() {
               </div>
 
               {/* KPI row */}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-5 gap-3">
                 <KPICard label="Total Leads" value={r.lead_summary?.loading ? '…' : totalLeads} color="brand" />
-                <KPICard label="Onboarded" value={r.pipeline?.loading ? '…' : onboardedCount} sub="Design in Progress + Handed Over" color="green" />
+                <KPICard label="Onboarded" value={r.pipeline?.loading ? '…' : onboardedCount} sub="Reached Onboarding or later" color="green" />
+                <KPICard label="Booked / Design in Progress" value={r.pipeline?.loading ? '…' : bookedCount} sub="Design in Progress + Handed Over" color="green" />
                 <KPICard label="Conversion" value={r.pipeline?.loading ? '…' : conversionPct} sub="Leads → onboarded" color="blue" />
                 <KPICard label="Active Designers" value={r.designer_performance?.loading ? '…' : activeDesigners} />
               </div>
@@ -716,6 +722,28 @@ export default function Reports() {
                       </>
                     )}
                   </div>
+                </div>
+              </div>
+
+              {/* Project type (grouped by the first word typed) */}
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-gray-800">Project type <span className="font-normal text-gray-400">· grouped by the first word, e.g. “Apartment - 3bhk” counts under Apartment</span></p>
+                  <button onClick={() => doExport('project_type')}
+                    className="text-[10px] text-gray-400 hover:text-gray-700 border border-gray-200 px-2 py-0.5 rounded-lg">
+                    ↓ CSV
+                  </button>
+                </div>
+                <div className="p-4">
+                  {r.project_type?.loading ? <Loader /> : (
+                    <MiniTable
+                      headers={[{ key: 'projectType', label: 'Project type' }, { key: 'count', label: 'Leads' }, { key: '_share', label: 'Share %' }]}
+                      rows={projectTypeRows.map((row) => ({
+                        ...row,
+                        _share: projectTypeTotal > 0 ? (((row.count as number) / projectTypeTotal) * 100).toFixed(1) + '%' : '—',
+                      }))}
+                    />
+                  )}
                 </div>
               </div>
             </div>

@@ -19,6 +19,7 @@ export const DASHBOARD_TILES: DashboardTileDef[] = [
   // Branch Head dashboard
   { id: 'bh.salesPipeline', dashboard: 'bh', section: 'Key numbers', label: 'Sales Pipeline' },
   { id: 'bh.activeLeads', dashboard: 'bh', section: 'Key numbers', label: 'Active Leads' },
+  { id: 'bh.unassignedLeads', dashboard: 'bh', section: 'Key numbers', label: 'Unassigned Leads' },
   { id: 'bh.activeProjects', dashboard: 'bh', section: 'Key numbers', label: 'Active Projects' },
   { id: 'bh.inDelivery', dashboard: 'bh', section: 'Key numbers', label: 'In Delivery' },
   { id: 'bh.collectedThisMonth', dashboard: 'bh', section: 'Key numbers', label: 'Collected This Month' },

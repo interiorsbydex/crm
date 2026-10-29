@@ -4,6 +4,7 @@ import { verifyToken, requireRole } from '../middleware/auth.js';
 import { buildLeadRoleWhere } from '../lib/leadScope.js';
 import { getCrmSettings, sourceDisplayName, sourceMatchWhere } from '../lib/crmSettings.js';
 import { getWonStages } from '../lib/reportDefinitions.js';
+import { projectTypeGroup, projectTypeGroupLabel, projectTypeWhere } from '../lib/projectTypeGroup.js';
 
 export const reportsRouter = Router();
 
@@ -13,6 +14,9 @@ type Handler = (q: Record<string, string>, user: ReportUser) => Promise<unknown>
 // Active funnel only (EFFECTIVE_LEAD/HANDED_OVER are legacy-only and excluded
 // from funnel-shaped reports — see .agents/memory/funnel-restructure.md).
 const PIPELINE_STAGES = ['MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS'];
+// Pipeline-stage distribution lists every stage so its total equals Total Leads: Effective Leads on top, and the legacy
+// Handed Over row only when a lead is still sitting there.
+const DISTRIBUTION_STAGES = ['EFFECTIVE_LEAD', ...PIPELINE_STAGES, 'HANDED_OVER'];
 // "Won"/converted stages for conversion-rate and trend reports come from
 // Admin → Reports & NPS (default: DESIGN_IN_PROGRESS, plus HANDED_OVER for legacy leads).
 
@@ -33,6 +37,11 @@ function toCSV(rows: Record<string, unknown>[]): string {
   return lines.join('\n');
 }
 
+/** startDate as the first instant of that day in IST (see endOfDayIST). */
+function startOfDayIST(v: string): Date {
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00.000+05:30`) : new Date(v);
+}
+
 /** endDate as the last instant of that day in IST. A bare YYYY-MM-DD (what the Reports page sends) used to be read as
  *  00:00 UTC, which dropped almost the whole end day. Full ISO timestamps are left exactly as given. */
 function endOfDayIST(v: string): Date {
@@ -42,19 +51,23 @@ function endOfDayIST(v: string): Date {
 // ── Build date + filter where clause from query params ────────────────────────
 export async function buildLeadWhere(q: Record<string, string>, userRole?: string, userId?: string) {
   const where: any = { isTestLead: false };
-  if (q.startDate) where.createdAt = { ...where.createdAt, gte: new Date(q.startDate) };
-  if (q.endDate) where.createdAt = { ...where.createdAt, lte: endOfDayIST(q.endDate) };
+  const andParts: unknown[] = [];
+  // Reports count a lead on the day it came in (leadOriginDate), not the day it was typed or imported into the CRM.
+  if (q.startDate) where.leadOriginDate = { ...where.leadOriginDate, gte: startOfDayIST(q.startDate) };
+  if (q.endDate) where.leadOriginDate = { ...where.leadOriginDate, lte: endOfDayIST(q.endDate) };
   if (q.designerId) where.assignedDesignerId = q.designerId;
   if (q.blId) where.assignedBLId = q.blId;
-  if (q.source) where.AND = [...(Array.isArray(where.AND) ? where.AND : []), await sourceMatchWhere(q.source)];
+  if (q.source) andParts.push(await sourceMatchWhere(q.source));
   if (q.stage) where.stage = q.stage;
-  // Typed project types match whatever capitals were used; a city matches areas inside it ("Chennai" finds "Adyar, Chennai").
-  if (q.projectType) where.projectType = { equals: q.projectType.trim(), mode: 'insensitive' };
+  // "Apartment" finds "Apartment - 3bhk" (grouped by first word); other typed values match whatever capitals were used.
+  // A city matches areas inside it ("Chennai" finds "Adyar, Chennai").
+  if (q.projectType?.trim()) andParts.push(projectTypeWhere(q.projectType));
   if (q.location) where.location = { contains: q.location.trim(), mode: 'insensitive' };
   // Role scope is AND-ed (own key `AND`), so no query parameter above can widen it.
   // DESIGN_MANAGER (and any other role) is intentionally left unscoped — unresolved.
   const scope = await leadScope(userRole, userId);
-  if (scope) where.AND = [scope];
+  if (scope) andParts.push(scope);
+  if (andParts.length) where.AND = andParts;
   return where;
 }
 
@@ -110,7 +123,7 @@ async function pipeline(q: Record<string, string>, user: ReportUser) {
     _count: { id: true },
     _avg: { daysLeadToDQL: true, daysDQLToPP: true, daysPPToOnboarding: true },
   });
-  return PIPELINE_STAGES.map((s) => {
+  return DISTRIBUTION_STAGES.filter((s) => s !== 'HANDED_OVER' || rows.some((x) => x.stage === s)).map((s) => {
     const r = rows.find((x) => x.stage === s);
     return {
       stage: s,
@@ -122,13 +135,27 @@ async function pipeline(q: Record<string, string>, user: ReportUser) {
   });
 }
 
+/** Leads per project type, grouped by the first word (Apartment, Villa, Rent, …) with the rest of what was typed ignored. */
+async function projectType(q: Record<string, string>, user: ReportUser) {
+  const where = await buildLeadWhere(q, user.role, user.id);
+  const rows = await prisma.lead.groupBy({ by: ['projectType'], where, _count: { id: true } });
+  const merged = new Map<string, number>();
+  for (const r of rows) {
+    const g = projectTypeGroup(r.projectType);
+    merged.set(g, (merged.get(g) ?? 0) + r._count.id);
+  }
+  return [...merged.entries()]
+    .map(([group, count]) => ({ projectType: projectTypeGroupLabel(group), count }))
+    .sort((a, b) => (a.projectType === '(blank)' ? 1 : b.projectType === '(blank)' ? -1 : b.count - a.count));
+}
+
 async function conversion(q: Record<string, string>, user: ReportUser) {
   const where = await buildLeadWhere(q, user.role, user.id);
   const stageCounts = await prisma.lead.groupBy({ by: ['stage'], where, _count: { id: true } });
   const stageMap: Record<string, number> = {};
   for (const r of stageCounts) stageMap[r.stage] = r._count.id;
-  // Total Leads Received = all leads across every pipeline stage in this filter.
-  const total = PIPELINE_STAGES.reduce((a, s) => a + (stageMap[s] ?? 0), 0);
+  // Total Leads Received = every lead in this filter, Effective Leads included (same base as the Dashboard funnel).
+  const total = Object.values(stageMap).reduce((a, n) => a + n, 0);
   const result = [];
   for (let i = 0; i < PIPELINE_STAGES.length - 1; i++) {
     const from = PIPELINE_STAGES[i];
@@ -436,21 +463,23 @@ async function leadAging(q: Record<string, string>, user: ReportUser) {
     .sort((a, b) => b.overdueDays - a.overdueDays);
 }
 
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
 async function monthlyTrend(q: Record<string, string>, user: ReportUser) {
   const WON_STAGES = await getWonStages();
   const where = await buildLeadWhere(q, user.role, user.id);
-  const startDate = q.startDate ? new Date(q.startDate) : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+  const startDate = q.startDate ? startOfDayIST(q.startDate) : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
   const endDate = q.endDate ? endOfDayIST(q.endDate) : new Date();
 
   const leads = await prisma.lead.findMany({
-    where: { ...where, createdAt: { gte: startDate, lte: endDate } },
-    select: { createdAt: true, stage: true },
+    where: { ...where, leadOriginDate: { gte: startDate, lte: endDate } },
+    select: { leadOriginDate: true, stage: true },
   });
 
   // Group by month
   const monthMap: Record<string, { month: string; leads: number; onboardings: number }> = {};
   for (const l of leads) {
-    const key = l.createdAt.toISOString().slice(0, 7); // YYYY-MM
+    const key = new Date(l.leadOriginDate.getTime() + IST_OFFSET_MS).toISOString().slice(0, 7); // YYYY-MM, IST calendar month
     if (!monthMap[key]) monthMap[key] = { month: key, leads: 0, onboardings: 0 };
     monthMap[key].leads++;
     if (WON_STAGES.includes(l.stage)) monthMap[key].onboardings++;
@@ -487,6 +516,7 @@ async function offerPerformance(q: Record<string, string>, user: ReportUser) {
 const HANDLERS: Record<string, Handler> = {
   lead_summary: leadSummary,
   pipeline,
+  project_type: projectType,
   conversion,
   timeline_performance: timelinePerformance,
   designer_performance: designerPerformance,
