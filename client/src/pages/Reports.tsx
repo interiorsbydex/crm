@@ -632,7 +632,7 @@ export default function Reports() {
               {/* KPI row */}
               <div className="grid grid-cols-4 gap-3">
                 <KPICard label="Total Leads" value={r.lead_summary?.loading ? '…' : totalLeads} color="brand" />
-                <KPICard label="Onboarded" value={r.pipeline?.loading ? '…' : onboardedCount} sub="Onboarding + Handed Over" color="green" />
+                <KPICard label="Onboarded" value={r.pipeline?.loading ? '…' : onboardedCount} sub="Design in Progress + Handed Over" color="green" />
                 <KPICard label="Conversion" value={r.pipeline?.loading ? '…' : conversionPct} sub="Leads → onboarded" color="blue" />
                 <KPICard label="Active Designers" value={r.designer_performance?.loading ? '…' : activeDesigners} />
               </div>
