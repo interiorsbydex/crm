@@ -4,10 +4,11 @@ import { api } from '../../lib/api';
 import { loadMyPermissions } from '../../lib/permissions';
 
 // Admin → Permissions: which roles may do each action (server: lib/permissions.ts).
-// A role can only be ticked for actions built for it; the Branch Head keeps its own.
+// A role can only be ticked for actions built for it; the Branch Head keeps its own
+// (except rows marked branchHeadOptional, which it may switch off for itself).
 
 type Role = 'DESIGNER' | 'DESIGN_MANAGER' | 'CRE' | 'BL' | 'BRANCH_HEAD';
-interface PermissionDef { key: string; label: string; area: string; roles: Role[] }
+interface PermissionDef { key: string; label: string; area: string; roles: Role[]; branchHeadOptional?: boolean }
 type Value = Record<string, Role[]>;
 interface LoadResp { value: Value; isDefault: boolean; revision: number; updatedAt: string | null; updatedByName: string | null; catalog: { permissions: PermissionDef[] } }
 interface HistoryEntry { id: string; reset: boolean; createdAt: string; byName: string; revision: number | null; note: string | null; value: Value | null }
@@ -86,7 +87,8 @@ export default function PermissionsAdmin() {
         <h2 className="font-semibold text-gray-900">Permissions</h2>
         <p className="mt-1 text-xs text-gray-500">
           Which roles may do each action. A box only appears where the action was built for that role.
-          The Branch Head always keeps its own permissions so the admin screens stay reachable. Changes apply straight away.
+          The Branch Head always keeps its own permissions so the admin screens stay reachable, except where its box can be unticked
+          (like downloading the lead list) — tick it again here any time. Changes apply straight away.
         </p>
         <p className="mt-2 text-xs text-gray-600">
           {data.isDefault
@@ -114,8 +116,8 @@ export default function PermissionsAdmin() {
                       <td key={role} className="px-3 py-2.5 text-center">
                         {p.roles.includes(role) ? (
                           <input type="checkbox" aria-label={`${label}: ${p.label}`}
-                            checked={role === 'BRANCH_HEAD' || (draft[p.key] ?? []).includes(role)}
-                            disabled={role === 'BRANCH_HEAD'}
+                            checked={(role === 'BRANCH_HEAD' && !p.branchHeadOptional) || (draft[p.key] ?? []).includes(role)}
+                            disabled={role === 'BRANCH_HEAD' && !p.branchHeadOptional}
                             onChange={(e) => toggle(p.key, role, e.target.checked)} />
                         ) : <span className="text-gray-300">—</span>}
                       </td>

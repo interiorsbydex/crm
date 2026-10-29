@@ -424,8 +424,8 @@ export default function LeadList() {
             ) : <p className="text-xs text-stone-400 mt-0.5">All leads in your scope</p>}
           </div>
           <div className="flex items-center gap-2">
-            {/* CSV export follows Admin → Permissions ("Download the lead list").
-                Excel export is Branch Head admin-only. */}
+            {/* Both exports follow Admin → Permissions ("Download the lead list");
+                Excel is Branch Head only on top of that. */}
             {can('LEAD_EXPORT') && (
               <button
                 onClick={() => handleExport('csv')}
@@ -436,7 +436,7 @@ export default function LeadList() {
                 {exporting ? 'Exporting…' : '↓ Export CSV'}
               </button>
             )}
-            {userRole === 'BRANCH_HEAD' && (
+            {userRole === 'BRANCH_HEAD' && can('LEAD_EXPORT') && (
               <button
                 onClick={() => handleExport('xlsx')}
                 disabled={exporting}

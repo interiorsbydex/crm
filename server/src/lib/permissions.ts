@@ -6,7 +6,8 @@
  * those (`roles`): the screens and checks behind each action were built for
  * those roles (e.g. "assign directly" assumes the user is a BL with a team),
  * so granting it to anyone else would misbehave. The Branch Head keeps every
- * permission it starts with, so nobody can be locked out of the admin screens.
+ * permission it starts with, so nobody can be locked out of the admin screens —
+ * except rows marked `branchHeadOptional` (switching those off can't lock anyone out).
  */
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
@@ -14,14 +15,17 @@ import { ConfigError, describeIssues, versionedConfig } from './versionedConfig.
 
 export type PermRole = 'DESIGNER' | 'DESIGN_MANAGER' | 'CRE' | 'BL' | 'BRANCH_HEAD';
 
-/** `roles`: the roles the action was built for. `defaultRoles`: who has it before an admin changes anything (default: all of `roles`). */
-export interface PermissionDef { key: string; label: string; area: string; roles: PermRole[]; defaultRoles?: PermRole[] }
+/**
+ * `roles`: the roles the action was built for. `defaultRoles`: who has it before an admin changes anything (default: all of `roles`).
+ * `branchHeadOptional`: the Branch Head may switch this one off for itself too.
+ */
+export interface PermissionDef { key: string; label: string; area: string; roles: PermRole[]; defaultRoles?: PermRole[]; branchHeadOptional?: boolean }
 
 export const PERMISSIONS: PermissionDef[] = [
   { key: 'LEAD_CREATE_MANUAL', area: 'Leads', label: 'Quick-capture walk-in and referral leads', roles: ['CRE', 'BL', 'BRANCH_HEAD'] },
   { key: 'LEAD_IMPORT', area: 'Leads', label: 'Import leads from a spreadsheet', roles: ['BL', 'BRANCH_HEAD'] },
   { key: 'LEAD_ALLOCATE_BL', area: 'Leads', label: 'Allocate an MQL lead to a Business Lead', roles: ['CRE', 'BRANCH_HEAD'] },
-  { key: 'LEAD_EXPORT', area: 'Leads', label: 'Download the lead list (Export CSV on the Leads screen)', roles: ['BL', 'BRANCH_HEAD'], defaultRoles: ['BRANCH_HEAD'] },
+  { key: 'LEAD_EXPORT', area: 'Leads', label: 'Download the lead list (Export CSV / Excel on the Leads screen; Excel is Branch Head only)', roles: ['BL', 'BRANCH_HEAD'], defaultRoles: ['BRANCH_HEAD'], branchHeadOptional: true },
   { key: 'LEAD_PUSHBACK_MQL', area: 'Leads', label: 'Send an MQL lead back to Effective Lead', roles: ['BL', 'BRANCH_HEAD'] },
   { key: 'STAGE_OVERRIDE', area: 'Leads', label: 'Push a stuck lead forward past missing requirements (reason required)', roles: ['BL', 'BRANCH_HEAD'], defaultRoles: ['BRANCH_HEAD'] },
   { key: 'WHATSAPP_ALL_CHATS', area: 'Leads', label: 'See every WhatsApp chat in the inbox (otherwise only chats of leads they can open)', roles: ['DESIGNER', 'CRE', 'BL', 'BRANCH_HEAD'], defaultRoles: ['BRANCH_HEAD'] },
@@ -48,8 +52,8 @@ function mergePermissions(saved: Partial<PermissionSettings> | undefined): Permi
   for (const [key, roles] of Object.entries(saved ?? {})) {
     const def = BY_KEY.get(key);
     if (!def || !roles) continue;
-    // Only roles the action was built for; the Branch Head always keeps it.
-    d[key] = def.roles.filter((r) => r === 'BRANCH_HEAD' || roles.includes(r));
+    // Only roles the action was built for; the Branch Head keeps it unless the row lets it switch off.
+    d[key] = def.roles.filter((r) => (r === 'BRANCH_HEAD' && !def.branchHeadOptional) || roles.includes(r));
   }
   return d;
 }
@@ -77,7 +81,7 @@ export const permissionsConfig = versionedConfig<PermissionSettings>({
 export async function hasPermission(role: string, key: string): Promise<boolean> {
   const def = BY_KEY.get(key);
   if (!def || !def.roles.includes(role as PermRole)) return false;
-  if (role === 'BRANCH_HEAD') return true; // can't be switched off
+  if (role === 'BRANCH_HEAD' && !def.branchHeadOptional) return true; // can't be switched off
   return ((await permissionsConfig.get())[key] ?? []).includes(role as PermRole);
 }
 

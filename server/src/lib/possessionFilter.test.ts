@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { possessionWhere } from './possessionFilter.js';
-import { PERMISSIONS, defaultPermissions } from './permissions.js';
+import { PERMISSIONS, defaultPermissions, permissionsConfig } from './permissions.js';
 
 // Mirrors the text comparisons Postgres does for the conditions possessionWhere builds.
 function matches(cond: any, value: string | null): boolean {
@@ -41,5 +41,13 @@ describe('Export permission', () => {
     const def = PERMISSIONS.find((p) => p.key === 'LEAD_EXPORT')!;
     expect(def.roles).toEqual(['BL', 'BRANCH_HEAD']);
     expect(defaultPermissions().LEAD_EXPORT).toEqual(['BRANCH_HEAD']);
+  });
+  it('the Branch Head can switch it off for itself, and back on', async () => {
+    expect((await permissionsConfig.spec.validate({ LEAD_EXPORT: [] })).LEAD_EXPORT).toEqual([]);
+    expect((await permissionsConfig.spec.validate({ LEAD_EXPORT: ['BRANCH_HEAD'] })).LEAD_EXPORT).toEqual(['BRANCH_HEAD']);
+  });
+  it('every other permission stays locked on for the Branch Head', async () => {
+    expect(PERMISSIONS.filter((p) => p.branchHeadOptional).map((p) => p.key)).toEqual(['LEAD_EXPORT']);
+    expect((await permissionsConfig.spec.validate({ OFFERS_MANAGE: [] })).OFFERS_MANAGE).toEqual(['BRANCH_HEAD']);
   });
 });
