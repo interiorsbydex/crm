@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import {
   LayoutDashboard, Kanban, Users, CalendarDays, Calendar,
   MessageCircle, Tag, Building2, BarChart2, Users2, Settings, Phone, ClipboardCheck,
-  Bell, Search, X, ChevronRight, ChevronDown, Plus, ListChecks,
+  Bell, Search, X, ChevronRight, ChevronDown, Plus, ListChecks, Menu,
   type LucideIcon,
 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -116,6 +116,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, []);
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // Phone-size menu: the sidebar slides over the page instead of squeezing it.
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => { setMenuOpen(false); }, [location.pathname, location.search]);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchLead[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -314,7 +317,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#F5F0EB' }}>
       {/* Sidebar */}
-      <aside className="w-56 shrink-0 bg-white flex flex-col h-full overflow-y-auto" style={{ borderRight: '1px solid #EDE8E3' }}>
+      {menuOpen && <div className="fixed inset-0 z-30 bg-black/30 md:hidden" onClick={() => setMenuOpen(false)} />}
+      <aside
+        className={`w-56 shrink-0 bg-white flex flex-col h-full overflow-y-auto fixed inset-y-0 left-0 z-40 transition-transform md:static md:z-auto md:translate-x-0 ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        style={{ borderRight: '1px solid #EDE8E3' }}
+      >
         {/* Logo */}
         <div className="px-4 py-4 shrink-0" style={{ borderBottom: '1px solid #EDE8E3' }}>
           <Link to="/" className="flex items-center gap-2.5">
@@ -420,8 +427,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
         <header className="bg-white px-4 py-2.5 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid #EDE8E3' }}>
+          <button onClick={() => setMenuOpen(true)} aria-label="Open menu" className="md:hidden p-1.5 -ml-1 text-stone-600 shrink-0">
+            <Menu size={20} strokeWidth={1.8} />
+          </button>
           {/* Search */}
-          <div className="relative flex-1 max-w-md" ref={searchRef}>
+          <div className="relative flex-1 max-w-md min-w-0" ref={searchRef}>
             <div className="flex items-center rounded-xl overflow-hidden bg-white transition-all" style={{ border: '1px solid #EDE8E3' }}>
               <Search size={14} strokeWidth={1.8} className="ml-3 text-stone-400 shrink-0" />
               <input
