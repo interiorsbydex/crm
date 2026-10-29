@@ -9,6 +9,7 @@ import StatusBadge from '../components/StatusBadge';
 import PDOBChecklistPanel from '../components/PDOBChecklistPanel';
 import DIPChecklistPanel from '../components/DIPChecklistPanel';
 import { usePermissions } from '../lib/permissions';
+import { LocationFilter, PossessionFilter } from '../components/LeadFilterFields';
 import StageCaptureModal from '../components/StageCaptureModal';
 import { DateInput } from '../components/ui/DateTimeInputs';
 import { stageLabel, crmSettings, sourceLabel } from '../lib/crmSettings';
@@ -94,6 +95,7 @@ interface SalesFilters {
   originDateTo: string;
   budgetMin: string;
   budgetMax: string;
+  possession: string;
   possessionDateFrom: string;
   possessionDateTo: string;
   intent: string;
@@ -717,7 +719,7 @@ const EMPTY_SALES_FILTERS: SalesFilters = {
   source: '', stage: '', status: '', designerId: '', projectType: '', location: '',
   originDateFrom: '', originDateTo: '',
   budgetMin: '', budgetMax: '',
-  possessionDateFrom: '', possessionDateTo: '',
+  possession: '', possessionDateFrom: '', possessionDateTo: '',
   intent: '',
   projectedObFrom: '', projectedObTo: '',
 };
@@ -783,7 +785,7 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
     salesFilters.projectType, salesFilters.location,
     salesFilters.originDateFrom, salesFilters.originDateTo,
     salesFilters.budgetMin, salesFilters.budgetMax,
-    salesFilters.possessionDateFrom, salesFilters.possessionDateTo,
+    salesFilters.possession, salesFilters.possessionDateFrom, salesFilters.possessionDateTo,
     salesFilters.intent,
   ].filter(Boolean).length;
   const activeFilterCount = Object.values(salesFilters).filter(Boolean).length;
@@ -814,6 +816,7 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
       if (salesFilters.originDateTo)   params.set('originDateTo',   salesFilters.originDateTo);
       if (salesFilters.budgetMin)      params.set('budgetMin',      salesFilters.budgetMin);
       if (salesFilters.budgetMax)      params.set('budgetMax',      salesFilters.budgetMax);
+      if (salesFilters.possession) params.set('possession', salesFilters.possession);
       if (salesFilters.possessionDateFrom) params.set('possessionDateFrom', salesFilters.possessionDateFrom);
       if (salesFilters.possessionDateTo)   params.set('possessionDateTo',   salesFilters.possessionDateTo);
       if (salesFilters.intent)      params.set('intent',      salesFilters.intent);
@@ -1218,18 +1221,7 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
               />
             </div>
 
-            {/* Location */}
-            <div>
-              <label className="block text-xs font-semibold text-stone-500 mb-1.5">Location</label>
-              <input
-                type="text"
-                value={salesFilters.location}
-                onChange={(e) => setSF('location', e.target.value)}
-                placeholder="Whitefield, Bangalore"
-                className="w-full rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
-              />
-            </div>
+            <LocationFilter value={salesFilters.location} onChange={(v) => setSF('location', v)} />
 
             {/* Lead origin date range */}
             <div>
@@ -1273,23 +1265,8 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
               />
             </div>
 
-            {/* Possession / Expected move-in date */}
-            <div>
-              <label className="block text-xs font-semibold text-stone-500 mb-1.5">Possession date (from)</label>
-              <DateInput
-                value={salesFilters.possessionDateFrom}
-                onChange={(v) => setSF('possessionDateFrom', v)}
-                className="w-full rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-stone-500 mb-1.5">Possession date (to)</label>
-              <DateInput
-                value={salesFilters.possessionDateTo}
-                onChange={(v) => setSF('possessionDateTo', v)}
-                className="w-full rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300"
-              />
-            </div>
+            <PossessionFilter possession={salesFilters.possession} from={salesFilters.possessionDateFrom} to={salesFilters.possessionDateTo}
+              onChange={(k, v) => setSF(k, v)} />
 
             {/* Intent rating (exact match) */}
             <div>

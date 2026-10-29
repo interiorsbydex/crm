@@ -21,6 +21,7 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'LEAD_CREATE_MANUAL', area: 'Leads', label: 'Quick-capture walk-in and referral leads', roles: ['CRE', 'BL', 'BRANCH_HEAD'] },
   { key: 'LEAD_IMPORT', area: 'Leads', label: 'Import leads from a spreadsheet', roles: ['BL', 'BRANCH_HEAD'] },
   { key: 'LEAD_ALLOCATE_BL', area: 'Leads', label: 'Allocate an MQL lead to a Business Lead', roles: ['CRE', 'BRANCH_HEAD'] },
+  { key: 'LEAD_EXPORT', area: 'Leads', label: 'Download the lead list (Export CSV on the Leads screen)', roles: ['BL', 'BRANCH_HEAD'], defaultRoles: ['BRANCH_HEAD'] },
   { key: 'LEAD_PUSHBACK_MQL', area: 'Leads', label: 'Send an MQL lead back to Effective Lead', roles: ['BL', 'BRANCH_HEAD'] },
   { key: 'STAGE_OVERRIDE', area: 'Leads', label: 'Push a stuck lead forward past missing requirements (reason required)', roles: ['BL', 'BRANCH_HEAD'], defaultRoles: ['BRANCH_HEAD'] },
   { key: 'WHATSAPP_ALL_CHATS', area: 'Leads', label: 'See every WhatsApp chat in the inbox (otherwise only chats of leads they can open)', roles: ['DESIGNER', 'CRE', 'BL', 'BRANCH_HEAD'], defaultRoles: ['BRANCH_HEAD'] },

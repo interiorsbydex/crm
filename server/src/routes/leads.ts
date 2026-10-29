@@ -36,6 +36,7 @@ import {
 } from '../lib/stageTimeline.js';
 import { isAutomationOn } from '../lib/automations.js';
 import { requirePermission, hasPermission } from '../lib/permissions.js';
+import { possessionWhere } from '../lib/possessionFilter.js';
 import { projectTypeWhere } from '../lib/projectTypeGroup.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -110,7 +111,7 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       // New pipeline filters (task #27)
       originDateFrom, originDateTo,
       budgetMin, budgetMax,
-      possessionDateFrom, possessionDateTo,
+      possessionDateFrom, possessionDateTo, possession,
       projectedObFrom, projectedObTo,
       pipelineMode,
       // Task #113 — lets dashboard KPI drill-through links exactly reproduce
@@ -247,17 +248,9 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       where.estimatedValue = ev;
     }
 
-    // Possession / expected move-in date range.
-    if (possessionDateFrom || possessionDateTo) {
-      const em: any = {};
-      if (possessionDateFrom) em.gte = new Date(possessionDateFrom);
-      if (possessionDateTo) {
-        const end = new Date(possessionDateTo);
-        end.setHours(23, 59, 59, 999);
-        em.lte = end;
-      }
-      where.expectedMoveIn = em;
-    }
+    // Possession: "Possession Received" or a possession date range.
+    const possessionCond = possessionWhere(possession, possessionDateFrom, possessionDateTo);
+    if (possessionCond) where.AND = [...(Array.isArray(where.AND) ? where.AND : []), possessionCond];
 
     // Projected OB date range — Task #83 added a dedicated expectedObDate
     // column (Founder spec item 4: PR→PP gate field, also filterable here).
@@ -802,9 +795,30 @@ leadsRouter.get('/meta/bls', verifyToken, async (req, res) => {
   }
 });
 
+// ── GET /api/leads/locations — the locations on the leads this user can see,
+// for the Location filter dropdown (same spelling merged, ignoring case/spaces).
+leadsRouter.get('/locations', verifyToken, async (req, res) => {
+  try {
+    const roleWhere = await buildLeadRoleWhere(req.user!, prisma, { access: true });
+    const rows = await prisma.lead.findMany({
+      where: { AND: [roleWhere, { location: { not: null } }] },
+      select: { location: true },
+      distinct: ['location'],
+    });
+    const byKey = new Map<string, string>();
+    for (const r of rows) {
+      const name = (r.location ?? '').trim().replace(/\s+/g, ' ');
+      if (name && !byKey.has(name.toLowerCase())) byKey.set(name.toLowerCase(), name);
+    }
+    res.json({ locations: [...byKey.values()].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' })) });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to load locations' });
+  }
+});
+
 // ── GET /api/leads/export — download filtered leads as CSV (or, with
 // ?format=xlsx, Excel — task #90 made the Excel option admin-only) ───────────
-leadsRouter.get('/export', verifyToken, async (req, res) => {
+leadsRouter.get('/export', verifyToken, requirePermission('LEAD_EXPORT'), async (req, res) => {
   try {
     const {
       stage, source, designerId, blId, allocatedToId, search,
@@ -812,14 +826,14 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
       status, format, unassigned,
       originDateFrom, originDateTo,
       budgetMin, budgetMax,
-      possessionDateFrom, possessionDateTo,
+      possessionDateFrom, possessionDateTo, possession,
       projectedObFrom, projectedObTo,
       sort, dir,
     } = req.query as Record<string, string>;
 
     const user = req.user!;
 
-    // Excel export is admin-only (task #90); CSV keeps its existing scoped access.
+    // Excel export is admin-only (task #90); CSV follows Admin → Permissions (LEAD_EXPORT).
     if (format === 'xlsx' && user.role !== 'BRANCH_HEAD') {
       res.status(403).json({ error: 'Excel export is only available to Branch Head admins' });
       return;
@@ -891,16 +905,8 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
       if (!isNaN(max)) estimatedValue.lte = max;
       where.estimatedValue = estimatedValue;
     }
-    if (possessionDateFrom || possessionDateTo) {
-      const expectedMoveIn: any = {};
-      if (possessionDateFrom) expectedMoveIn.gte = new Date(possessionDateFrom);
-      if (possessionDateTo) {
-        const end = new Date(possessionDateTo);
-        end.setHours(23, 59, 59, 999);
-        expectedMoveIn.lte = end;
-      }
-      where.expectedMoveIn = expectedMoveIn;
-    }
+    const possessionCond = possessionWhere(possession, possessionDateFrom, possessionDateTo);
+    if (possessionCond) where.AND = [...(Array.isArray(where.AND) ? where.AND : []), possessionCond];
     if (projectedObFrom || projectedObTo) {
       const expectedObDate: any = {};
       if (projectedObFrom) expectedObDate.gte = new Date(projectedObFrom);

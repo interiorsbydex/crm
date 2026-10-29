@@ -7,6 +7,8 @@ import EmptyState from '../components/ui/EmptyState';
 import StatusBadge, { STATUS_LABELS, STATUS_COLORS } from '../components/StatusBadge';
 import { DateInput } from '../components/ui/DateTimeInputs';
 import { stageLabel, crmSettings, sourceLabel } from '../lib/crmSettings';
+import { usePermissions } from '../lib/permissions';
+import { LocationFilter, PossessionFilter } from '../components/LeadFilterFields';
 
 /** Clickable star input for exact-match intent filter (e.g. "2 stars" shows only 2-star leads).
  * Mirrors the StarFilter in Pipeline.tsx so the two filter panels look identical. */
@@ -210,6 +212,7 @@ export default function LeadList() {
     originDateTo: '',
     budgetMin: '',
     budgetMax: '',
+    possession: '',
     possessionDateFrom: '',
     possessionDateTo: '',
     intent: searchParams.get('intent') ?? '',
@@ -230,6 +233,7 @@ export default function LeadList() {
   const [statusSummary, setStatusSummary] = useState<Record<string, { count: number; value: number }> | null>(null);
 
   const userRole = getCurrentUserRole();
+  const { can } = usePermissions();
   const STAGE_OPTIONS = userRole === 'DESIGNER' ? STAGE_OPTIONS_DESIGNER : STAGE_OPTIONS_ALL;
 
   useEffect(() => {
@@ -270,6 +274,7 @@ export default function LeadList() {
       if (filters.originDateTo) params.set('originDateTo', filters.originDateTo);
       if (filters.budgetMin) params.set('budgetMin', filters.budgetMin);
       if (filters.budgetMax) params.set('budgetMax', filters.budgetMax);
+      if (filters.possession) params.set('possession', filters.possession);
       if (filters.possessionDateFrom) params.set('possessionDateFrom', filters.possessionDateFrom);
       if (filters.possessionDateTo) params.set('possessionDateTo', filters.possessionDateTo);
       if (filters.intent) params.set('intent', filters.intent);
@@ -350,6 +355,7 @@ export default function LeadList() {
        if (filters.originDateTo) exportParams.set('originDateTo', filters.originDateTo);
        if (filters.budgetMin) exportParams.set('budgetMin', filters.budgetMin);
        if (filters.budgetMax) exportParams.set('budgetMax', filters.budgetMax);
+       if (filters.possession) exportParams.set('possession', filters.possession);
        if (filters.possessionDateFrom) exportParams.set('possessionDateFrom', filters.possessionDateFrom);
        if (filters.possessionDateTo) exportParams.set('possessionDateTo', filters.possessionDateTo);
        if (filters.intent) exportParams.set('intent', filters.intent);
@@ -387,7 +393,7 @@ export default function LeadList() {
     setFilters({
       search: '', stage: '', source: '', status: '', designerId: '', allocatedToId: '', projectType: '', location: '',
       originDateFrom: '', originDateTo: '', budgetMin: '', budgetMax: '',
-      possessionDateFrom: '', possessionDateTo: '', intent: '',
+      possession: '', possessionDateFrom: '', possessionDateTo: '', intent: '',
       intentMin: '', intentMax: '', projectedObFrom: '', projectedObTo: '', slaBreached: '', excludeStages: '',
       hasUnresolvedSlaBreach: '', flagged: '', unassigned: '', mine: '',
     });
@@ -398,7 +404,7 @@ export default function LeadList() {
   const moreFilterCount = [
     ...(userRole === 'BL' ? [filters.designerId] : []),
     filters.projectType, filters.location, filters.originDateFrom, filters.originDateTo,
-    filters.budgetMin, filters.budgetMax, filters.possessionDateFrom, filters.possessionDateTo,
+    filters.budgetMin, filters.budgetMax, filters.possession, filters.possessionDateFrom, filters.possessionDateTo,
     filters.intent, filters.intentMin, filters.intentMax,
   ].filter(Boolean).length;
   const anyFilterActive = Object.values(filters).some(Boolean);
@@ -418,10 +424,9 @@ export default function LeadList() {
             ) : <p className="text-xs text-stone-400 mt-0.5">All leads in your scope</p>}
           </div>
           <div className="flex items-center gap-2">
-            {/* Task #90 — export controls are admin/BL only; the designer/CRE
-                portal no longer surfaces them (they're read-only on scope
-                anyway). Excel export is Branch Head admin-only. */}
-            {userRole !== 'DESIGNER' && userRole !== 'CRE' && (
+            {/* CSV export follows Admin → Permissions ("Download the lead list").
+                Excel export is Branch Head admin-only. */}
+            {can('LEAD_EXPORT') && (
               <button
                 onClick={() => handleExport('csv')}
                 disabled={exporting}
@@ -599,14 +604,7 @@ export default function LeadList() {
                   style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
               </div>
 
-              {/* Location */}
-              <div>
-                <label className="block text-xs font-semibold text-stone-500 mb-1.5">Location</label>
-                <input value={filters.location} onChange={(e) => setFilter('location', e.target.value)}
-                  placeholder="Whitefield, Bangalore"
-                  className="w-full rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-                  style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
-              </div>
+              <LocationFilter value={filters.location} onChange={(v) => setFilter('location', v)} />
 
               {/* Lead origin date range */}
               <div>
@@ -636,17 +634,8 @@ export default function LeadList() {
                   style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
               </div>
 
-              {/* Possession date range */}
-              <div>
-                <label className="block text-xs font-semibold text-stone-500 mb-1.5">Possession date (from)</label>
-                <DateInput value={filters.possessionDateFrom} onChange={(v) => setFilter('possessionDateFrom', v)}
-                  className="w-full rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-stone-500 mb-1.5">Possession date (to)</label>
-                <DateInput value={filters.possessionDateTo} onChange={(v) => setFilter('possessionDateTo', v)}
-                  className="w-full rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300" />
-              </div>
+              <PossessionFilter possession={filters.possession} from={filters.possessionDateFrom} to={filters.possessionDateTo}
+                onChange={(k, v) => setFilter(k, v)} />
 
               {/* Intent rating (exact match) */}
               <div>
