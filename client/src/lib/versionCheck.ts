@@ -45,8 +45,12 @@ export function useNewVersionAvailable(): boolean {
     // Running from the dev server (no built script file): nothing to compare.
     if (!mine) return;
     let stopped = false;
+    let lastCheck = 0;
     const check = async () => {
       if (stopped || document.visibilityState !== 'visible') return;
+      // Switching tabs back and forth quickly checks once, not every time.
+      if (Date.now() - lastCheck < 10_000) return;
+      lastCheck = Date.now();
       try {
         const res = await fetch(`/?_v=${Date.now()}`, { cache: 'no-store' });
         if (!res.ok) return;
