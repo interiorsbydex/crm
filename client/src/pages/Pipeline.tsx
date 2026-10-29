@@ -1386,6 +1386,7 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
           value before a drag-drop stage move is committed. */}
       {stageCapture && (
         <StageCaptureModal
+          leadId={stageCapture.lead.id}
           leadName={stageCapture.lead.name}
           targetStageLabel={stageLabel(stageCapture.targetStage)}
           initialRating={stageCapture.lead.intentRating}

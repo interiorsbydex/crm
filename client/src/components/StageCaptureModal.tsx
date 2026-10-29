@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Star, AlertTriangle } from 'lucide-react';
 import { useLenientLaunch } from '../lib/flags';
+import { api } from '../lib/api';
 
 // Task #114 — shown as a confirmation step on every stage move (from the
 // lead-detail stage dropdown and the Pipeline kanban drag-drop) to capture
 // an up-to-date intent rating and project value before the move commits.
 
 interface Props {
+  /** When given, the box shows the stars the lead will actually carry after the move (GET /leads/:id/intent-preview). */
+  leadId?: string;
   leadName: string;
   targetStageLabel: string;
   initialRating: number | null | undefined;
@@ -25,10 +28,26 @@ interface Props {
 }
 
 export default function StageCaptureModal({
-  leadName, targetStageLabel, initialRating, initialValue, saving, error, triggersNpsSurvey, triggersProposalEmail, canOverride, onCancel, onConfirm,
+  leadId, leadName, targetStageLabel, initialRating, initialValue, saving, error, triggersNpsSurvey, triggersProposalEmail, canOverride, onCancel, onConfirm,
 }: Props) {
   const [overrideReason, setOverrideReason] = useState('');
   const [rating, setRating] = useState(initialRating || 0);
+  // The stage move recomputes the rating from the latest meeting type unless it was set by hand,
+  // so show that rating here rather than the stored one, which the move would silently replace.
+  const [preview, setPreview] = useState<{ rating: number; systemRating: number; manual: boolean } | null>(null);
+  const [touched, setTouched] = useState(false);
+  useEffect(() => {
+    if (!leadId) return;
+    let live = true;
+    api.get<{ rating: number; systemRating: number; manual: boolean }>(`/leads/${leadId}/intent-preview`)
+      .then((p) => { if (!live) return; setPreview(p); setRating((r) => (touched ? r : p.rating)); })
+      .catch(() => { /* keep the stored rating */ });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadId]);
+  // Unchanged from what the move will set: report the stored rating so the caller does not save
+  // it as a manual override (that would stop it following future meetings).
+  const ratingToSend = preview && !touched ? (initialRating || 0) : rating;
   const [value, setValue] = useState(initialValue != null ? String(initialValue) : '');
   const [reason, setReason] = useState('');
   const [sendNpsSurvey, setSendNpsSurvey] = useState(true);
@@ -51,7 +70,7 @@ export default function StageCaptureModal({
           <label className="block text-sm font-semibold text-stone-700 mb-1.5">Intent Rating</label>
           <div className="flex gap-1">
             {[1, 2, 3, 4, 5].map((n) => (
-              <button key={n} type="button" onClick={() => setRating(n)} className="p-0.5" aria-label={`${n} star`}>
+              <button key={n} type="button" onClick={() => { setRating(n); setTouched(true); }} className="p-0.5" aria-label={`${n} star`}>
                 <Star
                   size={22}
                   strokeWidth={1.8}
@@ -60,6 +79,15 @@ export default function StageCaptureModal({
               </button>
             ))}
           </div>
+          {preview && (
+            <p className="mt-1.5 text-[11px] text-stone-500" data-testid="intent-preview-note">
+              {preview.manual
+                ? 'Set by hand earlier, so it stays as it is after this move.'
+                : preview.systemRating === 1
+                  ? 'Set by the CRM from the latest meeting type. No meeting yet, so 1★ (no action planned). Pick other stars to override; a reason is needed.'
+                  : 'Set by the CRM from the latest meeting type (stars per type in Admin → Meetings). Pick other stars to override; a reason is needed.'}
+            </p>
+          )}
         </div>
 
         <div className="mb-4">
@@ -120,7 +148,7 @@ export default function StageCaptureModal({
               placeholder="Why must this lead move now? (at least 10 characters)" aria-label="Reason for pushing forward"
               className="mt-2 w-full rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-xs text-stone-800" />
             <button type="button" disabled={saving || overrideReason.trim().length < 10}
-              onClick={() => onConfirm(rating, valueOk ? parsedValue : null, reason.trim(), sendNpsSurvey, overrideReason.trim())}
+              onClick={() => onConfirm(ratingToSend, valueOk ? parsedValue : null, reason.trim(), sendNpsSurvey, overrideReason.trim())}
               className="mt-2 w-full rounded-lg bg-amber-600 py-2 font-semibold text-white hover:bg-amber-700 disabled:opacity-50">
               {saving ? 'Saving…' : 'Push forward with this reason'}
             </button>
@@ -139,7 +167,7 @@ export default function StageCaptureModal({
           </button>
           <button
             type="button"
-            onClick={() => onConfirm(rating, valueOk ? parsedValue : null, reason.trim(), sendNpsSurvey)}
+            onClick={() => onConfirm(ratingToSend, valueOk ? parsedValue : null, reason.trim(), sendNpsSurvey)}
             disabled={saving || !canSubmit}
             className="flex-1 bg-brand-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors"
           >

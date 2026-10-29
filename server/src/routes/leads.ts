@@ -16,7 +16,7 @@ import { designerAssignmentDates, designerAssignmentAgeDays } from '../lib/desig
 import { logGateBypass, isStrictStage } from '../lib/lenientMode.js';
 import { selectBLForLead, assignLeadToDesigner, incrementAssigned, routeQualifiedLead } from '../services/assignmentService.js';
 import { checkStageRequirements, isStageJumpAllowed, FUNNEL_ORDER, getEffectiveStageRules, describeAllowedSkips } from '../config/stageRequirements.js';
-import { computeSystemRating } from '../services/intentScoring.js';
+import { computeSystemRating, ratingAfterStageMove } from '../services/intentScoring.js';
 import { getModeRatings } from '../lib/meetingSettings.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { isValidEmail, isValidPhone, isValidPhoneStrict } from '../lib/leadValidation.js';
@@ -2130,6 +2130,21 @@ leadsRouter.get('/:id/activity', verifyToken, async (req, res) => {
       },
     });
     res.json({ activities });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/leads/:id/intent-preview — stars the lead will carry after a stage move ──
+leadsRouter.get('/:id/intent-preview', verifyToken, async (req, res) => {
+  try {
+    const lead = await prisma.lead.findUnique({
+      where: { id: req.params.id },
+      include: { meetings: { select: { mode: true, status: true }, orderBy: { createdAt: 'desc' } } },
+    });
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (!(await isAuthorizedForLead(lead, req.user!))) { res.status(403).json({ error: 'Not authorised for this lead' }); return; }
+    res.json(ratingAfterStageMove(lead, await getModeRatings()));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

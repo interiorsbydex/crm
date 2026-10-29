@@ -1153,6 +1153,7 @@ export default function LeadDetail() {
            value must be confirmed before the move is committed. ───────────── */}
       {stageCapture && lead && (
         <StageCaptureModal
+          leadId={lead.id}
           leadName={lead.name}
           targetStageLabel={stageLabel(stageCapture.targetStage)}
           initialRating={lead.intentRating}

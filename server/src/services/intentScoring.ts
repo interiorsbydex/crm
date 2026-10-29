@@ -30,6 +30,24 @@ export function computeAutoRatingFromMode(mode: string, ratings: Record<string, 
 }
 
 /**
+ * The rating a lead will carry after its next stage move (mirrors the stage-move code in
+ * routes/leads.ts): a manual override stays; otherwise the system rating from the latest meeting.
+ * Shown in the move box so the stars there are the stars the lead will end up with.
+ */
+export function ratingAfterStageMove(
+  lead: {
+    intentRating?: number | null;
+    intentRatingSource?: string | null;
+    meetings?: { mode?: string | null; status: string }[];
+  },
+  ratings: Record<string, number> = MODE_TO_RATING,
+): { rating: number; systemRating: number; manual: boolean } {
+  const systemRating = computeSystemRating(lead, ratings);
+  const manual = lead.intentRatingSource === 'manual';
+  return { rating: manual ? (lead.intentRating ?? systemRating) : systemRating, systemRating, manual };
+}
+
+/**
  * Backward-compatible wrapper: used by the intent-rating override validation.
  * Now returns the auto-rating derived from the most recent meeting mode,
  * or 1 if no meetings exist (no action planned).
