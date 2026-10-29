@@ -755,7 +755,7 @@ export default function Reports() {
           <Tile id="reports.designerPerformance">
           <SectionCard
             title={reportLabel('reports.designerPerformance', 'Designer performance')}
-            subtitle="Assigned leads, design meetings (DQL / PP) and conversion per designer."
+            subtitle={`Assigned leads, design meetings (${stageShortLabel('DQL', 'DQL')} / PP) and conversion per designer.`}
             onExport={() => doExport('designer_performance')}
           >
             {r.designer_performance?.loading ? <Loader /> : designerRows.length === 0 ? <EmptyState msg="No designer data" /> : (
@@ -763,7 +763,7 @@ export default function Reports() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-gray-100">
-                      {[['designer','Designer'],['leads','Assigned'],['dqlsDone','DQLs'],['ppsDone','PPs'],['onboardings','Onboarded'],['conversionPct','Conv. %']].map(([k, l]) => (
+                      {[['designer','Designer'],['leads','Assigned'],['dqlsDone',`${stageShortLabel('DQL', 'DQL')}s`],['ppsDone','PPs'],['onboardings','Onboarded'],['conversionPct','Conv. %']].map(([k, l]) => (
                         <th key={k} className="text-left py-2 px-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">{l}</th>
                       ))}
                     </tr>
