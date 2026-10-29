@@ -5,7 +5,8 @@
  * or free text such as "3-6 months". The separate "Expected Interior Handover
  * Date" (expectedMoveIn) is not part of this filter.
  *
- * possession: 'received' → only leads marked Possession Received (dates ignored);
+ * possession: 'received' → only leads whose possession is received — "Possession Received",
+ *                          or the sheet's "Ready", "RTMI", "Ready to move", "Ready for interiors" (dates ignored);
  *             'date'     → only leads with a possession date (in the range, if given);
  *             ''         → a from/to range alone behaves like 'date'.
  */
@@ -23,20 +24,29 @@ export function possessionDate(value: string | null | undefined): string | null 
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
+// Ways Annie's sheet writes "possession already received" (agreed with Pranesh, 29 Oct 2026).
+const RECEIVED_WORDS = new Set(['ready', 'rtmi', 'ready to move', 'ready for interiors']);
+
+/** True when the Possession field means possession is already received. */
+export function isPossessionReceived(value: string | null | undefined): boolean {
+  const v = (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return v.includes('received') || RECEIVED_WORDS.has(v);
+}
+
 type LeadFinder = { lead: { findMany: (args: any) => Promise<{ id: string; possessionTimeline: string | null }[]> } };
 
 export async function possessionWhere(
   db: LeadFinder, possession?: string, from?: string, to?: string,
 ): Promise<Record<string, any> | null> {
-  if (possession === 'received') {
-    return { possessionTimeline: { contains: 'received', mode: 'insensitive' } };
-  }
-  if (possession !== 'date' && !from && !to) return null;
-  // Dates are written two ways, so they're read here rather than compared as text.
+  if (possession !== 'received' && possession !== 'date' && !from && !to) return null;
+  // Possession is free text written several ways, so it's read here rather than compared in the query.
   const rows = await db.lead.findMany({
     where: { possessionTimeline: { not: null } },
     select: { id: true, possessionTimeline: true },
   });
+  if (possession === 'received') {
+    return { id: { in: rows.filter((r) => isPossessionReceived(r.possessionTimeline)).map((r) => r.id) } };
+  }
   const ids = rows.filter((r) => {
     const date = possessionDate(r.possessionTimeline);
     return date != null && (!from || date >= from) && (!to || date <= to);

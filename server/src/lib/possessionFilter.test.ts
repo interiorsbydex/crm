@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { possessionDate, possessionWhere } from './possessionFilter.js';
+import { isPossessionReceived, possessionDate, possessionWhere } from './possessionFilter.js';
 import { PERMISSIONS, defaultPermissions, permissionsConfig } from './permissions.js';
 
 // Values as they appear on Annie's live leads.
@@ -12,13 +12,15 @@ const leads = [
   { id: 'range2', possessionTimeline: '6-12 months' },
   { id: 'text', possessionTimeline: 'Dec 2026' },
   { id: 'year', possessionTimeline: '2027' },
+  { id: 'ready', possessionTimeline: 'Ready ' },
+  { id: 'rtmi', possessionTimeline: 'RTMI' },
+  { id: 'soon', possessionTimeline: 'Ready to move within next month' },
 ];
 const db = { lead: { findMany: async () => leads } };
 const run = async (p?: string, from?: string, to?: string) => {
   const c = await possessionWhere(db, p, from, to);
   if (!c) return null;
-  if (c.id) return c.id.in.sort();
-  return leads.filter((l) => l.possessionTimeline.toLowerCase().includes(c.possessionTimeline.contains)).map((l) => l.id);
+  return c.id.in.sort();
 };
 
 describe('Possession filter', () => {
@@ -33,7 +35,11 @@ describe('Possession filter', () => {
     expect(await run('', '', '')).toBeNull();
   });
   it('"Possession Received" finds only received leads', async () => {
-    expect(await run('received', '2026-01-01', '2026-12-31')).toEqual(['rec']);
+    expect(await run('received', '2026-01-01', '2026-12-31')).toEqual(['ready', 'rec', 'rtmi']);
+  });
+  it('counts the sheet\'s words for received, but not a future "ready to move within next month"', () => {
+    for (const v of ['Possession Received', 'Ready', 'RTMI', 'Ready to move', 'ready for interiors', ' ready  for interiors ']) expect(isPossessionReceived(v), v).toBe(true);
+    for (const v of ['Ready to move within next month', '3-6 months', 'Immediate', '', null]) expect(isPossessionReceived(v), String(v)).toBe(false);
   });
   it('"Possession date given" finds leads with a date in either style, not "3-6 months"', async () => {
     expect(await run('date')).toEqual(['dmy', 'dmy27', 'iso']);
