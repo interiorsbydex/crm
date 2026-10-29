@@ -647,7 +647,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     }
     const peerIds = peerUsers.map((p) => p.id);
     const peerBookingCancellations = await loadBookingCancellations({
-      assignedDesignerId: { in: peerIds },
+      assignedDesignerId: { in: peerIds }, isTestLead: false,
     }, targetCycle);
 
     const [
@@ -734,6 +734,9 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       prisma.lead.aggregate({
         where: {
           ...leadWhere,
+          // Test leads never count as bookings (same as Reports and BL credits,
+          // and the cancellation check above only looks at real leads).
+          isTestLead: false,
           id: { notIn: bookingCancellations.excludedLeadIds },
           activityLogs: {
             some: {
@@ -839,6 +842,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
         by: ['assignedDesignerId'],
         where: {
           assignedDesignerId: { in: peerIds },
+          isTestLead: false,
           id: { notIn: peerBookingCancellations.excludedLeadIds },
           OR: [
             {
