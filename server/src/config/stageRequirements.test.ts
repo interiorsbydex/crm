@@ -125,3 +125,14 @@ describe('regression: owed items never leak into other leads\' gates', () => {
     expect(labels({}, 'ONBOARDING', 'ONBOARDING_MEETING', rules)).toEqual(before);
   });
 });
+
+describe('missing items say what would satisfy them (Annie, 6 Nov 2026)', () => {
+  it('names the meeting or call, and why an item from a skipped stage is still asked for', async () => {
+    const { explainMissing } = await import('./stageRequirements.js');
+    const item = { type: 'meetingOrCall', meetingType: 'PP', label: 'Meeting or call scheduled & completed', id: 'x', whenSkipped: 'owedLater' } as const;
+    expect(explainMissing({ ...item, owedFrom: 'PROPOSAL_DISCUSSION' } as any)).toBe(
+      'Meeting or call scheduled & completed — needs a completed PP or PD meeting, or a logged call (still owed because the PD (Pitch Discussion) stage was skipped)',
+    );
+    expect(explainMissing({ type: 'file', fileType: 'FLOOR_PLAN', stages: [], label: 'Floor plan', id: 'y', whenSkipped: 'required' } as any)).toBe('Floor plan');
+  });
+});

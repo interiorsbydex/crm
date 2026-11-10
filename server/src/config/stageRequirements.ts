@@ -254,6 +254,8 @@ export type WhenSkipped = 'required' | 'waived' | 'owedLater';
 export type RuleItem = StageRequirement & {
   id: string;
   whenSkipped: WhenSkipped;
+  /** Set on an item carried over from a skipped stage (see requirementsForMove). */
+  owedFrom?: string;
   /** Checklist-backed items: the checklist performs the move, so they can't be edited or removed. */
   locked?: boolean;
 };
@@ -484,7 +486,7 @@ export function requirementsForMove(
       for (const r of (edge && rules.transitions[edge]) || []) {
         if (r.whenSkipped !== 'owedLater' || seenLabels.has(r.label)) continue;
         seenLabels.add(r.label);
-        reqs.push(r);
+        reqs.push({ ...r, owedFrom: stage });
       }
     }
   }
@@ -639,7 +641,7 @@ export async function checkStageRequirements(
   const details: { label: string; satisfied: boolean; type: string }[] = [];
   for (const r of requirementsForMove(lead, fromStage, toStage, effective)) {
     const satisfied = await isRequirementMet(r, lead);
-    if (!satisfied) missing.push(r.label);
+    if (!satisfied) missing.push(explainMissing(r));
     details.push({ label: r.label, satisfied, type: r.type });
   }
 
@@ -655,6 +657,24 @@ export async function checkStageRequirements(
   }
 
   return { ok: missing.length === 0, missing, details, warnOnly: isWarnOnly(toStage, effective) };
+}
+
+const SKIPPED_STAGE_NAMES: Record<string, string> = {
+  DQL: 'DQL', PROPOSAL_READY: 'Proposal Ready', PROPOSAL_DISCUSSION: 'PD (Pitch Discussion)',
+};
+
+/**
+ * The missing item as shown to the person moving the lead: what would satisfy a
+ * meeting-or-call item, and why an item from a skipped stage is still asked for
+ * (Annie, 6 Nov 2026: "meeting or call" looked met because a later meeting was done).
+ */
+export function explainMissing(r: RuleItem): string {
+  let text = r.label;
+  if (r.type === 'meetingOrCall') {
+    text += ` — needs a completed ${r.meetingType === 'PP' ? 'PP or PD' : r.meetingType} meeting, or a logged call`;
+  }
+  if (r.owedFrom) text += ` (still owed because the ${SKIPPED_STAGE_NAMES[r.owedFrom] ?? r.owedFrom} stage was skipped)`;
+  return text;
 }
 
 /** File-type requirements for one Files-tab folder: the items on the edge out of `stage`. */

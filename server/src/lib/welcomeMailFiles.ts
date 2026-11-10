@@ -108,7 +108,9 @@ export async function welcomeMailFileAttachments(leadId: string): Promise<EmailA
     total += data.size;
     if (total > MAX_TOTAL) throw new ConfigError(400, 'The files to attach add up to more than 20 MB. Upload smaller files, or switch some off in Admin → Welcome Mail.');
     const ext = ref.fileName.split('.').pop()?.toLowerCase() ?? '';
-    out.push({ filename: ref.fileName, content: Buffer.from(await data.arrayBuffer()).toString('base64'), ...(MIME[ext] && { contentType: MIME[ext] }) });
+    // Named by what it is ("Pitch presentation - file.pdf"): the same upload used for two kinds
+    // otherwise arrives as two identically named files (Annie, 6 Nov 2026).
+    out.push({ filename: `${ref.kind} - ${ref.fileName}`, content: Buffer.from(await data.arrayBuffer()).toString('base64'), ...(MIME[ext] && { contentType: MIME[ext] }) });
   }
   return out;
 }

@@ -49,7 +49,7 @@ beforeEach(() => {
 describe('welcome mail files', () => {
   it('attaches the payment screenshot, OB quotation and pitch presentation by default', async () => {
     const files = await welcomeMailFileAttachments('lead1');
-    expect(files.map((f) => f.filename)).toEqual(['payment.png', 'quote.pdf', 'pitch.pdf']);
+    expect(files.map((f) => f.filename)).toEqual(['Payment screenshot - payment.png', 'OB quotation - quote.pdf', 'Pitch presentation - pitch.pdf']);
     expect(files[0].contentType).toBe('image/png');
     expect(Buffer.from(files[1].content, 'base64').toString()).toBe('%PDF-quote');
   });
@@ -61,7 +61,7 @@ describe('welcome mail files', () => {
 
   it('leaves out a kind the lead has no file for, without failing', async () => {
     delete state.files.PITCH_PRESENTATION;
-    expect((await welcomeMailFileAttachments('lead1')).map((f) => f.filename)).toEqual(['payment.png', 'quote.pdf']);
+    expect((await welcomeMailFileAttachments('lead1')).map((f) => f.filename)).toEqual(['Payment screenshot - payment.png', 'OB quotation - quote.pdf']);
   });
 
   it('says plainly when a file cannot be read, and when the files are too big', async () => {
@@ -81,7 +81,7 @@ describe('welcome mail files', () => {
     state.configs.welcome_mail_files_v1 = { value: { attach: { payment: false, obQuote: false, pitch: false }, extraTypes: ['custom:site_photos'], whenMissing: 'skip' }, revision: 1, updatedAt: '', updatedById: 'x' };
     state.files['custom:site_photos'] = { fileName: 'site.jpg', storagePath: 'lead1/MQL/4_site.jpg' };
     state.blobs['crm-lead-files/lead1/MQL/4_site.jpg'] = Buffer.from('jpg');
-    expect((await welcomeMailFileAttachments('lead1')).map((f) => f.filename)).toEqual(['site.jpg']);
+    expect((await welcomeMailFileAttachments('lead1')).map((f) => f.filename)).toEqual(['Site photos - site.jpg']);
   });
 
   it('stops and names the missing file when she chose to be strict', async () => {
