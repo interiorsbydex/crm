@@ -24,6 +24,8 @@ interface Props {
 
 /** The survey's rating links, as they appear in the plain-text body: "7 (https://…/nps/<token>?score=7)". */
 const NPS_LINK = /\s*\(https?:\/\/[^)\s]*\/nps\/[^)\s]*\)/g;
+/** The survey's own link on its own ("Or tap here to open the survey: https://…/nps/<token>"). */
+const NPS_URL = /https?:\/\/\S*\/nps\/\S*/g;
 
 /**
  * Editable, pre-populated email preview modal shared by the PD→OB "Share
@@ -75,7 +77,7 @@ export default function EmailPreviewModal({
               <p className="text-sm text-gray-900 mb-3">{defaultSubject}</p>
               <p className="text-xs font-medium text-gray-600 mb-1">Message</p>
               <div className="whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 max-h-80 overflow-y-auto">
-                {prepared.body.replace(NPS_LINK, '')}
+                {prepared.body.replace(NPS_LINK, '').replace(NPS_URL, '[survey link — only the client receives it]')}
               </div>
               <p className="mt-2 text-xs text-gray-500">The rating links are hidden here, so only the client can give the score.</p>
             </div>
