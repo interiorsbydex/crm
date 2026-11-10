@@ -1,4 +1,4 @@
-import { findDuplicateLead, duplicateMessage } from '../lib/duplicateLeads.js';
+import { findDuplicateLead, duplicateMessage, duplicateEditMessage } from '../lib/duplicateLeads.js';
 import { leadOrderBy } from '../lib/leadSort.js';
 import { diffLeadDetails } from '../lib/leadChanges.js';
 import { recalculateMilestones } from '../lib/milestones.js';
@@ -475,7 +475,7 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
     }
 
     // Same phone (last 10 digits) or same email (any case) as an existing lead
-    const existing = await findDuplicateLead({ phone, email });
+    const existing = await findDuplicateLead({ phone, phone2, email });
     if (existing) {
       res.status(409).json({ isDuplicate: true, error: duplicateMessage(existing), existingLeadId: existing.leadId, existingId: existing.id, matchedOn: existing.matchedOn });
       return;
@@ -608,7 +608,7 @@ leadsRouter.post(
       }
 
       // Duplicate check — phone (last 10 digits) and email (any case)
-      const dup = await findDuplicateLead({ phone, email });
+      const dup = await findDuplicateLead({ phone, phone2, email });
       if (dup) {
         res.status(409).json({
           isDuplicate: true,
@@ -1188,6 +1188,17 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       },
     });
     if (!existing) { res.status(404).json({ error: 'Lead not found' }); return; }
+
+    // Changing a contact detail to one another lead already has is refused, as when creating a lead.
+    const changed = (v: string | null | undefined, old: string | null) => (v?.trim() && v.trim() !== (old ?? '') ? v : undefined);
+    const contactDup = await findDuplicateLead({
+      phone: changed(phone, existing.phone), phone2: changed(phone2, existing.phone2),
+      email: changed(email, existing.email), email2: changed(email2, existing.email2), excludeId: id,
+    });
+    if (contactDup) {
+      res.status(409).json({ isDuplicate: true, error: duplicateEditMessage(contactDup), existingLeadId: contactDup.leadId, existingId: contactDup.id, matchedOn: contactDup.matchedOn });
+      return;
+    }
 
     // Task #149 — an Inactive lead is fully locked from edits until it's
     // reactivated (POST /:id/reactivate). This never touches the reactivate

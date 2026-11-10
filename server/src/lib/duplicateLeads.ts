@@ -17,24 +17,40 @@ export type DuplicateMatch = {
   assignedCREId: string | null;
 };
 
-/** Finds an existing lead with the same phone (last 10 digits) or the same email (ignoring case). */
-export async function findDuplicateLead(input: { phone?: string | null; email?: string | null }): Promise<DuplicateMatch | null> {
-  const key = phoneKey(input.phone);
+/**
+ * Finds an existing lead with the same phone (last 10 digits, either of its two
+ * numbers) or the same email (ignoring case, either of its two emails).
+ * `excludeId` leaves out the lead being edited, so it doesn't match itself.
+ */
+export async function findDuplicateLead(input: {
+  phone?: string | null; phone2?: string | null; email?: string | null; email2?: string | null; excludeId?: string;
+}): Promise<DuplicateMatch | null> {
   const select = { id: true, leadId: true, name: true, assignedDesignerId: true, assignedBLId: true, assignedCREId: true } as const;
-  if (key.length >= 7) {
+  const exclude = input.excludeId ?? '';
+  for (const key of [phoneKey(input.phone), phoneKey(input.phone2)]) {
+    if (key.length < 7) continue;
     const rows = await prisma.$queryRaw<{ id: string }[]>`
       SELECT id FROM leads
-      WHERE right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = ${key}
-         OR right(regexp_replace(coalesce(phone2, ''), '[^0-9]', '', 'g'), 10) = ${key}
+      WHERE id <> ${exclude}
+        AND (right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = ${key}
+          OR right(regexp_replace(coalesce(phone2, ''), '[^0-9]', '', 'g'), 10) = ${key})
       ORDER BY "createdAt" ASC LIMIT 1`;
     if (rows[0]) {
       const lead = await prisma.lead.findUnique({ where: { id: rows[0].id }, select });
       if (lead) return { ...lead, matchedOn: 'phone' };
     }
   }
-  const email = input.email?.trim();
-  if (email) {
-    const lead = await prisma.lead.findFirst({ where: { email: { equals: email, mode: 'insensitive' } }, orderBy: { createdAt: 'asc' }, select });
+  for (const raw of [input.email, input.email2]) {
+    const email = raw?.trim();
+    if (!email) continue;
+    const lead = await prisma.lead.findFirst({
+      where: {
+        ...(exclude && { id: { not: exclude } }),
+        OR: [{ email: { equals: email, mode: 'insensitive' } }, { email2: { equals: email, mode: 'insensitive' } }],
+      },
+      orderBy: { createdAt: 'asc' },
+      select,
+    });
     if (lead) return { ...lead, matchedOn: 'email' };
   }
   return null;
@@ -43,6 +59,11 @@ export async function findDuplicateLead(input: { phone?: string | null; email?: 
 /** Plain-English message for the new-lead form. */
 export function duplicateMessage(match: Pick<DuplicateMatch, 'leadId' | 'matchedOn'>): string {
   return `This ${match.matchedOn === 'phone' ? 'phone number' : 'email'} already belongs to lead ${match.leadId}. Open that lead instead of creating a new one.`;
+}
+
+/** Plain-English message for editing a lead's contact details. */
+export function duplicateEditMessage(match: Pick<DuplicateMatch, 'leadId' | 'name' | 'matchedOn'>): string {
+  return `This ${match.matchedOn === 'phone' ? 'phone number' : 'email'} already belongs to lead ${match.leadId} (${match.name}). Each client should have only one lead.`;
 }
 
 /**

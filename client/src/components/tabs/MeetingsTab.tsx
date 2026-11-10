@@ -976,6 +976,7 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
           onSend={handleSendPendingMail}
           onClose={advanceMailQueue}
           requireSend={pendingMail.type === 'MEETING_COMPLETED' || pendingMail.type === 'NPS_ONBOARDING'}
+          readOnly={pendingMail.type.startsWith('NPS_')}
         />
       )}
       {pendingMail && mailQueue.length > 0 && (

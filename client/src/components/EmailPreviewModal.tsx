@@ -15,7 +15,15 @@ interface Props {
   onSend: (subject: string, html: string) => void;
   onClose: () => void;
   requireSend?: boolean;
+  /**
+   * Read-only preview (NPS survey mail): the text can be read but not changed,
+   * and the client's rating links are hidden so nobody else can rate for them.
+   */
+  readOnly?: boolean;
 }
+
+/** The survey's rating links, as they appear in the plain-text body: "7 (https://…/nps/<token>?score=7)". */
+const NPS_LINK = /\s*\(https?:\/\/[^)\s]*\/nps\/[^)\s]*\)/g;
 
 /**
  * Editable, pre-populated email preview modal shared by the PD→OB "Share
@@ -24,7 +32,7 @@ interface Props {
  * HTML template itself supplies the default styling.
  */
 export default function EmailPreviewModal({
-  title, leadId, defaultSubject, defaultHtml, attachmentNames, recipientLabel, sending, onSend, onClose, requireSend = false,
+  title, leadId, defaultSubject, defaultHtml, attachmentNames, recipientLabel, sending, onSend, onClose, requireSend = false, readOnly = false,
 }: Props) {
   const [subject, setSubject] = useState(defaultSubject);
   const prepared = prepareEmailDraft(defaultHtml);
@@ -36,6 +44,7 @@ export default function EmailPreviewModal({
   }, [defaultSubject, defaultHtml]);
 
   const handleSend = () => {
+    if (readOnly) { onSend(defaultSubject.trim(), defaultHtml); return; }
     const html = renderEditedEmail(defaultHtml, body);
     onSend(subject.trim(), html);
   };
@@ -58,8 +67,19 @@ export default function EmailPreviewModal({
               {attachmentNames.length ? attachmentNames.join(', ') : 'No standard documents for this mail (tick checklist items that have documents, or set them in Admin → Checklist Documents).'}
             </div>
           )}
-          {leadId && <MailAttachments leadId={leadId} />}
+          {leadId && !readOnly && <MailAttachments leadId={leadId} />}
           <p className="text-xs text-gray-500">To: {recipientLabel}</p>
+          {readOnly ? (
+            <div data-testid="email-readonly">
+              <p className="text-xs font-medium text-gray-600 mb-1">Subject</p>
+              <p className="text-sm text-gray-900 mb-3">{defaultSubject}</p>
+              <p className="text-xs font-medium text-gray-600 mb-1">Message</p>
+              <div className="whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 max-h-80 overflow-y-auto">
+                {prepared.body.replace(NPS_LINK, '')}
+              </div>
+              <p className="mt-2 text-xs text-gray-500">The rating links are hidden here, so only the client can give the score.</p>
+            </div>
+          ) : (<>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Subject</label>
             <input
@@ -90,6 +110,7 @@ export default function EmailPreviewModal({
               </div>
             )}
           </div>
+          </>)}
         </div>
         <div className="flex gap-2 px-5 py-4 border-t border-gray-100">
           <button
@@ -101,7 +122,7 @@ export default function EmailPreviewModal({
           </button>
           <button
             onClick={handleSend}
-            disabled={sending || !subject.trim() || !body.trim()}
+            disabled={sending || (!readOnly && (!subject.trim() || !body.trim()))}
             className="flex-1 flex items-center justify-center gap-1.5 bg-brand-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
           >
             <Send size={13} strokeWidth={2.5} />

@@ -529,6 +529,7 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
         <EmailPreviewModal
           leadId={leadId}
           title="Review NPS Survey Email"
+          readOnly
           defaultSubject={npsPendingMail.subject}
           defaultHtml={npsPendingMail.html}
           recipientLabel={npsPendingMail.to}
