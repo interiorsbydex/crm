@@ -1,4 +1,5 @@
 import { prisma } from './prisma.js';
+import { meetingCompletionLogs } from './completedPitches.js';
 import { getFormulas } from './formulaSettings.js';
 
 export type ContactStatus = 'RECENT' | 'WARNING' | 'HIGH_RISK' | 'UNKNOWN';
@@ -92,10 +93,7 @@ export async function loadContactHealth(leadIds: string[], now = new Date()) {
       where: { leadId: { in: ids }, status: 'COMPLETED' },
       select: { id: true, leadId: true },
     }),
-    prisma.activityLog.findMany({
-      where: { leadId: { in: ids }, action: 'MEETING_COMPLETED' },
-      select: { leadId: true, createdAt: true, meta: true },
-    }),
+    meetingCompletionLogs(ids),
   ]);
   return contactHealthByLead(ids, calls, meetings, logs, now, (await getFormulas()).contactHealth);
 }

@@ -6,7 +6,7 @@ import { getFormulas } from '../lib/formulaSettings.js';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
 import { getCycleForDate, type TargetCycle } from '../lib/targetCycle.js';
-import { loadCompletedPitches } from '../lib/completedPitches.js';
+import { loadCompletedPitches, meetingCompletionLogs } from '../lib/completedPitches.js';
 import { loadBookingCancellations } from '../lib/bookingCancellations.js';
 import { meetingCommitments } from '../lib/meetingCommitments.js';
 import { loadBlHeldPerformance } from '../lib/blHeldPerformance.js';
@@ -720,10 +720,7 @@ async function myCommitment(user: { id: string; role: string }, q: Record<string
     orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
   });
   const completedLeadIds = [...new Set(meetings.filter((m) => m.status === 'COMPLETED').map((m) => m.leadId))];
-  const completions = completedLeadIds.length ? await prisma.activityLog.findMany({
-    where: { leadId: { in: completedLeadIds }, action: 'MEETING_COMPLETED' },
-    select: { leadId: true, createdAt: true, meta: true },
-  }) : [];
+  const completions = await meetingCompletionLogs(completedLeadIds);
   const blocks = [];
   for (const cy of cycles) {
     const range = { gte: cy.cycleStart, lte: cy.cycleEnd };

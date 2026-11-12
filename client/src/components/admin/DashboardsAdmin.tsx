@@ -1,3 +1,4 @@
+import BlBoardRulesAdmin from './BlBoardRulesAdmin';
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ArrowDown, ArrowUp } from 'lucide-react';
@@ -185,6 +186,7 @@ export default function DashboardsAdmin() {
           </div>
         )}
       </div>
+      <BlBoardRulesAdmin />
     </div>
   );
 }

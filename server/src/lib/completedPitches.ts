@@ -22,6 +22,23 @@ function meetingId(meta: unknown): string | null {
   return typeof id === 'string' ? id : null;
 }
 
+/**
+ * When each meeting was completed: "Mark completed" (MEETING_COMPLETED, dated when marked)
+ * and "Log Meeting" (MEETING_LOGGED, dated when the meeting happened, as entered).
+ */
+export async function meetingCompletionLogs(leadIds: string[]): Promise<Completion[]> {
+  if (!leadIds.length) return [];
+  const logs = await prisma.activityLog.findMany({
+    where: { leadId: { in: leadIds }, action: { in: ['MEETING_COMPLETED', 'MEETING_LOGGED'] } },
+    select: { leadId: true, createdAt: true, meta: true, action: true },
+  });
+  return logs.map(({ action, ...log }) => {
+    const held = action === 'MEETING_LOGGED' ? (log.meta as { scheduledAt?: unknown } | null)?.scheduledAt : undefined;
+    const at = typeof held === 'string' ? new Date(held) : null;
+    return at && !isNaN(at.getTime()) ? { ...log, createdAt: at } : log;
+  });
+}
+
 /** Never use scheduledAt/updatedAt as evidence of an actual completion. */
 export function completedPitches(
   meetings: Meeting[], completions: Completion[], period?: PitchPeriod,
@@ -67,10 +84,7 @@ export async function loadCompletedPitches(leadWhere: Prisma.LeadWhereInput) {
     },
   });
   const leadIds = [...new Set(meetings.map((m) => m.leadId))];
-  const completions = leadIds.length ? await prisma.activityLog.findMany({
-    where: { leadId: { in: leadIds }, action: 'MEETING_COMPLETED' },
-    select: { leadId: true, createdAt: true, meta: true },
-  }) : [];
+  const completions = await meetingCompletionLogs(leadIds);
   return {
     all: completedPitches(meetings, completions),
     inPeriod: (period: PitchPeriod) => completedPitches(meetings, completions, period),

@@ -81,7 +81,7 @@ describe('Annie answer 8 — verified contact health', () => {
       select: { leadId: true, calledAt: true, outcome: true },
     });
     expect(db.meeting.findMany.mock.calls[0][0].where).toEqual({ leadId: { in: ['a'] }, status: 'COMPLETED' });
-    expect(db.activityLog.findMany.mock.calls[0][0].where).toEqual({ leadId: { in: ['a'] }, action: 'MEETING_COMPLETED' });
+    expect(db.activityLog.findMany.mock.calls[0][0].where).toEqual({ leadId: { in: ['a'] }, action: { in: ['MEETING_COMPLETED', 'MEETING_LOGGED'] } });
   });
   it('does not scan contacts at all when there are no permitted clients', async () => {
     expect((await loadContactHealth([])).size).toBe(0);

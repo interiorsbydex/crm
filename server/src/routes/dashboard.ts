@@ -8,9 +8,39 @@ import { buildLeadRoleWhere } from '../lib/leadScope.js';
 import { getCycleForDate } from '../lib/targetCycle.js';
 import { calculateDesignerCredits, loadIncentiveConfig } from '../lib/incentiveCredits.js';
 import { loadCompletedPitches } from '../lib/completedPitches.js';
+import { blBoardRulesConfig, computeBlBoard } from '../lib/blBoard.js';
 import { CancellationReviewRequired, loadBookingCancellations } from '../lib/bookingCancellations.js';
 
 export const dashboardRouter = Router();
+
+// ── GET /api/dashboard/bl-board?blId=&from=&to= — the Business Lead dashboard (Annie's mockup) ──
+// A BL sees their own team; the Branch Head picks the BL. from/to default to the current target cycle.
+dashboardRouter.get('/bl-board', verifyToken, async (req, res) => {
+  try {
+    const user = req.user!;
+    let blId: string;
+    if (user.role === 'BL') blId = user.id;
+    else if (user.role === 'BRANCH_HEAD') {
+      blId = typeof req.query.blId === 'string' ? req.query.blId : '';
+      const bl = blId ? await prisma.user.findFirst({ where: { id: blId, role: 'BL' }, select: { id: true } }) : null;
+      if (!bl) { res.status(400).json({ error: 'Pick a Business Lead' }); return; }
+    } else { res.status(403).json({ error: 'The BL dashboard is for Business Leads and the Branch Head' }); return; }
+    const cycle = getCycleForDate(new Date());
+    const day = (v: unknown, end: boolean) => {
+      if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+      const d = new Date(`${v}T${end ? '23:59:59.999' : '00:00:00.000'}+05:30`);
+      return isNaN(d.getTime()) ? null : d;
+    };
+    const from = day(req.query.from, false) ?? cycle.cycleStart;
+    const to = day(req.query.to, true) ?? cycle.cycleEnd;
+    if (from > to) { res.status(400).json({ error: 'The start date is after the end date' }); return; }
+    const rules = await blBoardRulesConfig.get();
+    res.json({ ...(await computeBlBoard(blId, { from, to }, rules)), cycle: { label: cycle.label, cycleStart: cycle.cycleStart, cycleEnd: cycle.cycleEnd } });
+  } catch (err: any) {
+    console.error('[dashboard:bl-board]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 const PIPELINE_STAGES = [
   'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',

@@ -71,7 +71,7 @@ describe('My Commitment report read-only integration', () => {
       type: { in: ['DQL', 'PP'] },
       OR: [{ scheduledAt: expect.any(Object) }, { status: 'COMPLETED' }],
     });
-    expect(state.logQueries[0].where).toEqual({ leadId: { in: ['lead'] }, action: 'MEETING_COMPLETED' });
+    expect(state.logQueries[0].where).toEqual({ leadId: { in: ['lead'] }, action: { in: ['MEETING_COMPLETED', 'MEETING_LOGGED'] } });
   });
   it('keeps BL-selected and Designer self-scoped rows identical without widening access', async () => {
     const designer = await report('designer', '&designerId=foreign');

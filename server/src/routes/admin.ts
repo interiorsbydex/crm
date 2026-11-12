@@ -33,6 +33,7 @@ import {
 } from '../lib/documentTypes.js';
 import { mountVersionedConfig, plainMessage } from '../lib/versionedConfig.js';
 import { welcomeMailFilesConfig, WELCOME_FILE_KINDS } from '../lib/welcomeMailFiles.js';
+import { blBoardRulesConfig, ATTENTION_ITEMS, FOCUS_ITEMS } from '../lib/blBoard.js';
 import { automationsConfig, AUTOMATION_EVENTS, CC_ROLES } from '../lib/automations.js';
 import { dashboardLayoutsConfig } from '../lib/dashboardLayouts.js';
 import { customBoxesConfig, BOX_MEASURES, BOX_SPLITS, BOX_ROLES, BOX_STAGES, BOX_STATUSES } from '../lib/customBoxes.js';
@@ -1105,6 +1106,7 @@ mountVersionedConfig(adminRouter, '/automations', automationsConfig, async () =>
 // ── Dashboards (Admin → Dashboards) ───────────────────────────────────────────
 // Hidden tiles, tile order within sections and tile names, per role's dashboard.
 mountVersionedConfig(adminRouter, '/dashboards', dashboardLayoutsConfig);
+mountVersionedConfig(adminRouter, '/bl-board-rules', blBoardRulesConfig, async () => ({ catalog: { attention: ATTENTION_ITEMS, focus: FOCUS_ITEMS } }));
 
 // ── Custom boxes (Admin → Custom Boxes) ───────────────────────────────────────
 // Boxes the Branch Head builds from a menu and puts on a role's dashboard (lib/customBoxes.ts).
