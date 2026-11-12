@@ -321,9 +321,11 @@ function defaultWhenSkipped(req: StageRequirement, stage: string): WhenSkipped {
     return req.type === 'meeting' && req.meetingType === 'PP' ? 'waived' : 'required';
   }
   if (stage === 'PROPOSAL_DISCUSSION') {
-    // Skipping PD drops that leg's requirements (meeting/call + PD quote) for
-    // the jump itself, but they are still owed on every later forward move.
-    return 'owedLater';
+    // PD is optional; PP is not (Annie, 12 Nov 2026). Skipping PD drops that
+    // leg's requirements (meeting/call, PP quotation, PD pitch file) for good.
+    // The PP meeting itself is still required on the move into PP, which can't
+    // be skipped. Admin → Stage Rules can set an item back to "owed later".
+    return 'waived';
   }
   return 'required';
 }

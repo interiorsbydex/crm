@@ -31,8 +31,10 @@ describe('default stage rules reproduce the original hardcoded gates exactly', (
   it('requires the same items for every stage pair and skip-flag combination', () => {
     let compared = 0;
     for (const from of STAGES) for (const to of STAGES) for (const lead of FLAG_COMBOS) {
+      // One deliberate change (Annie, 12 Nov 2026): a skipped PD no longer leaves its items owed,
+      // so a PD-skipped lead now needs exactly what the original asked of a lead that didn't skip PD.
       expect(labels(lead, from, to, rules), `${from} → ${to} ${JSON.stringify(lead)}`)
-        .toEqual(legacyRequirementLabels(lead, from, to));
+        .toEqual(legacyRequirementLabels({ ...lead, skippedProposalDiscussion: false }, from, to));
       compared++;
     }
     expect(compared).toBe(STAGES.length * STAGES.length * FLAG_COMBOS.length);
@@ -93,8 +95,18 @@ describe('admin edits change the gates', () => {
     expect(labels({}, 'MQL', 'PROPOSAL_READY', rules)).toContain(dqlMeeting);
   });
 
-  it('owedLater items come back on later moves only for leads that skipped', () => {
+  it('skipping PD drops its items for good by default (PP is mandatory, PD is not)', () => {
     const rules = defaultStageRules();
+    const pdItems = rules.transitions['PROPOSAL_PRESENTED->PROPOSAL_DISCUSSION'].map((r) => r.label);
+    expect(rules.transitions['PROPOSAL_PRESENTED->PROPOSAL_DISCUSSION'].every((r) => r.whenSkipped === 'waived')).toBe(true);
+    expect(labels({ skippedProposalDiscussion: true }, 'ONBOARDING', 'ONBOARDING_MEETING', rules)).not.toEqual(expect.arrayContaining(pdItems));
+    expect(labels({}, 'PROPOSAL_PRESENTED', 'ONBOARDING', rules)).not.toEqual(expect.arrayContaining(pdItems));
+  });
+
+  it('owedLater items (set in Admin) come back on later moves only for leads that skipped', () => {
+    const rules = defaultStageRules();
+    const edge = 'PROPOSAL_PRESENTED->PROPOSAL_DISCUSSION';
+    rules.transitions[edge] = rules.transitions[edge].map((r) => ({ ...r, whenSkipped: 'owedLater' as const }));
     const pdItems = rules.transitions['PROPOSAL_PRESENTED->PROPOSAL_DISCUSSION'].map((r) => r.label);
     expect(labels({ skippedProposalDiscussion: false }, 'ONBOARDING', 'ONBOARDING_MEETING', rules)).not.toEqual(expect.arrayContaining(pdItems));
     expect(labels({ skippedProposalDiscussion: true }, 'ONBOARDING', 'ONBOARDING_MEETING', rules)).toEqual(expect.arrayContaining(pdItems));
