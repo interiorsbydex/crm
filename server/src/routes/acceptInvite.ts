@@ -9,7 +9,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { recordTeamChange } from '../lib/blTeamHistory.js';
-import jwt from 'jsonwebtoken';
+import { createClient } from '@supabase/supabase-js';
 
 export const acceptInviteRouter = Router();
 
@@ -84,7 +84,15 @@ acceptInviteRouter.post('/:token', async (req, res) => {
           email_confirm: true,
         });
         if (data?.user?.id) supabaseId = data.user.id;
-        if (error) console.warn('[accept-invite] Supabase create error:', error.message);
+        if (error) {
+          console.warn('[accept-invite] Supabase create error:', error.message);
+          // Someone invited again who already has a sign-in (e.g. rejoining):
+          // the password they just chose becomes their password.
+          if (existingUser?.supabaseId && !existingUser.supabaseId.startsWith('pending-')) {
+            const { error: updErr } = await (supabaseAdmin as any).auth.admin.updateUserById(existingUser.supabaseId, { password });
+            if (updErr) console.warn('[accept-invite] Supabase password update error:', updErr.message);
+          }
+        }
       } catch (e) {
         console.warn('[accept-invite] Supabase admin not available');
       }
@@ -118,20 +126,29 @@ acceptInviteRouter.post('/:token', async (req, res) => {
       data: { acceptedAt: new Date() },
     });
 
-    // Issue JWT
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      throw new Error('JWT_SECRET is required');
+    // Sign the new person in with a real session — the same kind /auth/login
+    // gives — so every API call accepts it. (A home-made JWT was returned here
+    // before; the server never accepted it, so the app fell back to whatever
+    // sign-in the browser already held — on a shared computer, someone else's.)
+    // If sign-in fails, the client sends them to the login page instead.
+    let session: { access_token: string; refresh_token: string } | null = null;
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY && !supabaseId.startsWith('pending-')) {
+      try {
+        const client = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+          auth: { persistSession: false, autoRefreshToken: false },
+        });
+        const { data, error } = await client.auth.signInWithPassword({ email: invite.email, password });
+        if (error) console.warn('[accept-invite] sign-in after accept failed:', error.message);
+        if (data?.session && data.user?.id === supabaseId) session = data.session;
+      } catch (e: any) {
+        console.warn('[accept-invite] sign-in after accept failed:', e.message);
+      }
     }
-    const jwtToken = jwt.sign(
-      { sub: user.id, role: user.role, name: user.name },
-      jwtSecret,
-      { expiresIn: '7d' },
-    );
 
     res.json({
-      token: jwtToken,
-      user: { id: user.id, name: user.name, role: user.role, email: user.email },
+      accessToken: session?.access_token ?? null,
+      refreshToken: session?.refresh_token ?? null,
+      user: { id: user.id, name: user.name, role: user.role, email: user.email, blId: user.blId },
     });
   } catch (err: any) {
     console.error('[accept-invite]', err.message);

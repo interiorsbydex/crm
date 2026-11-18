@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api } from '../lib/api';
+import { api, scheduleProactiveRefresh } from '../lib/api';
+import toast from 'react-hot-toast';
 import fyxLogo from '../assets/fyx-logo.svg';
 import { useWording } from '../lib/wording';
 
@@ -43,10 +44,22 @@ export default function AcceptInvite() {
     setSubmitting(true);
     setError(null);
     try {
-      const data = await api.post<{ token: string; user?: unknown }>(`/accept-invite/${token}`, form);
-      localStorage.setItem('crm_token', data.token);
-      if (data.user) localStorage.setItem('crm_user', JSON.stringify(data.user));
-      navigate('/dashboard');
+      const data = await api.post<{ accessToken: string | null; refreshToken: string | null; user?: unknown }>(`/accept-invite/${token}`, form);
+      // Drop any sign-in this browser already had (e.g. the Branch Head's, if
+      // they opened the link on their own computer) before signing this person in.
+      localStorage.removeItem('crm_token');
+      localStorage.removeItem('crm_refresh_token');
+      localStorage.removeItem('crm_user');
+      if (data.accessToken) {
+        localStorage.setItem('crm_token', data.accessToken);
+        if (data.refreshToken) localStorage.setItem('crm_refresh_token', data.refreshToken);
+        if (data.user) localStorage.setItem('crm_user', JSON.stringify(data.user));
+        scheduleProactiveRefresh(data.accessToken);
+        navigate('/dashboard');
+      } else {
+        toast.success('Your account is ready. Sign in with your email and the password you just chose.', { duration: 10000 });
+        navigate('/login', { replace: true });
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
