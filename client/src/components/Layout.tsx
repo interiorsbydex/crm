@@ -116,7 +116,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     Promise.allSettled([loadWording(), loadCrmSettings(), loadDashboardLayouts(), loadMyPermissions(), loadMeetingSettings(), loadFormulas()]).finally(() => setSettingsReady(true));
   }, []);
 
-  // If a Branch Head changed this person's role, name or team since they
+  // If a Branch Head changed this person's role, name or team (or switched
+  // them off) since they
   // signed in, pick it up now (once per page load) instead of showing the
   // old role's screens until they sign out and back in.
   useEffect(() => {
@@ -129,7 +130,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           window.location.reload();
         }
       })
-      .catch(() => {});
+      .catch((e: any) => {
+        // Switched off by a Branch Head: say so instead of leaving a half-empty screen.
+        if (e?.status === 403 && /deactivated/i.test(e?.data?.error ?? '')) {
+          localStorage.removeItem('crm_token');
+          localStorage.removeItem('crm_refresh_token');
+          localStorage.removeItem('crm_user');
+          toast.error('Your account has been switched off. Please contact your Branch Head.', { duration: 10000 });
+          navigate('/login', { replace: true });
+        }
+      });
   }, []);
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
