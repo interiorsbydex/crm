@@ -879,19 +879,21 @@ export default function Admin() {
                           </td>
                           <td className="py-3 px-4 text-gray-500 text-xs">{inv.blName ?? '—'}</td>
                           <td className="py-3 px-4 text-gray-500 text-xs">{inv.invitedBy?.name ?? '—'}</td>
-                          <td className="py-3 px-4 text-gray-500 text-xs whitespace-nowrap">{formatISTDateTime(inv.expiresAt)}</td>
+                          <td className="py-3 px-4 text-gray-500 text-xs">{formatISTDateTime(inv.expiresAt)}</td>
                           <td className="py-3 px-4">
                             {inv.expired ? (
-                              <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700 whitespace-nowrap">Link expired — resend it</span>
+                              <span className="inline-block text-xs px-2 py-1 rounded-lg bg-red-100 text-red-700">Link expired — resend it</span>
                             ) : (
-                              <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 whitespace-nowrap">Invited — waiting to set password</span>
+                              <span className="inline-block text-xs px-2 py-1 rounded-lg bg-amber-100 text-amber-700">Invited — waiting to set password</span>
                             )}
                           </td>
-                          <td className="py-3 px-4 whitespace-nowrap space-x-3">
-                            <button onClick={() => resendInvite(inv)} disabled={inviteBusy === inv.id}
-                              className="text-xs text-brand-600 hover:underline disabled:opacity-40">Resend</button>
-                            <button onClick={() => cancelInvite(inv)} disabled={inviteBusy === inv.id}
-                              className="text-xs text-red-500 hover:text-red-700 hover:underline disabled:opacity-40">Cancel invite</button>
+                          <td className="py-3 px-4">
+                            <div className="flex flex-col items-start gap-1.5">
+                              <button onClick={() => resendInvite(inv)} disabled={inviteBusy === inv.id}
+                                className="text-xs text-brand-600 hover:underline disabled:opacity-40 whitespace-nowrap">Resend</button>
+                              <button onClick={() => cancelInvite(inv)} disabled={inviteBusy === inv.id}
+                                className="text-xs text-red-500 hover:text-red-700 hover:underline disabled:opacity-40 whitespace-nowrap">Cancel invite</button>
+                            </div>
                           </td>
                         </tr>
                       ))}
