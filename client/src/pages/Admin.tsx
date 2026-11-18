@@ -26,6 +26,7 @@ import FormulasAdmin from '../components/admin/FormulasAdmin';
 import WordingAdmin from '../components/admin/WordingAdmin';
 import { cycleDescription } from '../lib/crmSettings';
 import { wording } from '../lib/wording';
+import { formatISTDateTime } from '../lib/dateFormat';
 
 interface User {
   id: string; name: string; email: string; role: string;
@@ -35,6 +36,21 @@ interface User {
   designManager?: { id: string; name: string } | null;
   _count: { designerLeads: number; blLeads: number };
 }
+
+interface PendingInvite {
+  id: string; name: string; email: string; role: string;
+  blId: string | null; blName: string | null; designation: string | null;
+  expiresAt: string; createdAt: string; expired: boolean;
+  invitedBy: { name: string } | null;
+}
+interface TeamHistoryEntry {
+  id: string; action: string; createdAt: string; byName: string;
+  meta: { name?: string; email?: string; role?: string; changes?: Record<string, { from: unknown; to: unknown }> } | null;
+}
+const ROLE_LABELS: Record<string, string> = {
+  DESIGNER: 'Designer', DESIGN_MANAGER: 'Design Manager', CRE: 'CRE', BL: 'Business Lead', BRANCH_HEAD: 'Branch Head',
+};
+const roleLabel = (r: string) => ROLE_LABELS[r] ?? r;
 
 // Display-only title layered on role — no permission changes (task #79).
 const DESIGNATION_LABELS: Record<string, string> = {
@@ -138,6 +154,14 @@ export default function Admin() {
   }>>({});
   const [savingTargetFor, setSavingTargetFor] = useState<string | null>(null);
 
+  const [invites, setInvites] = useState<PendingInvite[]>([]);
+  const [inviteBusy, setInviteBusy] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState<User | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', role: 'DESIGNER', blId: '', designManagerId: '', designation: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [teamHistory, setTeamHistory] = useState<TeamHistoryEntry[] | null>(null);
+  const [showTeamHistory, setShowTeamHistory] = useState(false);
+
   const bls = users.filter((u) => u.role === 'BL' && u.isActive);
   const activeDesigners = users.filter((u) => u.role === 'DESIGNER' && u.isActive);
   const designManagers = users.filter((u) => u.role === 'DESIGN_MANAGER' && u.isActive);
@@ -145,12 +169,16 @@ export default function Admin() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [u, h, s] = await Promise.all([
+      const [u, h, s, inv] = await Promise.all([
         api.get<{ users: User[] }>('/admin/users'),
         api.get<Health>('/admin/health'),
         api.get<{ schedules: Schedule[] }>('/admin/report-schedules'),
+        api.get<{ invites: PendingInvite[] }>('/admin/invites?all=1'),
       ]);
       setUsers(u.users);
+      setInvites(inv.invites);
+      setTeamHistory(null);
+      setShowTeamHistory(false);
       setHealth(h);
       setSchedules(s.schedules);
     } catch (e: any) {
@@ -377,6 +405,114 @@ export default function Admin() {
     }
   };
 
+  const resendInvite = async (inv: PendingInvite) => {
+    setInviteBusy(inv.id);
+    try {
+      const { inviteLink, note } = await api.post<{ inviteLink: string; note: string }>(`/admin/invites/${inv.id}/resend`, {});
+      if (note && (note.includes('manual sharing') || note.includes('delivery unavailable'))) {
+        toast.success(`New link made for ${inv.name}. Email isn't configured yet — share this link with them: ${inviteLink}`, { duration: 12000 });
+      } else {
+        toast.success(`New invite email sent to ${inv.email}. The old link no longer works.`);
+      }
+      await loadAll();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setInviteBusy(null);
+    }
+  };
+
+  const cancelInvite = async (inv: PendingInvite) => {
+    if (!window.confirm(`Cancel the invite for ${inv.name} (${inv.email})? Their link will stop working. You can invite them again later.`)) return;
+    setInviteBusy(inv.id);
+    try {
+      await api.delete(`/admin/invites/${inv.id}`);
+      toast.success(`Invite for ${inv.name} cancelled`);
+      await loadAll();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setInviteBusy(null);
+    }
+  };
+
+  const reactivateUser = async (u: User) => {
+    if (!window.confirm(`Reactivate ${u.name}? They will be able to sign in again with their old password. Leads that were moved to someone else stay with that person.`)) return;
+    try {
+      await api.patch(`/admin/users/${u.id}`, { isActive: true });
+      toast.success(`${u.name} reactivated`);
+      await loadAll();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+  const openEdit = (u: User) => {
+    setEditTarget(u);
+    setEditForm({ name: u.name, role: u.role, blId: u.blId ?? '', designManagerId: u.designManagerId ?? '', designation: u.designation ?? '' });
+  };
+
+  const saveEdit = async () => {
+    if (!editTarget) return;
+    if (!editForm.name.trim()) { toast.error('Name cannot be empty'); return; }
+    const hasBl = editForm.role === 'DESIGNER' || editForm.role === 'CRE';
+    const isDesigner = editForm.role === 'DESIGNER';
+    setSavingEdit(true);
+    try {
+      await api.patch(`/admin/users/${editTarget.id}`, {
+        name: editForm.name.trim(),
+        role: editForm.role,
+        blId: hasBl ? editForm.blId : '',
+        designManagerId: isDesigner ? editForm.designManagerId : '',
+        designation: isDesigner ? editForm.designation : '',
+      });
+      toast.success(`${editForm.name.trim()} updated`);
+      setEditTarget(null);
+      await loadAll();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const toggleTeamHistory = async () => {
+    setShowTeamHistory((v) => !v);
+    if (!teamHistory) {
+      try { setTeamHistory((await api.get<{ history: TeamHistoryEntry[] }>('/admin/users/history')).history); }
+      catch (e: any) { toast.error(e?.message ?? 'Could not load history'); }
+    }
+  };
+
+  const nameOf = (id: unknown) => (typeof id === 'string' ? users.find((x) => x.id === id)?.name ?? 'someone no longer listed' : 'nobody');
+  const describeChange = (field: string, from: unknown, to: unknown) => {
+    switch (field) {
+      case 'name': return `name "${from}" → "${to}"`;
+      case 'role': return `role ${roleLabel(String(from))} → ${roleLabel(String(to))}`;
+      case 'blId': return `Business Lead ${nameOf(from)} → ${nameOf(to)}`;
+      case 'designManagerId': return `Design Manager ${nameOf(from)} → ${nameOf(to)}`;
+      case 'designation': {
+        const t = (v: unknown) => (v ? wording(`title.${v}`, DESIGNATION_LABELS[String(v)] ?? String(v)) : 'Designer (default)');
+        return `designation ${t(from)} → ${t(to)}`;
+      }
+      default: return null;
+    }
+  };
+  const describeHistory = (h: TeamHistoryEntry) => {
+    const who = h.meta?.name ?? 'someone';
+    switch (h.action) {
+      case 'TEAM_INVITE_SENT': return `Invited ${who} (${h.meta?.email}) as ${roleLabel(h.meta?.role ?? '')}`;
+      case 'TEAM_INVITE_RESENT': return `Sent a new invite link to ${who} (${h.meta?.email})`;
+      case 'TEAM_INVITE_CANCELLED': return `Cancelled the invite for ${who} (${h.meta?.email})`;
+      case 'TEAM_MEMBER_DEACTIVATED': return `Deactivated ${who}`;
+      case 'TEAM_MEMBER_REACTIVATED': return `Reactivated ${who}`;
+      default: {
+        const parts = Object.entries(h.meta?.changes ?? {}).map(([f, c]) => describeChange(f, c.from, c.to)).filter(Boolean);
+        return `Changed ${who}: ${parts.join('; ') || 'details'}`;
+      }
+    }
+  };
+
   const handleAddSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     const recipients = scheduleForm.recipientIds.split(',').map((s) => s.trim()).filter(Boolean);
@@ -569,6 +705,69 @@ export default function Admin() {
         </div>
       )}
 
+      {/* ── Edit team member modal ───────────────────────────────────────── */}
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" data-testid="edit-user-modal">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setEditTarget(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full space-y-3">
+            <h2 className="text-base font-semibold text-gray-900">Edit {editTarget.name}</h2>
+            <p className="text-xs text-gray-500">Email ({editTarget.email}) can't be changed here because it is their sign-in.</p>
+            <label className="block text-xs font-medium text-gray-600">Name
+              <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
+            </label>
+            <label className="block text-xs font-medium text-gray-600">Role
+              <select value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                {['DESIGNER', 'DESIGN_MANAGER', 'CRE', 'BL', 'BRANCH_HEAD'].map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
+              </select>
+            </label>
+            {(editForm.role === 'DESIGNER' || editForm.role === 'CRE') && (
+              <label className="block text-xs font-medium text-gray-600">Business Lead (team)
+                <select value={editForm.blId} onChange={(e) => setEditForm({ ...editForm, blId: e.target.value })}
+                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                  <option value="">No Business Lead</option>
+                  {bls.filter((bl) => bl.id !== editTarget.id).map((bl) => <option key={bl.id} value={bl.id}>{bl.name}</option>)}
+                </select>
+              </label>
+            )}
+            {editForm.role === 'DESIGNER' && (
+              <>
+                <label className="block text-xs font-medium text-gray-600">Design Manager
+                  <select value={editForm.designManagerId} onChange={(e) => setEditForm({ ...editForm, designManagerId: e.target.value })}
+                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                    <option value="">No Design Manager</option>
+                    {designManagers.map((dm) => <option key={dm.id} value={dm.id}>{dm.name}</option>)}
+                  </select>
+                </label>
+                <label className="block text-xs font-medium text-gray-600">Designation (title only — does not change what they can do)
+                  <select value={editForm.designation} onChange={(e) => setEditForm({ ...editForm, designation: e.target.value })}
+                    className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                    <option value="">Designer (default)</option>
+                    <option value="DESIGN_TEAM_LEAD">{wording('title.DESIGN_TEAM_LEAD', 'Design Team Lead')}</option>
+                  </select>
+                </label>
+              </>
+            )}
+            {editForm.role !== editTarget.role && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                Changing the role changes what {editTarget.name} can see and do. Their current leads stay with them.
+              </p>
+            )}
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setEditTarget(null)}
+                className="flex-1 border border-gray-200 text-gray-700 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={saveEdit} disabled={savingEdit}
+                className="flex-1 py-2 rounded-xl text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 disabled:opacity-40 transition-colors">
+                {savingEdit ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center gap-4">
@@ -652,6 +851,56 @@ export default function Admin() {
               </div>
             </div>
 
+            {/* Pending invites */}
+            {invites.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden" data-testid="pending-invites">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h2 className="font-semibold text-gray-900">Invited, not joined yet ({invites.length})</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">These people have an invite but haven't set their password. Resend gives them a new link that works for 48 hours (the old link stops working).</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100 bg-gray-50">
+                        {['Name', 'Email', 'Role', 'BL', 'Invited by', 'Link expires', 'Status', ''].map((h) => (
+                          <th key={h} className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {invites.map((inv) => (
+                        <tr key={inv.id} className="hover:bg-gray-50">
+                          <td className="py-3 px-4 font-medium text-gray-900">{inv.name}</td>
+                          <td className="py-3 px-4 text-gray-500 text-xs">{inv.email}</td>
+                          <td className="py-3 px-4">
+                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${ROLE_COLORS[inv.role] ?? 'bg-gray-100 text-gray-600'}`}>
+                              {inv.designation ? wording(`title.${inv.designation}`, DESIGNATION_LABELS[inv.designation] ?? inv.designation) : roleLabel(inv.role)}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-gray-500 text-xs">{inv.blName ?? '—'}</td>
+                          <td className="py-3 px-4 text-gray-500 text-xs">{inv.invitedBy?.name ?? '—'}</td>
+                          <td className="py-3 px-4 text-gray-500 text-xs whitespace-nowrap">{formatISTDateTime(inv.expiresAt)}</td>
+                          <td className="py-3 px-4">
+                            {inv.expired ? (
+                              <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700 whitespace-nowrap">Link expired — resend it</span>
+                            ) : (
+                              <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 whitespace-nowrap">Invited — waiting to set password</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap space-x-3">
+                            <button onClick={() => resendInvite(inv)} disabled={inviteBusy === inv.id}
+                              className="text-xs text-brand-600 hover:underline disabled:opacity-40">Resend</button>
+                            <button onClick={() => cancelInvite(inv)} disabled={inviteBusy === inv.id}
+                              className="text-xs text-red-500 hover:text-red-700 hover:underline disabled:opacity-40">Cancel invite</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* User list */}
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -689,12 +938,18 @@ export default function Admin() {
                               {u.isActive ? 'Active' : 'Inactive'}
                             </span>
                           </td>
-                          <td className="py-3 px-4">
+                          <td className="py-3 px-4 whitespace-nowrap space-x-3">
+                            {u.isActive && (
+                              <button onClick={() => openEdit(u)} className="text-xs text-brand-600 hover:underline">Edit</button>
+                            )}
                             {u.isActive && u.role !== 'BRANCH_HEAD' && (
                               <button onClick={() => openDeactivate(u)}
                                 className="text-xs text-red-500 hover:text-red-700 hover:underline">
                                 Deactivate
                               </button>
+                            )}
+                            {!u.isActive && (
+                              <button onClick={() => reactivateUser(u)} className="text-xs text-green-700 hover:underline">Reactivate</button>
                             )}
                           </td>
                         </tr>
@@ -703,6 +958,23 @@ export default function Admin() {
                   </table>
                 </div>
               )}
+              <div className="px-5 py-3 border-t border-gray-100">
+                <button onClick={toggleTeamHistory} className="text-xs text-gray-500 hover:underline">{showTeamHistory ? 'Hide' : 'Show'} change history</button>
+                {showTeamHistory && (
+                  <div className="pt-3" data-testid="history">
+                    {!teamHistory ? <p className="text-xs text-gray-400">Loading…</p> : teamHistory.length === 0 ? <p className="text-xs text-gray-400">No changes yet.</p> : (
+                      <ul className="space-y-1.5">
+                        {teamHistory.map((h) => (
+                          <li key={h.id} className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                            <span className="font-medium text-gray-800">{describeHistory(h)}</span>
+                            <span>{h.byName} · {formatISTDateTime(h.createdAt)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </>
         )}

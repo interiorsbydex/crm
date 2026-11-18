@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
@@ -69,6 +70,25 @@ adminRouter.get('/users', async (_req, res) => {
       orderBy: { createdAt: 'asc' },
     });
     res.json({ users });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/admin/users/history — change history for the Users tab ──────────
+const TEAM_HISTORY_ACTIONS = [
+  'TEAM_INVITE_SENT', 'TEAM_INVITE_RESENT', 'TEAM_INVITE_CANCELLED',
+  'TEAM_MEMBER_UPDATED', 'TEAM_MEMBER_DEACTIVATED', 'TEAM_MEMBER_REACTIVATED',
+];
+adminRouter.get('/users/history', async (_req, res) => {
+  try {
+    const rows = await prisma.activityLog.findMany({
+      where: { action: { in: TEAM_HISTORY_ACTIONS } },
+      include: { user: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    res.json({ history: rows.map((r) => ({ id: r.id, action: r.action, createdAt: r.createdAt, byName: r.user?.name ?? 'Someone', meta: r.meta })) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -206,6 +226,9 @@ adminRouter.patch('/users/:id/deactivate', async (req, res) => {
     // Step 3 — deactivate
     await prisma.user.update({ where: { id }, data: { isActive: false } });
     await recordTeamChange(req.user!.id, user, { ...user, isActive: false });
+    await logActivity(req.user!.id, 'TEAM_MEMBER_DEACTIVATED', undefined, {
+      userId: user.id, name: user.name, changes: { isActive: { from: true, to: false } }, reassignedTo: reassignDesignerId ?? null,
+    });
 
     const affected = (reassignDesignerId || reassignBLId)
       ? await prisma.lead.count({ where: { assignedDesignerId: reassignDesignerId ?? undefined } })
@@ -234,13 +257,35 @@ adminRouter.patch('/users/:id', async (req, res) => {
         return;
       }
     }
+    if (name !== undefined && !String(name).trim()) {
+      res.status(400).json({ error: 'Name cannot be empty' });
+      return;
+    }
+    const validRoles = ['DESIGNER', 'DESIGN_MANAGER', 'CRE', 'BL', 'BRANCH_HEAD'];
+    if (role && !validRoles.includes(role)) {
+      res.status(400).json({ error: `role must be one of: ${validRoles.join(', ')}` });
+      return;
+    }
+    if (blId) {
+      const bl = await prisma.user.findUnique({ where: { id: blId }, select: { role: true, isActive: true } });
+      if (!bl || !bl.isActive || bl.role !== 'BL') {
+        res.status(400).json({ error: 'The Business Lead picked is not an active Business Lead' });
+        return;
+      }
+      if (blId === req.params.id) {
+        res.status(400).json({ error: 'Someone cannot be their own Business Lead' });
+        return;
+      }
+    }
     const before = await prisma.user.findUnique({
-      where: { id: req.params.id }, select: { id: true, role: true, blId: true, isActive: true },
+      where: { id: req.params.id },
+      select: { id: true, name: true, role: true, blId: true, designManagerId: true, designation: true, isActive: true },
     });
+    if (!before) { res.status(404).json({ error: 'User not found' }); return; }
     const user = await prisma.user.update({
       where: { id: req.params.id },
       data: {
-        ...(name && { name }),
+        ...(name && { name: String(name).trim() }),
         ...(role && { role: role as any }),
         ...(blId !== undefined && { blId: blId || null }),
         ...(designManagerId !== undefined && { designManagerId: designManagerId || null }),
@@ -249,7 +294,18 @@ adminRouter.patch('/users/:id', async (req, res) => {
       },
     });
     // BL credits keep history with the team a designer was in at the time (Annie, item 7B).
-    if (before) await recordTeamChange(req.user!.id, before, user);
+    await recordTeamChange(req.user!.id, before, user);
+    // Change history for the Users tab: what changed, from → to.
+    const fields = ['name', 'role', 'blId', 'designManagerId', 'designation', 'isActive'] as const;
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const f of fields) {
+      if ((before as any)[f] !== (user as any)[f]) changes[f] = { from: (before as any)[f] ?? null, to: (user as any)[f] ?? null };
+    }
+    if (Object.keys(changes).length) {
+      const action = changes.isActive?.to === true ? 'TEAM_MEMBER_REACTIVATED'
+        : changes.isActive?.to === false ? 'TEAM_MEMBER_DEACTIVATED' : 'TEAM_MEMBER_UPDATED';
+      await logActivity(req.user!.id, action, undefined, { userId: user.id, name: user.name, changes });
+    }
     res.json({ user });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -441,15 +497,108 @@ adminRouter.post('/users/:id/reassign-leads', async (req, res) => {
   }
 });
 
-// ── GET /api/admin/invites — list pending invites ─────────────────────────────
-adminRouter.get('/invites', async (_req, res) => {
+// ── GET /api/admin/invites — list invites not yet accepted ────────────────────
+// Default: only live invites. `?all=1` also returns expired ones (flagged
+// `expired`) so the Users tab can offer Resend for them.
+adminRouter.get('/invites', async (req, res) => {
   try {
+    const all = req.query.all === '1';
+    const now = new Date();
     const invites = await prisma.userInvite.findMany({
-      where: { acceptedAt: null, expiresAt: { gt: new Date() } },
+      where: { acceptedAt: null, ...(all ? {} : { expiresAt: { gt: now } }) },
       include: { invitedBy: { select: { name: true } } },
       orderBy: { createdAt: 'desc' },
     });
-    res.json({ invites });
+    const blIds = [...new Set(invites.map((i) => i.blId).filter((id): id is string => !!id))];
+    const bls = blIds.length ? await prisma.user.findMany({ where: { id: { in: blIds } }, select: { id: true, name: true } }) : [];
+    const blName = new Map(bls.map((b) => [b.id, b.name]));
+    res.json({
+      invites: invites.map(({ token: _token, ...i }) => ({
+        ...i, blName: i.blId ? blName.get(i.blId) ?? null : null, expired: i.expiresAt <= now,
+      })),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+const INVITE_HOURS = 48;
+const escapeHtml = (v: string) => v.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+
+/** Emails the invite link (Resend, then SMTP). Returns how it went out; 'manual' = nothing sent. */
+async function deliverInviteEmail(invite: { name: string; email: string; role: string }, inviteLink: string): Promise<'resend' | 'smtp' | 'manual'> {
+  const from = process.env.FROM_EMAIL ?? 'noreply@interiorsbydex.com';
+  const subject = "You've been invited to FYX CRM";
+  const html = `<p>Hi ${escapeHtml(invite.name)},</p><p>You've been invited to join FYX CRM as <strong>${invite.role}</strong>.</p><p>Click the link below to set up your account (expires in ${INVITE_HOURS} hours):</p><p><a href="${inviteLink}">${inviteLink}</a></p>`;
+  // Send through the project's direct Resend API key. SMTP remains a
+  // compatibility fallback if the Resend key is unavailable or rejected.
+  try {
+    const resendResult = await sendViaResend({ from, to: invite.email, subject, html });
+    console.log(`[admin:invite] Resend accepted invite email (message ID: ${resendResult.id})`);
+    return 'resend';
+  } catch (resendError: any) {
+    console.warn('[admin:invite] Resend delivery failed:', resendError.message);
+    if (process.env.SMTP_HOST) {
+      const nodemailer = await import('nodemailer');
+      const transporter = nodemailer.default.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT ?? 587),
+        secure: Number(process.env.SMTP_PORT ?? 587) === 465,
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      });
+      await transporter.sendMail({ from, to: invite.email, subject, html });
+      console.log(`[admin:invite] SMTP sent invite to ${invite.email}`);
+      return 'smtp';
+    }
+    console.log(`[admin:invite] No email provider available. INVITE LINK for ${invite.email}: ${inviteLink}`);
+    return 'manual';
+  }
+}
+
+const deliveryNote = (delivery: 'resend' | 'smtp' | 'manual') => (delivery === 'resend'
+  ? 'Invite email sent through Resend'
+  : delivery === 'smtp'
+    ? 'Invite email sent through SMTP'
+    : 'Invite email delivery unavailable — invite link returned for manual sharing');
+
+// ── POST /api/admin/invites/:id/resend — new link, new 48-hour expiry, new email
+// The old link stops working because the token is replaced.
+adminRouter.post('/invites/:id/resend', async (req, res) => {
+  try {
+    const existing = await prisma.userInvite.findUnique({ where: { id: req.params.id } });
+    if (!existing || existing.acceptedAt) {
+      res.status(404).json({ error: 'This invite is not waiting any more (it was accepted or cancelled).' });
+      return;
+    }
+    const baseUrl = resolveBaseUrl();
+    if (!baseUrl) {
+      res.status(500).json({ error: 'Could not determine the app\'s public URL (BASE_URL is not configured), so no usable invite link could be created. Set BASE_URL and try again.' });
+      return;
+    }
+    const invite = await prisma.userInvite.update({
+      where: { id: existing.id },
+      data: { token: randomUUID().replace(/-/g, ''), expiresAt: new Date(Date.now() + INVITE_HOURS * 60 * 60 * 1000) },
+    });
+    const inviteLink = `${baseUrl}/accept-invite/${invite.token}`;
+    const delivery = await deliverInviteEmail(invite, inviteLink);
+    await logActivity(req.user!.id, 'TEAM_INVITE_RESENT', undefined, { inviteId: invite.id, name: invite.name, email: invite.email, role: invite.role });
+    res.json({ invite: { id: invite.id, email: invite.email, role: invite.role, expiresAt: invite.expiresAt }, inviteLink, note: deliveryNote(delivery) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── DELETE /api/admin/invites/:id — cancel an invite (its link stops working) ─
+adminRouter.delete('/invites/:id', async (req, res) => {
+  try {
+    const existing = await prisma.userInvite.findUnique({ where: { id: req.params.id } });
+    if (!existing || existing.acceptedAt) {
+      res.status(404).json({ error: 'This invite is not waiting any more (it was accepted or cancelled).' });
+      return;
+    }
+    await prisma.userInvite.delete({ where: { id: existing.id } });
+    await logActivity(req.user!.id, 'TEAM_INVITE_CANCELLED', undefined, { inviteId: existing.id, name: existing.name, email: existing.email, role: existing.role });
+    res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -490,7 +639,7 @@ adminRouter.post('/users/send-invite', async (req, res) => {
       }
     }
 
-    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+    const expiresAt = new Date(Date.now() + INVITE_HOURS * 60 * 60 * 1000);
     const invite = await prisma.userInvite.create({
       data: {
         email: email.toLowerCase().trim(),
@@ -517,44 +666,13 @@ adminRouter.post('/users/send-invite', async (req, res) => {
     }
     const inviteLink = `${baseUrl}/accept-invite/${invite.token}`;
 
-    const from = process.env.FROM_EMAIL ?? 'noreply@interiorsbydex.com';
-    const subject = "You've been invited to FYX CRM";
-    const html = `<p>Hi ${name},</p><p>You've been invited to join FYX CRM as <strong>${role}</strong>.</p><p>Click the link below to set up your account (expires in 48 hours):</p><p><a href="${inviteLink}">${inviteLink}</a></p>`;
-    let delivery: 'resend' | 'smtp' | 'manual' = 'manual';
-
-    // Send through the project's direct Resend API key. SMTP remains a
-    // compatibility fallback if the Resend key is unavailable or rejected.
-    try {
-      const resendResult = await sendViaResend({ from, to: email, subject, html });
-      delivery = 'resend';
-      console.log(`[admin:invite] Resend accepted invite email (message ID: ${resendResult.id})`);
-    } catch (resendError: any) {
-      console.warn('[admin:invite] Resend delivery failed:', resendError.message);
-
-      if (process.env.SMTP_HOST) {
-        const nodemailer = await import('nodemailer');
-        const transporter = nodemailer.default.createTransport({
-          host: process.env.SMTP_HOST,
-          port: Number(process.env.SMTP_PORT ?? 587),
-          secure: Number(process.env.SMTP_PORT ?? 587) === 465,
-          auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-        });
-        await transporter.sendMail({ from, to: email, subject, html });
-        delivery = 'smtp';
-        console.log(`[admin:invite] SMTP sent invite to ${email}`);
-      } else {
-        console.log(`[admin:invite] No email provider available. INVITE LINK for ${email}: ${inviteLink}`);
-      }
-    }
+    const delivery = await deliverInviteEmail({ name, email, role }, inviteLink);
+    await logActivity(adminUser.id, 'TEAM_INVITE_SENT', undefined, { inviteId: invite.id, name: invite.name, email: invite.email, role: invite.role });
 
     res.status(201).json({
       invite: { id: invite.id, email: invite.email, role: invite.role, expiresAt: invite.expiresAt },
       inviteLink,
-      note: delivery === 'resend'
-        ? 'Invite email sent through Resend'
-        : delivery === 'smtp'
-          ? 'Invite email sent through SMTP'
-          : 'Invite email delivery unavailable — invite link returned for manual sharing',
+      note: deliveryNote(delivery),
     });
   } catch (err: any) {
     if (err.code === 'P2002') {
