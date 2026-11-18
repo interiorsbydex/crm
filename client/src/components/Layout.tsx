@@ -121,7 +121,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // signed in, pick it up now (once per page load) instead of showing the
   // old role's screens until they sign out and back in.
   useEffect(() => {
-    api.get<{ user: { id: string; name: string; email: string; role: string; blId: string | null } }>('/auth/me')
+    api.get<{ user: { id: string; name: string; email: string; role: string; blId: string | null } }>('/config/me')
       .then(({ user: fresh }) => {
         const stored = getStoredUser() as any;
         if (!stored || !fresh) return;

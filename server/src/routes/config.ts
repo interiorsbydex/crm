@@ -18,6 +18,14 @@ import { wordingConfig } from '../lib/wording.js';
 export const configRouter = Router();
 
 // ── GET /api/config/flags — feature flags the client mirrors ──────────────────
+// Who am I now — read on each page load so a role / name / team change made
+// in Admin shows without signing out. Lives here, not under /api/auth, because
+// /api/auth is held to 20 calls per 15 minutes per connection for sign-ins.
+configRouter.get('/me', verifyToken, (req, res) => {
+  const u = req.user!;
+  res.json({ user: { id: u.id, name: u.name, email: u.email, role: u.role, blId: u.blId } });
+});
+
 configRouter.get('/flags', verifyToken, (_req, res) => {
   res.json({ lenientLaunch: isLenientLaunch() });
 });
