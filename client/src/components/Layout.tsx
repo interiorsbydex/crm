@@ -136,7 +136,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           localStorage.removeItem('crm_token');
           localStorage.removeItem('crm_refresh_token');
           localStorage.removeItem('crm_user');
-          toast.error('Your account has been switched off. Please contact your Branch Head.', { duration: 10000 });
+          toast.error('Your account has been switched off. Please contact your Branch Head.', { id: 'account-switched-off', duration: 10000 });
           navigate('/login', { replace: true });
         }
       });
