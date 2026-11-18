@@ -116,6 +116,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     Promise.allSettled([loadWording(), loadCrmSettings(), loadDashboardLayouts(), loadMyPermissions(), loadMeetingSettings(), loadFormulas()]).finally(() => setSettingsReady(true));
   }, []);
 
+  // If a Branch Head changed this person's role, name or team since they
+  // signed in, pick it up now (once per page load) instead of showing the
+  // old role's screens until they sign out and back in.
+  useEffect(() => {
+    api.get<{ user: { id: string; name: string; email: string; role: string; blId: string | null } }>('/auth/me')
+      .then(({ user: fresh }) => {
+        const stored = getStoredUser() as any;
+        if (!stored || !fresh) return;
+        if (stored.role !== fresh.role || stored.name !== fresh.name || (stored.blId ?? null) !== (fresh.blId ?? null)) {
+          localStorage.setItem('crm_user', JSON.stringify({ ...stored, id: fresh.id, name: fresh.name, email: fresh.email, role: fresh.role, blId: fresh.blId ?? null }));
+          window.location.reload();
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   // A Publish happened while this tab was open: offer a reload, and take it on the next page change.
   const newVersion = useNewVersionAvailable();
