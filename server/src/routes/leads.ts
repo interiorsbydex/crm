@@ -205,6 +205,7 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
         { phone: { contains: search } },
         { leadId: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } },
+        { truePulseLeadId: { equals: search } },
       ];
       where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { OR: searchOr }];
     }
@@ -872,6 +873,7 @@ leadsRouter.get('/export', verifyToken, requirePermission('LEAD_EXPORT'), async 
         { phone: { contains: search } },
         { email: { contains: search, mode: 'insensitive' } },
         { leadId: { contains: search, mode: 'insensitive' } },
+        { truePulseLeadId: { equals: search } },
       ];
       where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { OR: searchOr }];
     }

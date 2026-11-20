@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from './prisma.js';
-import { phoneKey, findDuplicateLead, recordDuplicateEnquiry } from './duplicateLeads.js';
+import { phoneKey, findDuplicateLead, recordDuplicateEnquiry, leadHandler } from './duplicateLeads.js';
 
 const safeDb = /@localhost:\d+\//.test(process.env.DATABASE_URL ?? '');
 
@@ -44,5 +44,10 @@ describe.skipIf(!safeDb)('duplicate lead matching', () => {
     await recordDuplicateEnquiry(m, uid, { source: 'META_ADS', name: 'Dup Lead', phone: '9123456789' });
     expect(await prisma.activityLog.count({ where: { leadId: m.id, action: 'DUPLICATE_ENQUIRY' } })).toBe(1);
     expect(await prisma.notificationLog.count({ where: { userId: uid, type: 'DUPLICATE_ENQUIRY' } })).toBe(1);
+  });
+  it('alerts only the person handling the lead: designer, else CRE, else BL', () => {
+    expect(leadHandler({ assignedDesignerId: 'd', assignedCREId: 'c', assignedBLId: 'b' })).toBe('d');
+    expect(leadHandler({ assignedDesignerId: null, assignedCREId: 'c', assignedBLId: 'b' })).toBe('c');
+    expect(leadHandler({ assignedDesignerId: null, assignedCREId: null, assignedBLId: 'b' })).toBe('b');
   });
 });

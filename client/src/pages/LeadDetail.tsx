@@ -38,7 +38,7 @@ type Tab = 'overview' | 'activity' | 'audit' | 'whatsapp' | 'quotes' | 'discount
 interface Lead {
   id: string; leadId: string; name: string; phone: string; phone2?: string;
   email?: string; email2?: string; pan?: string; gst?: string;
-  stage: string; status: 'ACTIVE' | 'ON_HOLD' | 'INACTIVE'; source?: string; adName?: string; utmCampaign?: string; utmAdSet?: string; utmSource?: string;
+  stage: string; status: 'ACTIVE' | 'ON_HOLD' | 'INACTIVE'; source?: string; adName?: string; utmCampaign?: string; utmAdSet?: string; utmSource?: string; truePulseLeadId?: string | null; landingPageUrl?: string | null;
   projectType?: string; scope?: string; location?: string; possessionTimeline?: string;
   builder?: string; expectedMoveIn?: string | null; expectedObDate?: string | null;
   offer1?: string; offer2?: string; offer3?: string;
@@ -2764,6 +2764,15 @@ export default function LeadDetail() {
                 <InfoRow label="UTM Campaign" value={lead.utmCampaign} />
                 <InfoRow label="UTM AdSet" value={lead.utmAdSet} />
                 <InfoRow label="UTM Source" value={lead.utmSource} />
+                {lead.truePulseLeadId && <InfoRow label="True Pulse ID" value={lead.truePulseLeadId} />}
+                {lead.landingPageUrl && (
+                  <InfoRow label="Landing page" value={!/^https?:\/\//i.test(lead.landingPageUrl) ? lead.landingPageUrl : (
+                    <a href={lead.landingPageUrl} target="_blank" rel="noopener noreferrer" title={lead.landingPageUrl}
+                      className="text-brand-600 hover:underline break-all">
+                      {lead.landingPageUrl.split('?')[0].replace(/^https?:\/\//, '')}
+                    </a>
+                  )} />
+                )}
                 <InfoRow label="Created" value={formatISTDate(lead.createdAt, { year: 'numeric' })} />
                 {lead.currentOffer && (
                   <div className="mt-2">

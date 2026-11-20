@@ -67,18 +67,30 @@ export function duplicateEditMessage(match: Pick<DuplicateMatch, 'leadId' | 'nam
 }
 
 /**
+ * Who hears about a repeat enquiry: the lead's designer; with no designer yet,
+ * its CRE; with neither, its Business Lead (who still has to pick a designer).
+ */
+export function leadHandler(lead: { assignedDesignerId: string | null; assignedCREId: string | null; assignedBLId: string | null }): string | null {
+  return lead.assignedDesignerId ?? lead.assignedCREId ?? lead.assignedBLId;
+}
+
+/**
  * An enquiry arrived by webhook for someone we already have. No new lead is made (no
- * double counting); instead the existing lead gets a history entry and its team is alerted.
+ * double counting); instead the existing lead gets a history entry (with whatever the
+ * new enquiry carried, so a second project or place isn't lost) and the person handling
+ * the lead is alerted (see leadHandler; founder's decision, 20 Nov 2026).
  */
 export async function recordDuplicateEnquiry(
   existing: DuplicateMatch,
   actorUserId: string,
-  info: { source: string; name?: string; phone?: string; email?: string },
+  info: { source: string; name?: string; phone?: string; email?: string; details?: Record<string, string | undefined> },
 ): Promise<void> {
+  const details = Object.fromEntries(Object.entries(info.details ?? {}).filter(([, v]) => typeof v === 'string' && v.trim()));
   await logActivity(actorUserId, 'DUPLICATE_ENQUIRY', existing.id, {
     source: info.source, name: info.name, phone: info.phone, email: info.email, matchedOn: existing.matchedOn,
+    ...(Object.keys(details).length && { details }),
   });
-  const people = new Set([existing.assignedDesignerId, existing.assignedBLId, existing.assignedCREId].filter((x): x is string => !!x));
+  const handler = leadHandler(existing);
   const message = `${existing.leadId} (${existing.name}) enquired again via ${info.source.replace(/_/g, ' ').toLowerCase()}. No new lead was made.`;
-  for (const uid of people) await createNotification(uid, 'DUPLICATE_ENQUIRY', message, existing.id);
+  if (handler) await createNotification(handler, 'DUPLICATE_ENQUIRY', message, existing.id);
 }

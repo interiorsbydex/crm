@@ -12,6 +12,26 @@ function fmtWhen(iso?: string) {
   return d.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' });
 }
 
+const FIELD_NAMES: Record<string, string> = {
+  email: 'email', location: 'location', projectType: 'project type', scope: 'scope', possessionTimeline: 'possession',
+  utmAdSet: 'ad set', estimatedValue: 'budget', truePulseLeadId: 'True Pulse ID', landingPageUrl: 'landing page',
+  utmCampaign: 'campaign', utmSource: 'UTM source', adName: 'ad name',
+};
+
+/** What a repeat enquiry carried (True Pulse ID, notes, page, campaign), so a second project or place isn't lost. */
+function enquiryDetails(d: unknown): string {
+  if (!d || typeof d !== 'object') return '';
+  const x = d as Record<string, string>;
+  const parts = [
+    x.truePulseLeadId && `True Pulse ID ${x.truePulseLeadId}`,
+    x.notes && `notes: "${x.notes}"`,
+    x.city && `city: ${x.city}`,
+    x.campaign && `campaign: ${x.campaign}`,
+    x.landingPageUrl && `page: ${x.landingPageUrl.split('?')[0]}`,
+  ].filter(Boolean);
+  return parts.length ? `. ${parts.join('; ')}` : '';
+}
+
 export function describeActivity(action: string, meta?: Record<string, any>): string {
   const m = meta ?? {};
   switch (action) {
@@ -22,7 +42,9 @@ export function describeActivity(action: string, meta?: Record<string, any>): st
     case 'STAGE_CHANGED':
       return `${m.isBackward ? '↩ Moved backward: ' : 'Moved stage: '}${stageLabel(m.from)} → ${stageLabel(m.to)}`;
     case 'DUPLICATE_ENQUIRY':
-      return `Enquired again${m.source ? ` via ${String(m.source).replace(/_/g, ' ').toLowerCase()}` : ''}${m.name ? ` as "${m.name}"` : ''} — no new lead was made (matched on ${m.matchedOn === 'email' ? 'email' : 'phone number'})`;
+      return `Enquired again${m.source ? ` via ${String(m.source).replace(/_/g, ' ').toLowerCase()}` : ''}${m.name ? ` as "${m.name}"` : ''} — no new lead was made (matched on ${m.matchedOn === 'email' ? 'email' : 'phone number'})${enquiryDetails(m.details)}`;
+    case 'TRUE_PULSE_REQUALIFIED':
+      return `Qualified again in True Pulse — no new lead was made${Array.isArray(m.filled) && m.filled.length ? ` (filled in: ${m.filled.map((f: string) => FIELD_NAMES[f] ?? f).join(', ')})` : ''}${enquiryDetails(m.details)}`;
     case 'NOTE_ADDED':
       return `Added a note: ${m.note ?? ''}`;
     case 'INTENT_RATING_UPDATED': {

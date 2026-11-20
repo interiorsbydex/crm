@@ -293,6 +293,10 @@ model Lead {
   utmCampaign          String?
   utmAdSet             String?
   utmSource            String?
+  /// Lead ID from the agency's True Pulse tracking platform (same ID is re-sent when re-qualified).
+  truePulseLeadId      String?
+  /// Full landing page link the enquiry came from (carries the UTM tags). No length limit.
+  landingPageUrl       String?
   projectType          String?
   scope                String?
   location             String?
@@ -441,6 +445,7 @@ model Lead {
   leadFiles            LeadFile[]
   attentionFlags       LeadAttentionFlag[]
 
+  @@index([truePulseLeadId])
   @@map("leads")
 }
 

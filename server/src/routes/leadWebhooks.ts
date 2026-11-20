@@ -2,11 +2,14 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { logActivity } from '../lib/activityLog.js';
-import { findDuplicateLead, recordDuplicateEnquiry } from '../lib/duplicateLeads.js';
+import { findDuplicateLead, leadHandler, recordDuplicateEnquiry } from '../lib/duplicateLeads.js';
 
 import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
-import { routeAdLead, incrementAssigned } from '../services/assignmentService.js';
+import { routeAdLead, routeQualifiedLead, incrementAssigned } from '../services/assignmentService.js';
 import { hasAllMqlMandatoryFields } from '../lib/leadMandatoryFields.js';
+import { createNotification } from '../lib/notifications.js';
+import { getCrmSettings } from '../lib/crmSettings.js';
+import { matchSource, normaliseProjectType, parseNotesDetails, utmFromUrl } from '../lib/truePulse.js';
 
 export const leadWebhooksRouter = Router();
 
@@ -52,6 +55,12 @@ async function createLeadFromWebhook(data: {
   adName?: string;
   /** Optional extra lead columns (agency intake: location, projectType, utmAdSet, notes, customFields). */
   extra?: Record<string, unknown>;
+  /**
+   * Already qualified elsewhere (True Pulse: the agency's CRE checked it before
+   * sending). Skips the CRM's CRE step: starts at MQL and goes straight to the
+   * BL (and designer) chosen by Admin → Lead Routing & Access → qualified leads.
+   */
+  qualified?: boolean;
 }): Promise<string | null> {
   if (!isValidPhone(data.phone)) {
     console.warn(`[webhook] Rejected lead with invalid phone "${data.phone}" from source ${data.source}`);
@@ -70,8 +79,12 @@ async function createLeadFromWebhook(data: {
   }
 
   // Ad-sourced leads go to the next CRE in turn for qualification, or wait
-  // unassigned if Admin → Lead Routing & Access says so.
-  const cre = await routeAdLead();
+  // unassigned if Admin → Lead Routing & Access says so. Leads qualified
+  // before they arrive skip the CRE and follow the qualified-lead routing.
+  const cre = data.qualified ? null : await routeAdLead();
+  const route = data.qualified
+    ? await routeQualifiedLead(typeof data.extra?.estimatedValue === 'number' ? data.extra.estimatedValue : null)
+    : null;
 
   const leadId = await generateLeadId();
   // Webhook-sourced leads never carry projectType/scope/location/
@@ -81,7 +94,10 @@ async function createLeadFromWebhook(data: {
   // leadMandatoryFields.ts. This data shape has no project-detail fields at
   // all, so the check is always false today, but stays correct if a future
   // webhook payload starts supplying them.
-  const initialStage = (await hasAllMqlMandatoryFields({})) ? 'MQL' : 'EFFECTIVE_LEAD';
+  // A pre-qualified lead starts at MQL even if some project details are
+  // missing: the designer fills them in after the first conversation (they
+  // then show as "Data incomplete" on the lead).
+  const initialStage = data.qualified || (await hasAllMqlMandatoryFields({})) ? 'MQL' : 'EFFECTIVE_LEAD';
   const lead = await prisma.lead.create({
     data: {
       leadId,
@@ -99,14 +115,27 @@ async function createLeadFromWebhook(data: {
       // CRE Stage 1: permanent qualification-owner record — survives post-MQL
       // designer assignment which overwrites assignedDesignerId.
       ...(cre && { assignedCREId: cre.id }),
+      ...(route?.blId && { assignedBLId: route.blId }),
+      ...(route?.designerId && { assignedDesignerId: route.designerId }),
     },
   });
   if (cre) await incrementAssigned(cre.id);
-  await logActivity(await resolveSystemUserId(), 'LEAD_CREATED_VIA_WEBHOOK', lead.id, {
+  const systemUserId = await resolveSystemUserId();
+  await logActivity(systemUserId, 'LEAD_CREATED_VIA_WEBHOOK', lead.id, {
     source: data.source,
     leadId,
     ...(cre && { autoAssignedCREId: cre.id, autoAssignedCREName: cre.name }),
   });
+  if (route?.blId) {
+    await incrementAssigned(route.blId);
+    await createNotification(route.blId, 'BL_ASSIGNED', `You have been assigned as BL for lead ${leadId} — ${data.name}`, lead.id);
+    await logActivity(systemUserId, 'BL_ASSIGNED', lead.id, { blId: route.blId, auto: true });
+  }
+  if (route?.designerId) {
+    await incrementAssigned(route.designerId);
+    await createNotification(route.designerId, 'DESIGNER_ASSIGNED', `You have been assigned as designer for lead ${leadId} — ${data.name}`, lead.id);
+    await logActivity(systemUserId, 'DESIGNER_ASSIGNED', lead.id, { designerId: route.designerId, auto: true });
+  }
   return lead.id;
 }
 
@@ -277,6 +306,14 @@ const pick = (b: Record<string, unknown>, ...keys: string[]): string => {
   return '';
 };
 
+// True Pulse (the agency's tracking platform) sends its own lead ID as
+// `leadId` (or `truePulseLeadId`), the CRE's project details in `notes`
+// ("Possession: … | Type: … | Scope: … | Location: …"), an open-text `source`
+// and the `landingPageUrl` with its UTM tags. Such a lead was already
+// qualified by the agency's CRE, so it skips the CRM's CRE step. Rules agreed
+// with the agency and the founder, 18–20 Nov 2026:
+// - same True Pulse ID again → the same lead is updated (blanks filled only);
+// - same phone/email → one lead per person: a note on the existing lead.
 leadWebhooksRouter.post('/agency', async (req, res) => {
   const auth = agencyTokenOk(req.headers.authorization);
   if (auth === 'unconfigured') { res.status(503).json({ error: 'Agency intake is not configured' }); return; }
@@ -290,39 +327,89 @@ leadWebhooksRouter.post('/agency', async (req, res) => {
     const city = pick(b, 'city', 'location');
     const propertyType = pick(b, 'propertyType', 'property_type', 'projectType');
     const budget = pick(b, 'budget', 'estimatedBudget', 'estimated_budget');
-    const srcRaw = pick(b, 'source').toUpperCase().replace(/[\s-]+/g, '_');
-    const source = ['META_ADS', 'GOOGLE_ADS'].includes(srcRaw) ? srcRaw : 'META_ADS';
+    const notesText = pick(b, 'notes', 'note', 'remarks');
+    const truePulseLeadId = pick(b, 'truePulseLeadId', 'leadId', 'tptLeadId');
+    const landingPageUrl = pick(b, 'landingPageUrl', 'landing_page_url', 'landingPage');
+    const sourceWord = pick(b, 'source');
 
     if (!name) { res.status(400).json({ error: 'name is required' }); return; }
     if (!phone) { res.status(400).json({ error: 'phone is required' }); return; }
     if (!isValidPhone(phone)) { res.status(400).json({ error: 'phone: invalid number' }); return; }
     if (email && !isValidEmail(email)) { res.status(400).json({ error: 'email: invalid format' }); return; }
 
-    // Duplicate by last-10 digits of phone, or by email (any case).
+    // Source is open text: a known source keeps its code ("google" → Google
+    // Ads); anything else is filed under Other with the agency's word kept as
+    // the UTM source. No source at all keeps the old default (Meta Ads).
+    const utm = utmFromUrl(landingPageUrl);
+    const settings = await getCrmSettings();
+    const sourceText = sourceWord || utm.source || '';
+    const matched = sourceText ? matchSource(sourceText, settings.leadSources) : { code: 'META_ADS', known: true };
+    const source = matched.code;
+
+    const fromNotes = parseNotesDetails(notesText);
+    const projectType = fromNotes.projectType || (propertyType ? normaliseProjectType(propertyType) : '') || undefined;
+    const location = fromNotes.location || city || undefined;
+    const budgetNumber = /^\d+(\.\d+)?$/.test(budget) ? Number(budget) : null;
+    const notes = [notesText, budget && `Budget selected on ad form: ${budget}`].filter(Boolean).join('\n') || undefined;
+
+    const details: Record<string, string | undefined> = {
+      truePulseLeadId: truePulseLeadId || undefined,
+      notes: notesText || undefined,
+      landingPageUrl: landingPageUrl || undefined,
+      campaign: pick(b, 'campaign', 'campaignName', 'utmCampaign') || utm.campaign,
+      city: city || undefined,
+      budget: budget || undefined,
+    };
+    const fields = {
+      ...(location && { location }),
+      ...(projectType && { projectType }),
+      ...(fromNotes.scope && { scope: fromNotes.scope }),
+      ...(fromNotes.possessionTimeline && { possessionTimeline: fromNotes.possessionTimeline }),
+      utmAdSet: pick(b, 'adSet', 'ad_set', 'utmAdSet') || utm.content || undefined,
+      ...(budgetNumber != null && { estimatedValue: budgetNumber }),
+      ...(truePulseLeadId && { truePulseLeadId }),
+      ...(landingPageUrl && { landingPageUrl }),
+    };
+    const utmCampaign = details.campaign || undefined;
+    const utmSource = pick(b, 'utmSource') || utm.source || (matched.known ? undefined : sourceText) || (source === 'GOOGLE_ADS' ? 'google' : source === 'META_ADS' ? 'meta' : undefined);
+    const adName = pick(b, 'adName', 'ad_name') || utm.term || undefined;
+
+    // Same True Pulse lead sent again (re-qualified): update that lead, filling
+    // only what is still empty so nothing the team changed is overwritten.
+    if (truePulseLeadId) {
+      const same = await prisma.lead.findFirst({ where: { truePulseLeadId }, orderBy: { createdAt: 'asc' } });
+      if (same) {
+        const current = same as unknown as Record<string, unknown>;
+        const candidate: Record<string, unknown> = { email: email || undefined, ...fields, utmCampaign, utmSource, adName };
+        const fill = Object.fromEntries(Object.entries(candidate).filter(([k, v]) => v !== undefined && (current[k] === null || current[k] === '')));
+        if (Object.keys(fill).length) await prisma.lead.update({ where: { id: same.id }, data: fill });
+        await logActivity(await resolveSystemUserId(), 'TRUE_PULSE_REQUALIFIED', same.id, {
+          source, filled: Object.keys(fill), details: Object.fromEntries(Object.entries(details).filter(([, v]) => v)),
+        });
+        const handler = leadHandler(same);
+        if (handler) await createNotification(handler, 'DUPLICATE_ENQUIRY', `${same.leadId} (${same.name}) was qualified again in True Pulse. No new lead was made.`, same.id);
+        res.status(200).json({ status: 'updated', leadId: same.leadId }); return;
+      }
+    }
+
+    // Duplicate by last-10 digits of phone, or by email (any case): one lead per person.
     const dup = await findDuplicateLead({ phone, email });
     if (dup) {
-      await recordDuplicateEnquiry(dup, await resolveSystemUserId(), { source, name, phone, email: email || undefined });
+      await recordDuplicateEnquiry(dup, await resolveSystemUserId(), { source, name, phone, email: email || undefined, details });
+      // Keep the True Pulse ID on the person's lead if it has none yet, for troubleshooting.
+      if (truePulseLeadId) await prisma.lead.updateMany({ where: { id: dup.id, truePulseLeadId: null }, data: { truePulseLeadId } });
       res.status(200).json({ status: 'duplicate', leadId: dup.leadId }); return;
     }
 
-    // "2 BhK" -> "2BHK" to match the CRM's existing free-text convention.
-    const projectType = propertyType.replace(/\s+/g, '').toUpperCase() || undefined;
-    const extra: Record<string, unknown> = {
-      ...(city && { location: city }),
-      ...(projectType && { projectType }),
-      utmAdSet: pick(b, 'adSet', 'ad_set', 'utmAdSet') || undefined,
-      ...(budget && {
-        notes: `Budget selected on ad form: ${budget}`,
-        customFields: { budgetRange: budget },
-      }),
-    };
-
     const id = await createLeadFromWebhook({
       name, phone, email: email || undefined, source,
-      utmCampaign: pick(b, 'campaign', 'campaignName', 'utmCampaign') || undefined,
-      utmSource: pick(b, 'utmSource') || (source === 'GOOGLE_ADS' ? 'google' : 'meta'),
-      adName: pick(b, 'adName', 'ad_name') || undefined,
-      extra,
+      utmCampaign, utmSource, adName,
+      extra: {
+        ...fields,
+        ...(notes && { notes }),
+        ...(budget && { customFields: { budgetRange: budget } }),
+      },
+      qualified: !!truePulseLeadId,
     });
     if (!id) { res.status(400).json({ error: 'Lead rejected by validation' }); return; }
     const created = await prisma.lead.findUnique({ where: { id }, select: { leadId: true, stage: true } });
