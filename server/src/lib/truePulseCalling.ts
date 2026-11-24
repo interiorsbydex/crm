@@ -15,6 +15,7 @@ import { logActivity } from './activityLog.js';
 import { createNotification } from './notifications.js';
 import { phoneKey } from './duplicateLeads.js';
 import { ConfigError, versionedConfig } from './versionedConfig.js';
+import { isLeadLocked } from './leadLock.js';
 
 const API_BASE = 'https://app.truepulse.co.in/api/client/v1/calls/outbound';
 const RNR_OUTCOMES = ['RNR_1', 'RNR_2', 'RNR_3', 'RNR_4', 'RNR_5', 'RNR_6_PLUS'] as const;
@@ -162,9 +163,29 @@ const pick = (b: Record<string, unknown>, ...keys: string[]): string => {
   return '';
 };
 
-function toDate(v: string): Date | null {
+const MONTHS: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+/**
+ * A call time from True Pulse. Times without a time zone are Indian time: True
+ * Pulse sends "24 Nov 2026, 02:44:36 PM" (seen in their first live results,
+ * 24 Nov 2026), and the server's own clock is UTC.
+ */
+export function toDate(v: string): Date | null {
   if (!v) return null;
-  const d = /^\d{12,}$/.test(v) ? new Date(Number(v)) : new Date(v);
+  if (/^\d{12,}$/.test(v)) return new Date(Number(v));
+  const m = /^(\d{1,2})[ -]([A-Za-z]{3})[a-z]*[ -](\d{4}),?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i.exec(v.trim());
+  if (m) {
+    const month = MONTHS[m[2].toLowerCase()];
+    let hour = Number(m[4]);
+    if (month === undefined || hour > 23) return null;
+    if (m[7]) hour = (hour % 12) + (m[7].toUpperCase() === 'PM' ? 12 : 0);
+    return new Date(Date.UTC(Number(m[3]), month, Number(m[1]), hour, Number(m[5]), Number(m[6] ?? 0)) - IST_OFFSET_MS);
+  }
+  // ISO date-time without a zone ("2026-11-24T14:44:36" or "2026-11-24 14:44:36"): Indian time too.
+  const iso = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?(\.\d+)?$/.exec(v.trim());
+  if (iso) return new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3], +iso[4], +iso[5], +(iso[6] ?? 0)) - IST_OFFSET_MS);
+  const d = new Date(v);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
@@ -237,7 +258,8 @@ async function userForTrackingNumber(number: string | null): Promise<string | nu
  * - incoming not answered → no call row (it is not an attempt by us); the
  *   person handling the lead is alerted to call back;
  * - if the person already typed in this call (within 3 hours), the result is
- *   added to their entry instead of making a second one.
+ *   added to their entry instead of making a second one;
+ * - inactive (locked) leads get nothing added; the result is only kept here.
  */
 export async function recordCallResult(r: CallResult): Promise<{ status: 'logged' | 'updated' | 'stored' | 'duplicate'; leadId?: string }> {
   const existing = await prisma.truePulseCall.findUnique({ where: { tpCallId: r.tpCallId } });
@@ -259,6 +281,8 @@ export async function recordCallResult(r: CallResult): Promise<{ status: 'logged
     ? await prisma.truePulseCall.update({ where: { id: pending.id }, data })
     : await prisma.truePulseCall.create({ data });
   if (!lead) return { status: 'stored' };
+  // Inactive leads are locked in the CRM (calls can't be typed in either): keep the result here only.
+  if (isLeadLocked(lead.status)) return { status: 'stored', leadId: lead.leadId };
 
   const actor = userId ?? await systemUserId();
   const when = r.startedAt ?? new Date();

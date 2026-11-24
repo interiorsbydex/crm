@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prisma } from './prisma.js';
-import { autoLoggedCallToComplete, parseCallResult, recordCallResult, startCall, toE164, truePulseNumbersConfig, type CallResult } from './truePulseCalling.js';
+import { autoLoggedCallToComplete, parseCallResult, recordCallResult, startCall, toDate, toE164, truePulseNumbersConfig, type CallResult } from './truePulseCalling.js';
 
 const safeDb = /@localhost:\d+\//.test(process.env.DATABASE_URL ?? '');
 
@@ -30,6 +30,21 @@ describe('True Pulse call results', () => {
     expect((parseCallResult({ tpCallID: 'C3', tpCallerNumber: '9876543210', tpCallStatus: 'weird' }) as CallResult).status).toBe('UNKNOWN');
     expect(parseCallResult({ tpCallerNumber: '9876543210' })).toEqual({ error: 'tpCallID is required' });
     expect('error' in parseCallResult({ tpCallID: 'C4' })).toBe(true);
+  });
+  it('reads True Pulse\'s own time format as Indian time (as sent on 24 Nov 2026)', () => {
+    expect(toDate('24 Nov 2026, 02:44:36 PM')?.toISOString()).toBe('2026-11-24T09:14:36.000Z');
+    expect(toDate('24 Nov 2026, 12:05:00 AM')?.toISOString()).toBe('2026-11-23T18:35:00.000Z');
+    expect(toDate('24 Nov 2026, 12:05:00 PM')?.toISOString()).toBe('2026-11-24T06:35:00.000Z');
+    expect(toDate('2026-11-24 14:44:36')?.toISOString()).toBe('2026-11-24T09:14:36.000Z');
+    expect(toDate('2026-11-24T14:44:36+05:30')?.toISOString()).toBe('2026-11-24T09:14:36.000Z');
+    expect(toDate('2026-11-24T09:14:36Z')?.toISOString()).toBe('2026-11-24T09:14:36.000Z');
+    expect(toDate('not a date')).toBeNull();
+    const r = parseCallResult({
+      tpCallID: '247249', tpCallerNumber: '9840374251', tpCallStatus: 'MISSED', tpCallType: 'OUTGOING',
+      tpCallStartTime: '24 Nov 2026, 02:44:36 PM', tpCallEndTime: '24 Nov 2026, 02:44:43 PM', tpLegALegBDuration: '7',
+    }) as CallResult;
+    expect(r.startedAt?.toISOString()).toBe('2026-11-24T09:14:36.000Z');
+    expect(r.durationSecs).toBe(7);
   });
   it('keeps only web links as recordings', () => {
     expect((parseCallResult({ tpCallID: 'C5', tpCallerNumber: '9876543210', tpCallRecordingPath: 'javascript:alert(1)' }) as CallResult).recordingUrl).toBeNull();
@@ -99,6 +114,19 @@ describe.skipIf(!safeDb)('logging True Pulse call results on leads', () => {
     await prisma.truePulseCall.create({ data: { refno: `${tag}-ref2`, leadId: leadDbId, userId: designerId, direction: 'OUTGOING', status: 'QUEUED' } });
     expect(await recordCallResult({ ...r, refno: `${tag}-ref2` })).toMatchObject({ status: 'updated' });
     expect(await prisma.call.findUnique({ where: { id: typed.id } })).toMatchObject({ externalCallId: r.tpCallId, duration: 120, recordingUrl: 'https://rec.example/x.mp3', notes: 'Spoke about kitchen' });
+  });
+
+  it('adds nothing to an inactive lead (kept for reference only)', async () => {
+    const inactive = await prisma.lead.create({ data: { leadId: `I${tag}`.slice(0, 20), name: 'TP Inactive', phone: '+919000000088', status: 'INACTIVE', assignedDesignerId: designerId } });
+    try {
+      const r = result({ customerNumber: '+919000000088' });
+      expect(await recordCallResult(r)).toMatchObject({ status: 'stored' });
+      expect(await prisma.call.count({ where: { leadId: inactive.id } })).toBe(0);
+      expect(await prisma.truePulseCall.findUnique({ where: { tpCallId: r.tpCallId } })).toMatchObject({ leadId: inactive.id });
+    } finally {
+      await prisma.truePulseCall.deleteMany({ where: { leadId: inactive.id } });
+      await prisma.lead.delete({ where: { id: inactive.id } });
+    }
   });
 
   it('lets the person complete an automatically logged call with their notes', async () => {
