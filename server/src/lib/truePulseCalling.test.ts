@@ -111,7 +111,7 @@ describe.skipIf(!safeDb)('logging True Pulse call results on leads', () => {
     await truePulseNumbersConfig.save({ byUser: { [designerId]: { id: 12, phone: '+914440000012' } } }, saved.revision, designerId);
     const sent: any[] = [];
     vi.stubGlobal('fetch', async (url: string, init: any) => {
-      sent.push({ url, body: JSON.parse(init.body), key: init.headers['X-API-Key'] });
+      sent.push({ url, body: JSON.parse(init.body), key: init.headers.Authorization });
       return new Response(JSON.stringify({ status: 'SUCCESS', message: 'Call queued successfully', data: { refno: `${tag}-777`, status: 'QUEUED' } }), { status: 200 });
     });
     const oldKey = process.env.TRUEPULSE_OUTBOUND_KEY;
@@ -121,7 +121,7 @@ describe.skipIf(!safeDb)('logging True Pulse call results on leads', () => {
       process.env.TRUEPULSE_OUTBOUND_KEY = 'tp_out_test';
       const r = await startCall(leadDbId, designerId);
       expect(r).toMatchObject({ refno: `${tag}-777`, sandbox: false });
-      expect(sent[0]).toMatchObject({ body: { customerNumber: phone, trackingNumberId: 12 }, key: 'tp_out_test' });
+      expect(sent[0]).toMatchObject({ body: { customerNumber: phone, trackingNumberId: 12 }, key: 'Bearer tp_out_test' });
       expect(await prisma.truePulseCall.findFirst({ where: { refno: `${tag}-777` } })).toMatchObject({ leadId: leadDbId, userId: designerId, status: 'QUEUED' });
     } finally {
       vi.unstubAllGlobals();

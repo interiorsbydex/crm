@@ -86,7 +86,8 @@ async function callApi(path: string, init: RequestInit = {}): Promise<any> {
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...init,
-      headers: { 'X-API-Key': outboundKey(), 'Content-Type': 'application/json', ...(init.headers ?? {}) },
+      // True Pulse (Joshua, 24 Nov 2026): "Authorization: Bearer <key>", not the X-API-Key header in their docs.
+      headers: { Authorization: `Bearer ${outboundKey()}`, 'Content-Type': 'application/json', ...(init.headers ?? {}) },
       signal: AbortSignal.timeout(15000),
     });
   } catch (e: any) {
