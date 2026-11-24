@@ -196,6 +196,9 @@ export interface CallRecord {
   nextPlanOfActionItems?: NextPlanItem[];
   createdAt: string;
   loggedBy: { id: string; name: string; role: string };
+  /** "TRUE_PULSE" when logged automatically from True Pulse's call results. */
+  source?: string | null;
+  direction?: string | null;
 }
 
 export interface FollowUpTask {

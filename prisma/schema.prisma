@@ -505,6 +505,12 @@ model Call {
   /// Deliberately its own field, not part of the categorized `attachments`
   /// array (Lifestyle Capture / Proposal / Pitch Presentation).
   externalNotesAttachments Json?
+  /// "TRUE_PULSE" when the call was logged from True Pulse's call results (null = typed in by staff).
+  source           String?
+  /// True Pulse's call ID, so the same result is never logged twice.
+  externalCallId   String?     @unique
+  /// INCOMING or OUTGOING (null for older, typed-in calls).
+  direction        String?
   createdAt        DateTime    @default(now())
 
   lead     Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
@@ -1339,4 +1345,36 @@ model DesignerCreditSnapshot {
 
   @@unique([designerId, cycleStart])
   @@map("designer_credit_snapshots")
+}
+
+/// Every call True Pulse tells us about (and every call started from the CRM),
+/// kept as received — also calls from numbers that are not a lead yet.
+model TruePulseCall {
+  id             String    @id @default(cuid())
+  /// True Pulse's call ID (from its results). Null until the result arrives.
+  tpCallId       String?   @unique
+  /// True Pulse's reference for a call started from the CRM ("refno").
+  refno          String?
+  leadId         String?
+  /// The CRM person whose phone was used (designer who pressed Call, or matched by number).
+  userId         String?
+  /// The CRM call row this result was logged as, if any.
+  callId         String?
+  direction      String?
+  status         String?
+  customerNumber String?
+  didNumber      String?
+  agentName      String?
+  agentPhone     String?
+  startedAt      DateTime?
+  endedAt        DateTime?
+  durationSecs   Int?
+  recordingUrl   String?
+  raw            Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([refno])
+  @@index([leadId])
+  @@map("true_pulse_calls")
 }

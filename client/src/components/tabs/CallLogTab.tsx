@@ -98,8 +98,13 @@ function CallCard({ call, onRecordingRefresh }: CardProps) {
           </span>
           <span className="text-xs text-gray-400">{formatDuration(call.duration)}</span>
           {call.location && <span className="text-xs text-gray-400">📍 {call.location}</span>}
-          {isManual && (
+          {isManual && call.source !== 'TRUE_PULSE' && (
             <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Manual</span>
+          )}
+          {call.source === 'TRUE_PULSE' && (
+            <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full" title="Logged automatically from True Pulse">
+              True Pulse{call.direction === 'INCOMING' ? ' · incoming' : call.direction === 'OUTGOING' ? ' · outgoing' : ''}
+            </span>
           )}
         </div>
         <div className="text-right text-xs text-gray-400 shrink-0">
@@ -110,6 +115,9 @@ function CallCard({ call, onRecordingRefresh }: CardProps) {
 
       {call.notes && (
         <p className="text-sm text-gray-600 mt-2">{call.notes}</p>
+      )}
+      {call.source === 'TRUE_PULSE' && !call.notes && (
+        <p className="text-xs text-amber-700 mt-2">Logged automatically. Add your notes and the follow-up with Log Call; it completes this entry instead of adding a second one.</p>
       )}
       {call.nextPlanOfAction && (
         <div className="mt-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">

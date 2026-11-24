@@ -57,8 +57,12 @@ export function describeActivity(action: string, meta?: Record<string, any>): st
       const dur = m.duration && !isNaN(secs)
         ? secs >= 60 ? ` (${Math.floor(secs / 60)}m ${secs % 60}s)` : ` (${secs}s)`
         : '';
-      return `Logged a call${m.outcome ? ` — ${String(m.outcome).replace(/_/g, ' ').toLowerCase()}` : ''}${dur}`;
+      return `Logged a call${m.outcome ? ` — ${String(m.outcome).replace(/_/g, ' ').toLowerCase()}` : ''}${dur}${m.source === 'TRUE_PULSE' ? ` (from True Pulse${m.direction === 'INCOMING' ? ', incoming' : m.direction === 'OUTGOING' ? ', outgoing' : ''})` : ''}`;
     }
+    case 'TRUE_PULSE_CALL_STARTED':
+      return m.sandbox ? 'Started a call through True Pulse (test mode, no real call)' : 'Started a call through True Pulse';
+    case 'TRUE_PULSE_MISSED_CALL':
+      return `Missed call from the client${m.at ? ` at ${fmtWhen(m.at)}` : ''} — please call back`;
     case 'MEETING_SCHEDULED':
       return `Scheduled a meeting${m.type ? ` (${String(m.type).replace(/_/g, ' ').toLowerCase()})` : ''}${m.scheduledAt ? ` for ${fmtWhen(m.scheduledAt)}` : ''}`;
     case 'MEETING_COMPLETED':

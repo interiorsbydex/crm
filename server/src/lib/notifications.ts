@@ -37,6 +37,7 @@ export type NotificationType =
   | 'MQL_PUSHED_BACK'
   | 'TEAM_CHAT_MESSAGE'
   | 'DUPLICATE_ENQUIRY'
+  | 'MISSED_CALL'
   | 'LEAD_FLAGGED'
   | 'INACTIVE_FEEDBACK_RECEIVED';
 
@@ -75,6 +76,7 @@ export const NOTIFICATION_TYPES: { type: NotificationType; label: string }[] = [
   { type: 'DTL_ASSIGNED', label: 'A Design Team Lead is assigned' },
   { type: 'TEAM_CHAT_MESSAGE', label: 'A message in a lead\'s team chat' },
   { type: 'DUPLICATE_ENQUIRY', label: 'Someone we already have enquires again (ad or form)' },
+  { type: 'MISSED_CALL', label: 'A client called and nobody answered (True Pulse)' },
   { type: 'LEAD_FLAGGED', label: 'A lead is flagged for attention' },
   { type: 'INACTIVE_FEEDBACK_RECEIVED', label: 'A client answers the feedback form after their lead is made inactive' },
 ];

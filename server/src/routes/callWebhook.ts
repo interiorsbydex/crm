@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { isLeadLocked } from '../lib/leadLock.js';
+import { callTokenOk, parseCallResult, recordCallResult } from '../lib/truePulseCalling.js';
 
 export const callWebhookRouter = Router();
 
@@ -97,5 +98,32 @@ callWebhookRouter.post('/exotel', async (req, res) => {
   } catch (err: any) {
     console.error('[exotel:webhook] Error:', err.message);
     res.sendStatus(200); // always ACK Exotel
+  }
+});
+
+/**
+ * POST /api/calls/webhook/truepulse
+ * Authorization: Bearer <TRUEPULSE_CALL_TOKEN>
+ *
+ * True Pulse sends one completed call per request (calls started from the CRM
+ * and calls into our tracking numbers), using its own call format: tpCallID,
+ * tpCallerNumber, tpDIDNumber, tpCallStatus, tpCallType, tpCallStartTime,
+ * tpCallEndTime, tpAgentName, tpAgentPhone, tpLegALegBDuration,
+ * tpCallRecordingPath, plus `refno` for calls started from the CRM.
+ * Fails closed (503) when the token is not configured. Sending the same
+ * tpCallID twice is harmless.
+ */
+callWebhookRouter.post('/truepulse', async (req, res) => {
+  const auth = callTokenOk(req.headers.authorization);
+  if (auth === 'unconfigured') { res.status(503).json({ status: 'ERROR', message: 'Call results are not set up yet' }); return; }
+  if (auth === 'bad') { res.status(401).json({ status: 'ERROR', message: 'Missing or invalid token' }); return; }
+  try {
+    const parsed = parseCallResult((req.body ?? {}) as Record<string, unknown>);
+    if ('error' in parsed) { res.status(400).json({ status: 'ERROR', message: parsed.error }); return; }
+    const result = await recordCallResult(parsed);
+    res.status(200).json({ status: 'SUCCESS', message: result.status, ...(result.leadId && { leadId: result.leadId }) });
+  } catch (err: any) {
+    console.error('[truepulse:call-result]', err.message);
+    res.status(500).json({ status: 'ERROR', message: 'Could not save the call' });
   }
 });

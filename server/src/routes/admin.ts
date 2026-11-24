@@ -51,6 +51,7 @@ import {
   loadCrmSettingsState, saveCrmSettings, resetCrmSettings, crmSettingsHistory, getCrmSettings, previewCycleStartDay,
 } from '../lib/crmSettings.js';
 import { wordingConfig, WORDING_KEYS } from '../lib/wording.js';
+import { listOutboundNumbers, truePulseNumbersConfig, TruePulseError } from '../lib/truePulseCalling.js';
 
 export const adminRouter = Router();
 
@@ -1271,6 +1272,30 @@ mountVersionedConfig(adminRouter, '/wording', wordingConfig, async () => ({ cata
 // ── Formulas (Admin → Formulas) ───────────────────────────────────────────────
 // Medal levels, score weights, intent tiers and contact-health days (lib/formulaSettings.ts).
 mountVersionedConfig(adminRouter, '/formulas', formulaSettingsConfig);
+
+// ── True Pulse Calling (Admin → True Pulse Calling): each person's tracking number ──
+// The GET also lists who can be given a number (active staff), so the screen
+// needs one call. The numbers themselves come from True Pulse (below).
+mountVersionedConfig(adminRouter, '/true-pulse-numbers', truePulseNumbersConfig, async () => ({
+  catalog: {
+    people: await prisma.user.findMany({
+      where: { isActive: true, role: { in: ['DESIGNER', 'BL', 'CRE', 'BRANCH_HEAD'] } },
+      select: { id: true, name: true, role: true },
+      orderBy: [{ role: 'asc' }, { name: 'asc' }],
+    }),
+    keyConfigured: !!process.env.TRUEPULSE_OUTBOUND_KEY,
+    resultsConfigured: !!process.env.TRUEPULSE_CALL_TOKEN,
+  },
+}));
+
+// GET /api/admin/true-pulse/available-numbers — tracking numbers True Pulse has enabled for outbound calls.
+adminRouter.get('/true-pulse/available-numbers', async (_req, res) => {
+  try {
+    res.json({ numbers: await listOutboundNumbers() });
+  } catch (err: any) {
+    res.status(err instanceof TruePulseError ? err.status : 500).json({ error: err.message });
+  }
+});
 
 // ── Reports & NPS (Admin → Reports & NPS) ─────────────────────────────────────
 // Which stages count as onboarded in Reports, and which stage starts each NPS survey (lib/reportDefinitions.ts).

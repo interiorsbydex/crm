@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import {
   Phone, CalendarPlus, Tag, MessageCircle, AlertTriangle, Gift,
   ChevronDown, Upload, ExternalLink, Pencil, Info, Check, X, RefreshCw,
+  PhoneCall,
 } from 'lucide-react';
 import { api, uploadFile } from '../lib/api';
 import { describeActivity } from '../lib/activityLabels';
@@ -294,6 +295,24 @@ export default function LeadDetail() {
   const crm = useCrmSettings();
   const lenient = useLenientLaunch();
   const { leadId } = useParams<{ leadId: string }>();
+  // Calling through True Pulse: only people with a True Pulse number (Admin → True Pulse Calling).
+  const [calling, setCalling] = useState<{ enabled: boolean; myNumber: string | null }>({ enabled: false, myNumber: null });
+  const [dialing, setDialing] = useState(false);
+  useEffect(() => {
+    api.get<{ enabled: boolean; myNumber: string | null }>('/config/my-calling').then(setCalling).catch(() => {});
+  }, []);
+  const callClient = async () => {
+    if (!window.confirm(`Call this client through True Pulse?\n\nYour phone (${calling.myNumber ?? 'your True Pulse number'}) will ring first. Answer it, and True Pulse connects you to the client.`)) return;
+    setDialing(true);
+    try {
+      const r = await api.post<{ message: string; sandbox: boolean }>(`/leads/${leadId}/calls/dial`, {});
+      toast.success(r.message, { duration: 6000 });
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Could not start the call');
+    } finally {
+      setDialing(false);
+    }
+  };
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<Tab>((searchParams.get('tab') as Tab) ?? 'overview');
   const [lead, setLead] = useState<Lead | null>(null);
@@ -1840,6 +1859,15 @@ export default function LeadDetail() {
                 style={{ border: '1px solid #fca5a5' }}
                 title={(lead.attentionFlags?.length ?? 0) > 0 ? 'See and resolve the open flags on this lead' : 'Flag this lead for attention'}
               ><AlertTriangle size={13} strokeWidth={2} /> {(lead.attentionFlags?.length ?? 0) > 0 ? `Flagged (${lead.attentionFlags!.length})` : 'Flag'}</button>
+              {calling.enabled && !isLocked && (
+                <button
+                  onClick={callClient}
+                  disabled={dialing}
+                  className="flex items-center gap-1.5 text-white bg-green-600 px-3 py-1.5 rounded-xl text-xs hover:bg-green-700 transition-colors font-medium disabled:opacity-50"
+                  title="Your phone rings first, then True Pulse connects the client"
+                  data-testid="true-pulse-call"
+                ><PhoneCall size={13} strokeWidth={2} /> {dialing ? 'Calling…' : 'Call'}</button>
+              )}
               <button
                 onClick={() => handleTabChange('activity')}
                 className="flex items-center gap-1.5 text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"

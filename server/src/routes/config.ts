@@ -14,6 +14,7 @@ import { getCrmSettings, describeCycles } from '../lib/crmSettings.js';
 import { DEFAULT_CYCLE_SCHEDULE } from '../lib/targetCycle.js';
 import { getFormulas } from '../lib/formulaSettings.js';
 import { wordingConfig } from '../lib/wording.js';
+import { truePulseNumberFor } from '../lib/truePulseCalling.js';
 
 export const configRouter = Router();
 
@@ -71,6 +72,16 @@ configRouter.get('/meetings', verifyToken, async (_req, res) => {
 configRouter.get('/dashboards', verifyToken, async (_req, res) => {
   try {
     res.json({ layouts: await dashboardLayoutsConfig.get() });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/config/my-calling — can the signed-in user call through True Pulse? ──
+configRouter.get('/my-calling', verifyToken, async (req, res) => {
+  try {
+    const number = await truePulseNumberFor(req.user!.id);
+    res.json({ enabled: !!number && !!process.env.TRUEPULSE_OUTBOUND_KEY, myNumber: number?.phone ?? null });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

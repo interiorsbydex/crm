@@ -16,6 +16,7 @@ import { validateAttachmentPairing, validateGenericAttachments } from '../lib/at
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 import { isAutomationOn, automationCc } from '../lib/automations.js';
 import { time12 } from '../lib/istTime.js';
+import { autoLoggedCallToComplete, startCall, TruePulseError } from '../lib/truePulseCalling.js';
 
 export const callsRouter = Router({ mergeParams: true });
 
@@ -330,24 +331,37 @@ callsRouter.post('/', verifyToken, async (req, res) => {
   }
 
   // Create call + follow-up task / linked meeting in a transaction
+  // A call True Pulse already logged for this person on this lead (in the last
+  // 3 hours) is completed by this entry instead of being logged twice.
+  const autoLogged = await autoLoggedCallToComplete(leadId, user.id);
   const { call, task, meeting, nextPlanMeeting } = await prisma.$transaction(async (tx) => {
-    const newCall = await tx.call.create({
-      data: {
-        leadId,
-        loggedById: user.id,
-        outcome: outcome as any,
-        duration,
-        notes,
-        externalNotes: externalNotes?.trim() || undefined,
-        externalNotesAttachments: externalNotesAttachments?.length ? externalNotesAttachments : undefined,
-        recordingUrl,
-        location: location?.trim() || undefined,
-        calledAt: calledAt ? new Date(calledAt) : undefined,
-        attachments: attachments ?? undefined,
-        nextPlanOfAction: nextPlanOfAction?.length ? summarizeNextPlanItems(nextPlanOfAction) : undefined,
-        nextPlanOfActionItems: nextPlanOfAction?.length ? (nextPlanOfAction as any) : undefined,
-      },
-    });
+    const callData = {
+      leadId,
+      loggedById: user.id,
+      outcome: outcome as any,
+      duration,
+      notes,
+      externalNotes: externalNotes?.trim() || undefined,
+      externalNotesAttachments: externalNotesAttachments?.length ? externalNotesAttachments : undefined,
+      recordingUrl,
+      location: location?.trim() || undefined,
+      calledAt: calledAt ? new Date(calledAt) : undefined,
+      attachments: attachments ?? undefined,
+      nextPlanOfAction: nextPlanOfAction?.length ? summarizeNextPlanItems(nextPlanOfAction) : undefined,
+      nextPlanOfActionItems: nextPlanOfAction?.length ? (nextPlanOfAction as any) : undefined,
+    };
+    const newCall = autoLogged
+      ? await tx.call.update({
+        where: { id: autoLogged.id },
+        // True Pulse's duration, recording and time stay unless the person typed their own.
+        data: {
+          ...callData,
+          duration: duration ?? autoLogged.duration ?? undefined,
+          recordingUrl: recordingUrl || autoLogged.recordingUrl || undefined,
+          calledAt: calledAt ? new Date(calledAt) : autoLogged.calledAt ?? undefined,
+        },
+      })
+      : await tx.call.create({ data: callData });
 
     let newTask: Awaited<ReturnType<typeof tx.followUpTask.create>> | null = null;
     let newMeeting: Awaited<ReturnType<typeof tx.meeting.create>> | null = null;
@@ -641,6 +655,27 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     openCallLogTab: true,
     pendingMail,
   });
+});
+
+// ── POST /api/leads/:leadId/calls/dial — call the client through True Pulse ──
+// The caller's own phone rings first (their True Pulse number, Admin → True
+// Pulse Calling), then True Pulse connects the client. The result arrives later
+// at /api/calls/webhook/truepulse and is logged on the lead.
+callsRouter.post('/dial', verifyToken, async (req, res) => {
+  const { leadId } = req.params as { leadId: string };
+  const user = req.user!;
+  const which = (req.body as { which?: string } | undefined)?.which === 'phone2' ? 'phone2' : 'phone';
+  try {
+    const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { id: true, assignedDesignerId: true, assignedBLId: true, status: true } });
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (!(await isAuthorizedForLead(lead, user))) { res.status(403).json({ error: 'Not authorised for this lead' }); return; }
+    if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
+    res.json(await startCall(leadId, user.id, which));
+  } catch (err: any) {
+    if (err instanceof TruePulseError) { res.status(err.status).json({ error: err.message }); return; }
+    console.error('[calls:dial]', err.message);
+    res.status(500).json({ error: 'Could not start the call' });
+  }
 });
 
 // ── POST /api/leads/:leadId/calls/schedule ────────────────────────────────────
