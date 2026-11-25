@@ -250,11 +250,12 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     prisma.followUpTask.count({
       where: { completedAt: { gte: today }, ...(isBranchWide ? {} : { assignedToId: { in: teamUserIds } }) },
     }),
+    // Test leads are left out of every tile (their drill-through lists use excludeTest=1).
     prisma.lead.count({
-      where: { ...leadWhere, status: 'ACTIVE', stage: { notIn: ['HANDED_OVER', 'DESIGN_IN_PROGRESS'] } },
+      where: { ...leadWhere, isTestLead: false, status: 'ACTIVE', stage: { notIn: ['HANDED_OVER', 'DESIGN_IN_PROGRESS'] } },
     }),
     // Active leads that are in Design in Progress: shown as "+N in Design" next to Active Leads (they are the Active Projects tile).
-    prisma.lead.count({ where: { ...leadWhere, status: 'ACTIVE', stage: 'DESIGN_IN_PROGRESS' } }),
+    prisma.lead.count({ where: { ...leadWhere, isTestLead: false, status: 'ACTIVE', stage: 'DESIGN_IN_PROGRESS' } }),
     // Active leads past Effective Lead that nobody owns (no designer, no Business Lead). Branch Head only.
     user.role === 'BRANCH_HEAD'
       ? prisma.lead.count({
@@ -281,6 +282,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     prisma.lead.aggregate({
       where: {
         ...leadWhere,
+        isTestLead: false,
         status: 'ACTIVE',
         stage: { notIn: ['HANDED_OVER', 'DESIGN_IN_PROGRESS'] },
         estimatedValue: { not: null },
@@ -291,7 +293,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     // "project" stage), count + estimated value — distinct from "In Delivery"
     // above, which spans every non-Handover/Completed *project phase* instead.
     prisma.lead.aggregate({
-      where: { ...leadWhere, stage: 'DESIGN_IN_PROGRESS' },
+      where: { ...leadWhere, isTestLead: false, status: 'ACTIVE', stage: 'DESIGN_IN_PROGRESS' },
       _count: { id: true },
       _sum: { estimatedValue: true },
     }),
@@ -514,7 +516,8 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
   // ── Projects delivery widgets ─────────────────────────────────────────────────
   let deliveryWidgets: any = null;
   if (user.role !== 'CRE') {
-    const projectWhere: any = Object.keys(leadWhere).length > 0 ? { lead: leadWhere } : {};
+    // Delivery tiles: real projects only (no test leads, no inactive/cancelled leads).
+    const projectWhere: any = { lead: { ...leadWhere, isTestLead: false, status: { not: 'INACTIVE' } } };
 
     const attentionWhere = { ...projectWhere, attentionFlags: { some: { resolvedAt: null } } };
 
@@ -680,6 +683,8 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
         ? { OR: [{ designerId: user.id }, { id: { in: approvedTeamProjectIds } }] }
         : { designerId: user.id }),
       phase: { notIn: ['COMPLETED'] },
+      // Real projects only: not test leads, not inactive (cancelled) leads.
+      lead: { isTestLead: false, status: { not: 'INACTIVE' } },
     };
 
     // Fetch designer's performance record + find peers via blId

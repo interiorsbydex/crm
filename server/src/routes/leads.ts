@@ -126,6 +126,8 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       // Dashboard drill-through: the ownership scope the dashboard counted,
       // not the wider "which leads may I open" scope.
       mine,
+      // excludeTest=1: leave out leads marked as test leads (dashboard tiles don't count them).
+      excludeTest,
       sort, dir,
     } = req.query as Record<string, string>;
 
@@ -142,6 +144,7 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
     const selectedStages = stage?.split(',').map((s) => s.trim()).filter(Boolean) ?? [];
     if (selectedStages.length === 1) where.stage = selectedStages[0];
     if (selectedStages.length > 1) where.stage = { in: selectedStages };
+    if (excludeTest === '1') where.isTestLead = false;
     if (excludeStages) {
       const stageFilter = typeof where.stage === 'string' ? { equals: where.stage } : (where.stage ?? {});
       where.stage = { ...stageFilter, notIn: excludeStages.split(',').map((s) => s.trim()).filter(Boolean) };

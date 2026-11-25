@@ -231,6 +231,7 @@ export default function LeadList() {
     // From a dashboard number: only the leads that number counted (yours /
     // your team's), even when Lead Routing & Access lets you see more.
     mine: searchParams.get('mine') ?? '',
+    excludeTest: searchParams.get('excludeTest') ?? '',
   });
   const [statusSummary, setStatusSummary] = useState<Record<string, { count: number; value: number }> | null>(null);
 
@@ -291,6 +292,7 @@ export default function LeadList() {
       if (filters.flagged) params.set('flagged', filters.flagged);
       if (filters.unassigned) params.set('unassigned', filters.unassigned);
       if (filters.mine) params.set('mine', filters.mine);
+      if (filters.excludeTest) params.set('excludeTest', filters.excludeTest);
       if (sort) { params.set('sort', sort.by); params.set('dir', sort.dir); }
       const data = await api.get<{ leads: Lead[]; total: number; pages: number }>(`/leads?${params}`);
       setLeads(data.leads);
@@ -399,7 +401,7 @@ export default function LeadList() {
       originDateFrom: '', originDateTo: '', budgetMin: '', budgetMax: '',
       possession: '', possessionDateFrom: '', possessionDateTo: '', intent: '',
       intentMin: '', intentMax: '', projectedObFrom: '', projectedObTo: '', slaBreached: '', excludeStages: '',
-      hasUnresolvedSlaBreach: '', flagged: '', unassigned: '', mine: '',
+      hasUnresolvedSlaBreach: '', flagged: '', unassigned: '', mine: '', excludeTest: '',
     });
     setPage(1);
   };

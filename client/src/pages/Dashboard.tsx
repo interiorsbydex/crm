@@ -193,7 +193,7 @@ function BHDashboard({ data }: { data: DashboardData }) {
           value={fmt(data.pipelineValue)}
           sub={`${data.activeLeads} active leads, est. value`}
           accent
-          to="/leads?mine=1&status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
+          to="/leads?mine=1&status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER&excludeTest=1"
         />
         </Tile>
 <Tile id="bh.activeLeads">
@@ -201,7 +201,7 @@ function BHDashboard({ data }: { data: DashboardData }) {
           label={L('bh.activeLeads', 'Active Leads')}
           value={data.activeLeads}
           sub={`${fmt(data.activeLeadsValue ?? 0)} estimated value · before Design in Progress${data.activeLeadsInDesign ? ` (+${data.activeLeadsInDesign} in Design, shown under Active Projects)` : ''}`}
-          to="/leads?mine=1&status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
+          to="/leads?mine=1&status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER&excludeTest=1"
         />
         </Tile>
 {data.unassignedLeads != null && (
@@ -210,7 +210,7 @@ function BHDashboard({ data }: { data: DashboardData }) {
           label={L('bh.unassignedLeads', 'Unassigned Leads')}
           value={data.unassignedLeads}
           sub="Active, past Effective Lead, with no designer or Business Lead"
-          to="/leads?status=ACTIVE&excludeStages=EFFECTIVE_LEAD&unassigned=1"
+          to="/leads?status=ACTIVE&excludeStages=EFFECTIVE_LEAD&unassigned=1&excludeTest=1"
         />
         </Tile>
 )}
@@ -326,7 +326,7 @@ function BHDashboard({ data }: { data: DashboardData }) {
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={funnelData} layout="vertical" margin={{ left: 10, right: 20 }}>
                 <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis type="category" dataKey="stage" tick={{ fontSize: 11 }} width={72} />
+                <YAxis type="category" dataKey="stage" tick={{ fontSize: 11 }} width={72} interval={0} />
                 <Tooltip formatter={(v) => [v, 'Leads']} />
                 <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={18}>
                   {funnelData.map((d, i) => <Cell key={i} fill={d.fill} />)}
@@ -506,7 +506,7 @@ function BLDashboard({ data }: { data: DashboardData }) {
           value={fmt(data.pipelineValue)}
           sub={`${data.activeLeads ?? 0} active leads in scope`}
           accent
-          to="/leads?mine=1&status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
+          to="/leads?mine=1&status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER&excludeTest=1"
         />
         </Tile>
 <Tile id="bl.inDelivery">
