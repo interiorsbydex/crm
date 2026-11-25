@@ -164,6 +164,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     teamUserIds = [user.id, ...members.map((m) => m.id)];
   }
   // BRANCH_HEAD / ADMIN: no filter
+  const isBranchWide = user.role === 'BRANCH_HEAD' && !viewDesignerId;
 
   const today = startOfDay();
   const week = startOfWeek();
@@ -208,8 +209,11 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     prisma.lead.count({ where: { ...receivedFunnelWhere, leadOriginDate: { gte: today } } }),
     prisma.lead.count({ where: { ...receivedFunnelWhere, leadOriginDate: { gte: week } } }),
     prisma.lead.count({ where: { ...receivedFunnelWhere, leadOriginDate: { gte: month } } }),
-    prisma.lead.groupBy({ by: ['stage'], where: { ...receivedFunnelWhere, leadOriginDate: { gte: rangeFrom, lte: rangeTo } }, _count: { id: true } }),
-    prisma.lead.groupBy({ by: ['source'], where: { ...receivedFunnelWhere, leadOriginDate: { gte: rangeFrom, lte: rangeTo } }, _count: { id: true } }),
+    // Pipeline Funnel and Lead Sources show the active pipeline as it is now, so a
+    // stage move shows straight away (Annie, 25 Nov 2026: with the default
+    // "this month" window they stayed empty whenever no new leads had arrived).
+    prisma.lead.groupBy({ by: ['stage'], where: { ...receivedFunnelWhere, status: 'ACTIVE' }, _count: { id: true } }),
+    prisma.lead.groupBy({ by: ['source'], where: { ...receivedFunnelWhere, status: 'ACTIVE' }, _count: { id: true } }),
     prisma.sLABreach.findMany({
       // ONBOARDING excluded (task #14): legacy breach rules never covered
       // OB→OBM, so any flag here would be stale/carried over from an earlier
@@ -236,14 +240,15 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
         slaBreaches: { some: { resolvedAt: null } },
       },
     }),
+    // Today's Activity: the Branch Head sees the whole branch, others their own team.
     prisma.call.count({
-      where: { createdAt: { gte: today }, loggedById: { in: teamUserIds } },
+      where: { createdAt: { gte: today }, ...(isBranchWide ? {} : { loggedById: { in: teamUserIds } }) },
     }),
     prisma.activityLog.count({
-      where: { action: 'STAGE_CHANGED', createdAt: { gte: today }, userId: { in: teamUserIds } },
+      where: { action: 'STAGE_CHANGED', createdAt: { gte: today }, ...(isBranchWide ? {} : { userId: { in: teamUserIds } }) },
     }),
     prisma.followUpTask.count({
-      where: { completedAt: { gte: today }, assignedToId: { in: teamUserIds } },
+      where: { completedAt: { gte: today }, ...(isBranchWide ? {} : { assignedToId: { in: teamUserIds } }) },
     }),
     prisma.lead.count({
       where: { ...leadWhere, status: 'ACTIVE', stage: { notIn: ['HANDED_OVER', 'DESIGN_IN_PROGRESS'] } },
@@ -355,7 +360,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
   ]);
 
   // ── Stage funnel map ──────────────────────────────────────────────────────────
-  // Date-scoped map (used for the stageFunnel bars and source breakdown)
+  // Active-pipeline map (used for the stageFunnel bars and source breakdown)
   const stageMap: Record<string, number> = {};
   for (const row of stageCounts) stageMap[row.stage] = row._count.id;
 

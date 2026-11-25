@@ -318,7 +318,8 @@ function BHDashboard({ data }: { data: DashboardData }) {
         {/* Pipeline funnel – horizontal bars */}
         <Tile id="bh.pipelineFunnel">
         <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
-          <h3 className="font-bold text-stone-900 mb-4 tracking-tight">{L('bh.pipelineFunnel', 'Pipeline Funnel')}</h3>
+          <h3 className="font-bold text-stone-900 tracking-tight">{L('bh.pipelineFunnel', 'Pipeline Funnel')}</h3>
+          <p className="text-xs text-stone-400 mb-4">Active leads now, by stage</p>
           {funnelData.every((d) => d.count === 0) ? (
             <div className="flex items-center justify-center h-44 text-gray-400 text-sm">No active leads</div>
           ) : (
@@ -339,9 +340,10 @@ function BHDashboard({ data }: { data: DashboardData }) {
         {/* Source mix – donut */}
         <Tile id="bh.leadSources">
         <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
-          <h3 className="font-bold text-stone-900 mb-4 tracking-tight">{L('bh.leadSources', 'Lead Sources')}</h3>
+          <h3 className="font-bold text-stone-900 tracking-tight">{L('bh.leadSources', 'Lead Sources')}</h3>
+          <p className="text-xs text-stone-400 mb-4">Active leads now, by source</p>
           {data.sourceBreakdown.length === 0 ? (
-            <div className="flex items-center justify-center h-44 text-gray-400 text-sm">No source data</div>
+            <div className="flex items-center justify-center h-44 text-gray-400 text-sm">No active leads</div>
           ) : (
             <div className="flex items-start gap-4">
               <div className="flex-1">

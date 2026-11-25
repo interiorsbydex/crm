@@ -94,7 +94,7 @@ function HealthPill({ health }: { health: string }) {
 }
 
 // ── Date presets ───────────────────────────────────────────────────────────────
-type Preset = 'month' | 'quarter' | 'lfy' | 'custom';
+type Preset = 'month' | 'quarter' | 'fy' | 'lfy' | 'custom';
 
 function getPresetRange(p: Preset): { startDate: string; endDate: string } {
   const now = new Date();
@@ -106,6 +106,11 @@ function getPresetRange(p: Preset): { startDate: string; endDate: string } {
   if (p === 'quarter') {
     const qStart = Math.floor(now.getMonth() / 3) * 3;
     return { startDate: fmt(new Date(now.getFullYear(), qStart, 1)), endDate: fmt(now) };
+  }
+  if (p === 'fy') {
+    // This India FY so far: Apr 1 → today
+    const fyYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    return { startDate: `${fyYear}-04-01`, endDate: fmt(now) };
   }
   if (p === 'lfy') {
     // India FY: Apr 1 → Mar 31
@@ -284,7 +289,8 @@ export default function Reports() {
   // Offer/Campaign performance are not shown to them (Offer/Campaign are admin-side).
   const isBL = role === 'BL';
 
-  const [preset, setPreset] = useState<Preset>('month');
+  // Opens on this financial year so a quiet month doesn't look like empty reports (Annie, 25 Nov 2026).
+  const [preset, setPreset] = useState<Preset>('fy');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
@@ -471,7 +477,7 @@ export default function Reports() {
           </p>
         </div>
         <div className="flex items-center gap-1 ml-3">
-          {([['month', 'This Month'], ['quarter', 'This Quarter'], ['lfy', 'Last Financial Year']] as [Preset, string][]).map(([p, label]) => (
+          {([['month', 'This Month'], ['quarter', 'This Quarter'], ['fy', 'This Financial Year'], ['lfy', 'Last Financial Year']] as [Preset, string][]).map(([p, label]) => (
             <button
               key={p}
               onClick={() => setPreset(p)}
